@@ -3,13 +3,13 @@
 import { memo, useState, type CSSProperties } from "react";
 
 /** Official coin logos, served locally so nothing depends on a third-party CDN. */
-const COIN_ICONS = new Set(["BTC", "ETH", "USDC", "QOR"]);
+const COIN_ICONS = new Set(["BTC", "ETH", "USDC", "QOR", "QWAKK"]);
 /** Basket legs are named by what they track; fUSD (the Fest test dollar) shows the dollar mark. */
 const ALIAS: Record<string, string> = { USD: "USDC", FUSD: "USDC", FBTC: "BTC", FETH: "ETH", WQOR: "QOR" };
 /** PNG unless named here. Vector where we have it: these are drawn as small as 18px and scale up
  *  into the basket headers, and the bitmap XAUT was visibly soft at both ends. SOL is the official
  *  wordless gradient logomark, shipped as a vector so it stays crisp at every bubble size. */
-const SVG_ICONS = new Set(["USDC", "QOR"]);
+const SVG_ICONS = new Set(["USDC", "QOR", "QWAKK"]);
 
 const logoUrl = (raw: string) => {
   const symbol = ALIAS[raw] ?? raw;

@@ -14,10 +14,11 @@ const FEEDS: [number, string][] = [
   [3, "BTC"],
   [2, "ETH"],
   [4, "QOR"],
+  [5, "QWAKK"],
   [1, "USD"],
 ];
 
-const price = (p: number) => (p < 1 ? `$${p.toFixed(5)}` : usd(p));
+const price = (p: number) => (p < 0.001 ? `$${p.toPrecision(4)}` : p < 1 ? `$${p.toFixed(5)}` : usd(p));
 
 
 export function OracleScreen() {
@@ -95,6 +96,7 @@ export function OracleScreen() {
               <th className={styles.r}>BTC</th>
               <th className={styles.r}>ETH</th>
               <th className={styles.r}>QOR</th>
+              <th className={styles.r}>QWAKK</th>
               <th className={styles.r}>Transaction</th>
             </tr>
           </thead>
@@ -106,6 +108,7 @@ export function OracleScreen() {
                 <td className={styles.r}>{r.prices[3] ? price(r.prices[3]) : "—"}</td>
                 <td className={styles.r}>{r.prices[2] ? price(r.prices[2]) : "—"}</td>
                 <td className={styles.r}>{r.prices[4] ? price(r.prices[4]) : "—"}</td>
+                <td className={styles.r}>{r.prices[5] ? price(r.prices[5]) : "—"}</td>
                 <td className={styles.r}>
                   <a className={styles.a} href={txUrl(r.tx)} target="_blank" rel="noreferrer">
                     {r.tx.slice(0, 10)}…

@@ -12,6 +12,7 @@ const COIN_ROWS: { key: string; label: string; tracks: string; decimals: number 
   { key: "fBTC", label: "fBTC", tracks: "BTC", decimals: 8 },
   { key: "fETH", label: "fETH", tracks: "ETH", decimals: 18 },
   { key: "WQOR", label: "WQOR", tracks: "QOR", decimals: 18 },
+  { key: "QWAKK", label: "QWAKK", tracks: "QWAKK", decimals: 6 },
 ];
 
 export function Portfolio() {
