@@ -49,7 +49,10 @@ export async function nativeTrade(cmd: "approve" | "approveBasket" | "buy" | "se
     msgs.push(crossVmCallMsg(address, d.baskets[key!].address, encodeFunctionData({ abi: erc20, functionName: "approve", args: [d.router, maxUint256] })));
   } else if (cmd === "buy") {
     const basket = d.baskets[key!].address as Address;
-    msgs.push(crossVmCallMsg(address, d.router, encodeFunctionData({ abi: routerAbi, functionName: "buy", args: [basket, parseUnits(amount!, 6), 0n, me] })));
+    const usdIn = parseUnits(amount!, 6);
+    const allowance = (await publicClient.readContract({ address: d.tokens.fUSD, abi: erc20, functionName: "allowance", args: [me, d.router] })) as bigint;
+    if (allowance < usdIn) msgs.push(crossVmCallMsg(address, d.tokens.fUSD, encodeFunctionData({ abi: erc20, functionName: "approve", args: [d.router, maxUint256] })));
+    msgs.push(crossVmCallMsg(address, d.router, encodeFunctionData({ abi: routerAbi, functionName: "buy", args: [basket, usdIn, 0n, me] })));
   } else if (cmd === "sell") {
     const basket = d.baskets[key!].address as Address;
     const held = (await publicClient.readContract({ address: basket, abi: erc20, functionName: "balanceOf", args: [me] })) as bigint;
