@@ -67,7 +67,8 @@
     "approve WQOR for DEGENDW": "2026-11-19T21:25:18.561Z",
     "approve QWAKK for DEGENDW": "2026-11-19T21:25:19.423Z",
     "seed DEGENDW": "2026-11-19T21:25:22.843Z",
-    "fund reserve QWAKK": "2026-11-19T21:25:23.768Z"
+    "fund reserve QWAKK": "2026-11-19T21:25:23.768Z",
+    "deploy router v2": "2026-11-19T22:03:57.344Z"
   },
   "oracle": "0x26ede83659e3e007f3fe568ee6c6a20df77929e6",
   "reserve": "0x39a401ae133e80b05c6f7076bc0bc6d5e3df1a23",
@@ -188,6 +189,13 @@
       }
     }
   },
-  "router": "0x6b4d9220db397d4490ce4acc6ff63e4386a39de3",
-  "deployedAt": "2026-11-19T19:54:49.262Z"
+  "router": "0x9a3ec4cc1163ee8fdce4049944178da6d74972c9",
+  "deployedAt": "2026-11-19T19:54:49.262Z",
+  "routerHistory": [
+    {
+      "address": "0x6b4d9220db397d4490ce4acc6ff63e4386a39de3",
+      "retired": "2026-11-19T22:03:53.948Z",
+      "reason": "linear quote could undershoot rounding on 8-decimal legs"
+    }
+  ]
 }
