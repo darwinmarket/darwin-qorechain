@@ -7,7 +7,8 @@
  *    moved more than DEVIATION_BPS.
  *  - Rebalance: every REBALANCE_EVERY seconds, rebalances any basket whose weights drifted more
  *    than DRIFT_BPS, with the curator's ML-DSA-87 signature.
- *  - Demo flow (DEMO_TRADES=1): small buys and sells through the router, so the app shows life.
+ *  - Demo flow (DEMO_TRADES=1): the treasury trades small amounts from the native lane,
+ *    hybrid-signed, like a QoreX user, so the app shows life. It never sells seed shares.
  *
  *   tsx src/keeper.ts
  */
@@ -20,18 +21,17 @@ import { FEED, fetchPrices } from "./prices.js";
 import { submitRound } from "./oracle.js";
 import { rebalance } from "./rebalance.js";
 import { open } from "./window.js";
-import { buy, sell } from "./trade.js";
+import { nativeTrade, treasuryShares } from "./crossvm.js";
 
 const HEARTBEAT = Number(process.env.HEARTBEAT ?? 600);
 const DEVIATION_BPS = Number(process.env.DEVIATION_BPS ?? 25);
 const REBALANCE_EVERY = Number(process.env.REBALANCE_EVERY ?? 900);
 const DRIFT_BPS = Number(process.env.DRIFT_BPS ?? 150);
-const DEMO_EVERY = Number(process.env.DEMO_EVERY ?? 1200);
+const DEMO_EVERY = Number(process.env.DEMO_EVERY ?? 2700);
 const DEMO = process.env.DEMO_TRADES === "1";
 const TICK = 60;
 
 const oracleAbi = artifact("DarwinOracle").abi;
-const erc20 = artifact("WQOR").abi;
 const log = (...a: unknown[]) => console.log(new Date().toISOString(), ...a);
 
 let lastRebalance = 0;
@@ -88,19 +88,21 @@ async function maybeRebalance() {
   }
 }
 
+/**
+ * Demo flow: the treasury (a QoreX-type coin-118 account) trades small amounts over the native
+ * lane, hybrid-signed, exactly like an app user. It only ever sells shares it bought itself.
+ */
 async function maybeDemo() {
   if (!DEMO || Date.now() / 1000 - lastDemo < DEMO_EVERY) return;
   lastDemo = Date.now() / 1000;
-  const d = loadDeployments();
   const keys = ["BLUEDW", "BALDW", "BLUEDW", "BALDW", "QOREDW"];
-  const key = keys[demoSide % keys.length];
-  const me = (await evmAccount("deployer")).evm as Address;
-  const held = (await publicClient.readContract({ address: d.baskets[key].address, abi: erc20, functionName: "balanceOf", args: [me] })) as bigint;
+  const key = keys[Math.floor(demoSide / 2) % keys.length];
+  const held = await treasuryShares(key);
   if (demoSide % 2 === 0 || held === 0n) {
-    const usd = key === "QOREDW" ? 0.2 : 1 + Math.round(Math.random() * 4);
-    await buy(key, usd);
+    const usd = key === "QOREDW" ? "0.2" : String(1 + Math.round(Math.random() * 2));
+    await nativeTrade("buy", key, usd);
   } else {
-    await sell(key, formatEther(held / 2n));
+    await nativeTrade("sell", key, formatEther(held / 2n));
   }
   demoSide++;
 }

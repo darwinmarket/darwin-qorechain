@@ -35,30 +35,47 @@ export function crossVmCallMsg(sender: string, target: Address, data: Hex) {
   };
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+/** Trade from the treasury (coin 118) over the native lane, hybrid-signed. Returns the tx hash. */
+export async function nativeTrade(cmd: "approve" | "approveBasket" | "buy" | "sell", key?: string, amount?: string) {
   const d = loadDeployments();
   const { client, address } = await treasuryClient();
   const me = evmTwin(address);
-  const [cmd, key, amount] = process.argv.slice(2);
   const erc20 = artifact("WQOR").abi;
   const routerAbi = artifact("DarwinRouter").abi;
-  let msg;
+  const msgs = [];
   if (cmd === "approve") {
-    msg = crossVmCallMsg(address, d.tokens.fUSD, encodeFunctionData({ abi: erc20, functionName: "approve", args: [d.router, maxUint256] }));
-  } else if (cmd === "buy") {
-    const basket = d.baskets[key].address as Address;
-    msg = crossVmCallMsg(address, d.router, encodeFunctionData({ abi: routerAbi, functionName: "buy", args: [basket, parseUnits(amount, 6), 0n, me] }));
+    msgs.push(crossVmCallMsg(address, d.tokens.fUSD, encodeFunctionData({ abi: erc20, functionName: "approve", args: [d.router, maxUint256] })));
   } else if (cmd === "approveBasket") {
-    msg = crossVmCallMsg(address, d.baskets[key].address, encodeFunctionData({ abi: erc20, functionName: "approve", args: [d.router, maxUint256] }));
+    msgs.push(crossVmCallMsg(address, d.baskets[key!].address, encodeFunctionData({ abi: erc20, functionName: "approve", args: [d.router, maxUint256] })));
+  } else if (cmd === "buy") {
+    const basket = d.baskets[key!].address as Address;
+    msgs.push(crossVmCallMsg(address, d.router, encodeFunctionData({ abi: routerAbi, functionName: "buy", args: [basket, parseUnits(amount!, 6), 0n, me] })));
   } else if (cmd === "sell") {
-    const basket = d.baskets[key].address as Address;
+    const basket = d.baskets[key!].address as Address;
     const held = (await publicClient.readContract({ address: basket, abi: erc20, functionName: "balanceOf", args: [me] })) as bigint;
-    msg = crossVmCallMsg(address, d.router, encodeFunctionData({ abi: routerAbi, functionName: "sell", args: [basket, held, 0n, me] }));
-  } else {
-    throw new Error("usage: crossvm.ts approve | buy <BASKET> <fUSD> | approveBasket <BASKET> | sell <BASKET>");
+    const shares = amount ? parseUnits(amount, 18) : held;
+    if (shares === 0n || shares > held) throw new Error(`treasury holds ${held} ${key}`);
+    const allowance = (await publicClient.readContract({ address: basket, abi: erc20, functionName: "allowance", args: [me, d.router] })) as bigint;
+    if (allowance < shares) msgs.push(crossVmCallMsg(address, basket, encodeFunctionData({ abi: erc20, functionName: "approve", args: [d.router, maxUint256] })));
+    msgs.push(crossVmCallMsg(address, d.router, encodeFunctionData({ abi: routerAbi, functionName: "sell", args: [basket, shares, 0n, me] })));
   }
-  console.log(`treasury ${address} (EVM ${me}): ${cmd}`);
-  const res: any = await client.signAndBroadcast([msg], { amount: [{ denom: "uqor", amount: "150000" }], gas: "1500000" }, `darwin: ${cmd} via cross-VM`);
-  console.log(`code ${res.code ?? 0} tx ${res.transactionHash} gasUsed ${res.gasUsed}`);
-  if (res.code) console.log(res.rawLog);
+  const gas = 1_300_000 + 400_000 * (msgs.length - 1);
+  const res: any = await client.signAndBroadcast(msgs, { amount: [{ denom: "uqor", amount: String(Math.ceil(gas * 0.11)) }], gas: String(gas) }, `darwin: ${cmd} via cross-VM`);
+  if (res.code) throw new Error(`native ${cmd} failed: ${res.rawLog}`);
+  console.log(`native ${cmd} ${key ?? ""} ${amount ?? ""}: hybrid-signed tx ${res.transactionHash} (gas ${res.gasUsed})`);
+  return res.transactionHash as string;
+}
+
+export async function treasuryShares(key: string): Promise<bigint> {
+  const d = loadDeployments();
+  const { address } = await treasuryClient();
+  return (await publicClient.readContract({ address: d.baskets[key].address, abi: artifact("WQOR").abi, functionName: "balanceOf", args: [evmTwin(address)] })) as bigint;
+}
+
+if (import.meta.url === `file://${process.argv[1]}`) {
+  const [cmd, key, amount] = process.argv.slice(2);
+  if (!["approve", "approveBasket", "buy", "sell"].includes(cmd)) {
+    throw new Error("usage: crossvm.ts approve | buy <BASKET> <fUSD> | approveBasket <BASKET> | sell <BASKET> [shares]");
+  }
+  await nativeTrade(cmd as any, key, amount);
 }
