@@ -114,3 +114,17 @@
 @media (max-width: 980px) { .homeLower { grid-template-columns: 1fr; } }
 .footer { background: none !important; color: #8b8b85; font-size: 12px; text-align: center; padding: 28px 0 0 !important; border: 0 !important; }
 .footer a { color: inherit; }
+
+/* ---- small screens ---- */
+.card, .stat { min-width: 0; overflow: hidden; }
+.stack > * { min-width: 0; }
+@media (max-width: 860px) {
+  .nav { flex-wrap: wrap; gap: 10px; padding: 8px 6px 12px; }
+  .navLinks { order: 3; width: 100%; margin-left: 0; overflow-x: auto; scrollbar-width: none; }
+  .navLink { white-space: nowrap; padding: 6px 10px; }
+  .netPill { display: none; }
+  .container { padding: 20px 14px 48px; }
+  .bNav { margin-left: 0; text-align: left; width: 100%; }
+  .table { font-size: 12px; }
+  .table th, .table td { padding: 8px 4px; }
+}
