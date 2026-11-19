@@ -5,9 +5,9 @@
   "license": "MIT",
   "description": "Darwin on QoreChain: the web app (post-quantum crypto baskets on qorechain-diana)",
   "scripts": {
-    "dev": "next dev -p 3020",
+    "dev": "next dev -p 3032",
     "build": "next build",
-    "start": "next start -p 3020",
+    "start": "next start -p 3032",
     "type-check": "tsc --noEmit",
     "sync": "node scripts/sync-deployments.mjs"
   },
@@ -21,10 +21,12 @@
     "viem": "2.57.17"
   },
   "devDependencies": {
+    "@qorechain/qorex-wallet-mock": "^0.1.0",
     "@types/node": "^22.0.0",
     "@types/react": "^18.3.0",
     "@types/react-dom": "^18.3.0",
     "autoprefixer": "^10.4.20",
+    "playwright": "^1.56.1",
     "postcss": "^8.5.26",
     "tailwindcss": "^3.4.17",
     "typescript": "^5.6.0"
