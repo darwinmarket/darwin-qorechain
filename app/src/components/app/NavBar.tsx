@@ -17,10 +17,15 @@ function OraclePill() {
   const age = Math.max(0, Math.floor(Date.now() / 1000) - oracle.lastTimestamp);
   const stale = age > oracle.maxAge;
   return (
-    <span className={styles.netPill} title="Darwin's oracle: every round is signed with ML-DSA-87 and checked on chain by pqcVerify">
+    <Link
+      href="/oracle"
+      className={styles.netPill}
+      style={{ textDecoration: "none" }}
+      title="Darwin's oracle: every round is signed with ML-DSA-87 and checked on chain by pqcVerify"
+    >
       <span className={`${styles.dot} ${stale ? styles.dotStale : ""}`} />
       QoreChain Diana · PQ oracle round {oracle.round} · {age < 90 ? `${age}s` : `${Math.round(age / 60)}m`} ago
-    </span>
+    </Link>
   );
 }
 
@@ -100,6 +105,9 @@ export function NavBar() {
         </Link>
         <Link className={styles.navLink} href="/portfolio">
           Portfolio
+        </Link>
+        <Link className={styles.navLink} href="/oracle">
+          Oracle
         </Link>
         <Link className={styles.navLink} href="/security">
           Post-quantum security
