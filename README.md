@@ -94,7 +94,8 @@ deployments/diana.json  every address, role and seed
 | Curator | `0xe0BBCcb71b761041B3f3038b3E6cdb392CfbE373` | ML-DSA-87 only signs; never sends a tx |
 
 Oracle `0x26ede83659e3e007f3fe568ee6c6a20df77929e6`, reserve
-`0x39a401ae133e80b05c6f7076bc0bc6d5e3df1a23`, router `0x6b4d9220db397d4490ce4acc6ff63e4386a39de3`,
+`0x39a401ae133e80b05c6f7076bc0bc6d5e3df1a23`, router v2 `0x9a3ec4cc1163ee8fdce4049944178da6d74972c9`
+(v1 `0x6b4d…9de3` retired),
 WQOR `0xa140f05ff3fec2d757ae758cddc064e2e386b749` (see `deployments/diana.json`).
 
 ### Measured on qorechain-diana
@@ -124,7 +125,7 @@ Requirements: Foundry, Node 20+.
 ```bash
 git clone --recursive https://github.com/darwinmarket/darwin-qorechain && cd darwin-qorechain
 
-# contracts: 80 unit, fuzz and invariant tests, mock precompiles locally
+# contracts: 81 unit, fuzz and invariant tests, mock precompiles locally
 cd contracts && forge test && cd ..
 
 # app, against the live testnet deployment
@@ -168,7 +169,7 @@ node e2e/trade.mjs BLUEdw 2              # connect, buy 2 fUSD of BLUEdw, sell h
 - The reserve sells at oracle prices with a 0.30% spread; Darwin's own baskets are spread-exempt
   for rebalances. A rebalance that would cost more than 1% of NAV reverts.
 - Audit: see [docs/AUDIT.md](docs/AUDIT.md) (two-stage QCAI audit).
-- Tests: unit, fuzz, invariant, on-chain E2E (18/18) and browser E2E (20/20); see [docs/TESTING.md](docs/TESTING.md).
+- Tests: unit, fuzz, invariant, on-chain E2E (20/20), an 8-user parallel battery (48/48 trades) and browser E2E (20/20); see [docs/TESTING.md](docs/TESTING.md).
 - Testnet only: the tokens have no value and the mnemonic used here must never touch mainnet.
 
 ## Credits

@@ -15,7 +15,11 @@
     "rebalance": "tsx src/rebalance.ts",
     "keeper": "tsx src/keeper.ts",
     "e2e": "tsx src/e2e.ts",
-    "test": "tsx --test test/*.test.ts"
+    "test": "tsx --test test/*.test.ts",
+    "battery": "tsx src/battery.ts",
+    "sweep": "tsx src/sweep.ts",
+    "refill": "tsx src/refill.ts",
+    "amm": "tsx src/amm.ts"
   },
   "keywords": [],
   "author": "",
