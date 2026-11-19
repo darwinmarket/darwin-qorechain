@@ -2,12 +2,12 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
-import { Chart } from "@/components/darwin/Chart";
 import { StockLogo } from "@/components/darwin/StockLogo";
 import { short, usd } from "@/lib/darwin/format";
 import { useOracle } from "@/lib/darwin/store";
 import { addressUrl, D, ORACLE, txUrl } from "@/lib/qore/chain";
 import { roundGas, useOracleRounds } from "@/lib/qore/oracleHistory";
+import { Sparkline } from "./Sparkline";
 import styles from "./app.module.css";
 
 const FEEDS: [number, string][] = [
@@ -19,10 +19,6 @@ const FEEDS: [number, string][] = [
 
 const price = (p: number) => (p < 1 ? `$${p.toFixed(5)}` : usd(p));
 
-function Spark({ points }: { points: [number, number][] }) {
-  const change = points.length > 1 ? points.at(-1)![1] / points[0][1] - 1 : null;
-  return <Chart history={{ points, change, supported: points.length > 1, loading: false }} height={70} fill />;
-}
 
 export function OracleScreen() {
   const oracle = useOracle();
@@ -67,7 +63,7 @@ export function OracleScreen() {
                 <StockLogo sym={sym} size={16} /> {sym}/USD · feed {id}
               </small>
               <strong>{f ? price(f.price) : "…"}</strong>
-              <Spark points={series[id] ?? []} />
+              <Sparkline values={(series[id] ?? []).map((p) => p[1])} />
             </div>
           );
         })}
