@@ -137,6 +137,13 @@
       }
     }
   },
-  "router": "0x6b4d9220db397d4490ce4acc6ff63e4386a39de3",
-  "deployedAt": "2026-11-19T19:54:49.262Z"
+  "router": "0x9a3ec4cc1163ee8fdce4049944178da6d74972c9",
+  "deployedAt": "2026-11-19T19:54:49.262Z",
+  "routerHistory": [
+    {
+      "address": "0x6b4d9220db397d4490ce4acc6ff63e4386a39de3",
+      "retired": "2026-11-19T22:03:53.948Z",
+      "reason": "linear quote could undershoot rounding on 8-decimal legs"
+    }
+  ]
 }
