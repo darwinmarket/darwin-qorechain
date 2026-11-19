@@ -23,14 +23,7 @@ export function BasketLink({
   onOpen?: (symbol: string) => void;
   children: ReactNode;
 }) {
-  // A basket whose faucets aren't deployed yet opens nothing, like the app's own cards.
-  if (!basket.live) {
-    return (
-      <div className={className} aria-label={ariaLabel} aria-disabled="true">
-        {children}
-      </div>
-    );
-  }
+  // A paused basket still opens: minting is stopped, but redemption never is.
   if (onOpen) {
     return (
       <button type="button" className={className} aria-label={ariaLabel} onClick={() => onOpen(basket.symbol)}>

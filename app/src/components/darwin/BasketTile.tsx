@@ -29,7 +29,7 @@ export const BasketTile = memo(function BasketTile({ b, onOpen }: { b: Basket; o
       className={`${styles.tile}${soon ? ` ${styles.soon}` : ""}`}
       ariaLabel={`Open ${b.name}, ${basketTicker(b.symbol)}. NAV ${usd(b.navUsd)} per share.`}
     >
-      {soon && <span className={styles.soonBadge}>Soon</span>}
+      {soon && <span className={styles.soonBadge}>{b.paused ? "Paused" : "Soon"}</span>}
       <header className={styles.head}>
         <LogoStack legs={byWeight} size={30} />
         <span className={styles.name}>
