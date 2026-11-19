@@ -90,22 +90,21 @@ async function txMessages(hash) {
   throw new Error(`tx ${hash} not found`);
 }
 
-async function trade({ display, side, amount, inKind = false }) {
+async function trade({ display, side, amount }) {
   await page.goto(`${BASE}/basket/${display}`, { waitUntil: "networkidle" });
   await page.waitForSelector("text=/Balance/", { timeout: 30000 });
   if (side === "sell") {
     await page.getByRole("tab", { name: `Sell ${display}` }).click();
-    if (inKind) await page.getByRole("radio", { name: "Receive the coins" }).click();
     await page.getByLabel(`${display} to sell`).fill(String(amount));
   } else {
     await page.getByLabel("fUSD to pay").fill(String(amount));
   }
-  await page.waitForSelector(inKind ? "text=/redemption in kind is free/" : "text=You receive (about)", { timeout: 30000 });
-  const label = side === "buy" ? `Buy ${display}` : inKind ? `Redeem ${display} in kind` : `Sell ${display}`;
+  await page.waitForSelector("text=You receive (about)", { timeout: 30000 });
+  const label = side === "buy" ? `Buy ${display}` : `Sell ${display}`;
   await page.getByRole("button", { name: new RegExp(`^${label}$`) }).last().click();
-  const done = await page.waitForSelector("text=/^(Bought|Sold|Redeemed)\\./", { timeout: 150000 });
+  const done = await page.waitForSelector("text=/^(Bought|Sold)\\./", { timeout: 150000 });
   const text = await done.innerText();
-  await page.screenshot({ path: `${SHOTS}${display}-${side}${inKind ? "-kind" : ""}.png` });
+  await page.screenshot({ path: `${SHOTS}${display}-${side}.png` });
   const req = await lastSignAndBroadcast();
   const hash = req?.result?.txHash;
   assert(hash, "a signAndBroadcast result");
@@ -191,15 +190,16 @@ await check("sell BALdw for fUSD", async () => {
   return `+${(Number(u1 - u0) / 1e6).toFixed(3)} fUSD, msgs [${r.types.join(", ")}]`;
 });
 
-await check("redeem BLUEdw in kind: fBTC and fETH arrive, no fee", async () => {
-  const b0 = await bal(D.tokens.fBTC, me.twin);
-  const e0 = await bal(D.tokens.fETH, me.twin);
-  const shares = await bal(D.baskets.BLUEDW.address, me.twin);
-  const r = await trade({ display: "BLUEdw", side: "sell", amount: (Number(shares) / 1e18 / 4).toFixed(6), inKind: true });
-  const b1 = await bal(D.tokens.fBTC, me.twin);
-  const e1 = await bal(D.tokens.fETH, me.twin);
-  assert(b1 > b0 && e1 > e0, `fBTC ${b0}->${b1}, fETH ${e0}->${e1}`);
-  return `+${b1 - b0} fBTC sats, +${(Number(e1 - e0) / 1e18).toExponential(3)} fETH, msgs [${r.types.join(", ")}]`;
+await check("the only way out is selling the basket token for fUSD (no coin withdrawal in the app)", async () => {
+  await page.goto(`${BASE}/basket/BLUEdw`, { waitUntil: "networkidle" });
+  await page.waitForSelector("text=/Balance/", { timeout: 30000 });
+  await page.getByRole("tab", { name: "Sell BLUEdw" }).click();
+  assert((await page.getByText("Receive the coins").count()) === 0, "no in-kind option");
+  assert((await page.getByText(/Redeem .* in kind/).count()) === 0, "no redeem button");
+  await page.getByLabel("BLUEdw to sell").fill("0.001");
+  await page.waitForSelector("text=You receive (about)", { timeout: 30000 });
+  assert(/fUSD/.test(await page.locator("text=You receive (about)").locator("..").innerText()), "proceeds in fUSD");
+  return "Sell tab pays fUSD only";
 });
 
 await check("faucet fUSD (bank form) is converted in the same transaction as the buy", async () => {
@@ -271,11 +271,12 @@ await check("activity feed shows QoreX trades with their verified hybrid signatu
   return `${n} QoreX trades listed`;
 });
 
-await check("portfolio lists the positions and the redeemed coins", async () => {
+await check("portfolio lists the basket positions and the fUSD, never the underlying coins", async () => {
   await page.goto(`${BASE}/portfolio`, { waitUntil: "networkidle" });
-  for (const t of ["Darwin Blue Chip", "Darwin Qore Ecosystem", "fBTC", "fETH"]) await page.waitForSelector(`text=${t}`, { timeout: 30000 });
+  for (const t of ["Darwin Blue Chip", "Darwin Qore Ecosystem", "Wallet", "fUSD"]) await page.waitForSelector(`text=${t}`, { timeout: 30000 });
+  assert((await page.getByText("fBTC").count()) === 0, "no underlying coins listed");
   await page.screenshot({ path: `${SHOTS}portfolio-after.png`, fullPage: true });
-  return "positions + coins shown";
+  return "baskets + fUSD + gas, no underlying";
 });
 
 await check("disconnect forgets the account", async () => {
