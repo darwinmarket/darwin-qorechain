@@ -19,13 +19,13 @@ export const client = createPublicClient({
   transport: http(EVM_RPC, { batch: { wait: 16 }, retryCount: 3 }),
 });
 
-type Deployments = typeof deployments;
-export const D = deployments as Deployments & {
+type Deployments = Omit<typeof deployments, "tokens" | "baskets">;
+export const D = deployments as unknown as Deployments & {
   baskets: Record<string, { address: Address; name: string; display: string; description: string; components: string[]; weights: number[] }>;
   tokens: Record<string, Address>;
 };
 
-export const TOKENS = D.tokens;
+export const TOKENS = D.tokens as Record<string, Address>;
 export const ROUTER = D.router as Address;
 export const ORACLE = D.oracle as Address;
 export const RESERVE = D.reserve as Address;
