@@ -168,6 +168,8 @@ node e2e/trade.mjs BLUEdw 2              # connect, buy 2 fUSD of BLUEdw, sell h
   a timestamp that is not newer, or one more than 2 minutes in the future. Readers refuse prices
   older than 30 minutes, so a stalled oracle stops buys and sells through the router, never
   redemptions.
+- The reserve's inventory is managed by the team (`ops/src/refill.ts` wraps QOR or sends tokens,
+  `ops/src/amm.ts` buys on QoreChain's native AMM); the app refuses buys above what it holds.
 - The reserve sells at oracle prices with a 0.30% spread; Darwin's own baskets are spread-exempt
   for rebalances. A rebalance that would cost more than 1% of NAV reverts.
 - Audit: see [docs/AUDIT.md](docs/AUDIT.md) (two-stage QCAI audit).
