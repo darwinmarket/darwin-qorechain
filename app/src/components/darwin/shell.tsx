@@ -34,8 +34,8 @@ export function HeroActions() {
       <button type="button" className="btn btn-lg btn-ink" onClick={scrollToExplore}>
         Explore baskets
       </button>
-      <a className={`btn btn-lg ${heroSecondary}`} href="https://docs.darwin.market" target="_blank" rel="noreferrer">
-        Documentation
+      <a className={`btn btn-lg ${heroSecondary}`} href="/security">
+        How it is protected
       </a>
     </>
   );
