@@ -9,9 +9,9 @@ only with ML-DSA-87 signatures checked on chain.
 
 **Description**
 
-Darwin turns a portfolio into one token. Three baskets are live on qorechain-diana: Blue Chip
-(BLUEdw, 50% BTC / 50% ETH), Balanced (BALdw, 35/35/30 with fUSD) and Qore Ecosystem (QOREdw, 40%
-QOR). You buy and sell them with fUSD from QoreX in one transaction.
+Darwin turns a portfolio into one token. Four baskets are live on qorechain-diana: Blue Chip
+(BLUEdw, 50% BTC / 50% ETH), Balanced (BALdw, 35/35/30 with fUSD), Qore Ecosystem (QOREdw, 40%
+QOR) and Degen (DEGENdw, 50% QOR / 50% QWAKK, the community memecoin). You buy and sell them with fUSD from QoreX in one transaction.
 
 A basket protocol has three keys worth stealing: the price key, the trading key and the admin key.
 Darwin puts all three behind ML-DSA-87. Every oracle round carries the reporter's signature,
@@ -27,7 +27,7 @@ post-quantum port, written during the fest.
 
 **How it was built**
 
-- Contracts (Solidity, Foundry, 80 unit/fuzz/invariant tests, plus 18 on-chain and 18 browser E2E checks): PqcAuth / PqcAdmin on the 0x0A01 and 0x0A02 precompiles,
+- Contracts (Solidity, Foundry, 80 unit/fuzz/invariant tests, plus 18 on-chain and 20 browser E2E checks): PqcAuth / PqcAdmin on the 0x0A01 and 0x0A02 precompiles,
   DarwinOracle, DarwinBasket, DarwinReserve (oracle-priced inventory, since the EVM cannot call the
   native AMM), DarwinRouter, WQOR.
 - Ops (TypeScript, @qorechain/sdk 0.14): coin-118 treasury and coin-60 deployer / reporter /

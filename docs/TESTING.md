@@ -7,7 +7,7 @@ Four layers, from pure logic to the live chain. Every layer is run before a chan
 | Unit and fuzz | `contracts/test/*.t.sol` | 76 tests: oracle rounds and refusals, PQ admin, reserve pricing, basket mint/redeem/rebalance, router, WQOR, QOREDW | `cd contracts && forge test` |
 | Invariant | `contracts/test/invariant` | 4 invariants under random mints, redeems, buys and sells (256 runs x 500 calls each): shares fully backed, NAV per share never drops at fixed prices, router keeps nothing, weights sum to 100% | `forge test --match-path "test/invariant/*"` |
 | On-chain E2E | `ops/src/e2e.ts` | 18 checks on qorechain-diana against the real `pqcVerify` and `pqcKeyStatus` precompiles: forged, tampered, replayed and stale signatures refused; admin, guardian, router, in-kind redemption, native cross-VM trades, ERC-20 conversions, curator rebalances | `cd ops && npm run e2e` (stop the keeper first) |
-| Browser E2E | `app/e2e/suite.mjs` | 18 checks in Chromium with the QoreX test double (real hybrid signing, real broadcast), each followed by on-chain assertions | `cd app && npm run build && npm start & node e2e/suite.mjs` |
+| Browser E2E | `app/e2e/suite.mjs` | 20 checks in Chromium with the QoreX test double (real hybrid signing, real broadcast), each followed by on-chain assertions | `cd app && npm run build && npm start & node e2e/suite.mjs` |
 
 Locally the precompiles do not exist, so `test/utils/MockPqc.sol` is etched at `0x…0A01` and
 `0x…0A02`: a signature is valid when it equals `keccak256("ok", key, message)`. The on-chain suite

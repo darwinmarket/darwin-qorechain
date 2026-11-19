@@ -2,7 +2,7 @@
 
 ## Build (at the end)
 
-- [ ] **4th basket, degen: DEGENDW (display DEGENdw).** QOR + QWAKK (QWAKK is the community memecoin
+- [x] **4th basket, degen: DEGENDW (display DEGENdw)** — deployed `0x48775d391021698298f6fcdb1826ba3a59db8d91`. QOR + QWAKK (QWAKK is the community memecoin
       registered by governance, `0xa5b3c3Fb92E2E89555F9909b9004C65F3542eE23`, 6 decimals; pool 6
       QWAKK/QOR on the native AMM). Needs: a QWAKK/USD feed in the oracle (priced from pool 6 x QOR),
       QWAKK listed on the reserve with inventory (QWAKK bought on the AMM), deploy + seed + spread
