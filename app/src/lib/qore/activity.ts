@@ -41,17 +41,25 @@ const b64 = (s: string) => bytesToHex(Uint8Array.from(atob(s), (c) => c.charCode
 
 /** Trades sent from QoreX: native MsgCrossVMCall into the router. Their EVM logs are not indexed, so
  *  they are read from the native tx search and decoded from the calldata they carry. */
+/** Every router Darwin has run, newest first: trades on a retired router stay in the history. */
+const ROUTERS = [ROUTER, ...((D as any).routerHistory ?? []).map((r: { address: string }) => r.address)].map((a: string) => a.toLowerCase());
+
 async function readNativeTrades(): Promise<ActivityItem[]> {
-  const q = encodeURIComponent(`crossvm_request.target_contract='${ROUTER.toLowerCase()}'`);
-  const res = await fetch(`${REST}/cosmos/tx/v1beta1/txs?query=${q}`);
-  if (!res.ok) return [];
-  const { tx_responses } = (await res.json()) as { tx_responses?: CosmosTx[] };
+  const pages = await Promise.all(
+    ROUTERS.map(async (router) => {
+      const q = encodeURIComponent(`crossvm_request.target_contract='${router}'`);
+      const res = await fetch(`${REST}/cosmos/tx/v1beta1/txs?query=${q}`);
+      if (!res.ok) return [] as CosmosTx[];
+      return ((await res.json()) as { tx_responses?: CosmosTx[] }).tx_responses ?? [];
+    }),
+  );
+  const tx_responses = pages.flat();
   const out: ActivityItem[] = [];
   for (const t of tx_responses ?? []) {
     if (t.code !== 0) continue;
     const hybrid = t.events.some((e) => e.type === "pqc_hybrid_verify" && e.attributes.some((a) => a.key === "status" && a.value === "verified"));
     for (const m of t.tx.body.messages) {
-      if (!m["@type"].endsWith("MsgCrossVMCall") || m.target_contract?.toLowerCase() !== ROUTER.toLowerCase() || !m.payload) continue;
+      if (!m["@type"].endsWith("MsgCrossVMCall") || !ROUTERS.includes(m.target_contract?.toLowerCase() ?? "") || !m.payload) continue;
       try {
         const call = decodeFunctionData({ abi: routerAbi, data: b64(m.payload) });
         const key = basketKey(call.args[0] as string);
@@ -69,7 +77,7 @@ async function readNativeTrades(): Promise<ActivityItem[]> {
 
 async function readActivity(onlyBasket?: string): Promise<ActivityItem[]> {
   const head = await client.getBlockNumber();
-  const addresses = [ROUTER, ORACLE, ...Object.values(D.baskets).map((b) => b.address)] as Address[];
+  const addresses = [...ROUTERS, ORACLE, ...Object.values(D.baskets).map((b) => b.address)] as Address[];
   const logs = await client.getLogs({ address: addresses, events: EVENTS, fromBlock: head - SPAN, toBlock: head });
   const items: ActivityItem[] = [];
   for (const l of logs as any[]) {
