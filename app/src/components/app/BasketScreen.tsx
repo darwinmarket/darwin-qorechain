@@ -94,7 +94,7 @@ export function BasketScreen({ symbol }: { symbol: string }) {
             </div>
             <Chart history={history} height={260} grid axis />
             <p className={styles.drift} style={{ marginTop: 8 }}>
-              History replays today&apos;s units per share on BTC and ETH closes (fBTC and fETH track them); fUSD and QOR legs are held at
+              The vault holds the coins; you hold the basket token. History replays today&apos;s units per share on BTC and ETH closes (fBTC and fETH track them); fUSD and QOR legs are held at
               today&apos;s price.
             </p>
           </section>

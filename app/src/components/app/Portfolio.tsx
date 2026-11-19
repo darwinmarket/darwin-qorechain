@@ -8,12 +8,6 @@ import { useBaskets, useOracle } from "@/lib/darwin/store";
 import { useWallet } from "@/lib/qore/wallet";
 import styles from "./app.module.css";
 
-const COIN_ROWS: { key: string; label: string; tracks: string; decimals: number }[] = [
-  { key: "fBTC", label: "fBTC", tracks: "BTC", decimals: 8 },
-  { key: "fETH", label: "fETH", tracks: "ETH", decimals: 18 },
-  { key: "WQOR", label: "WQOR", tracks: "QOR", decimals: 18 },
-  { key: "QWAKK", label: "QWAKK", tracks: "QWAKK", decimals: 6 },
-];
 
 export function Portfolio() {
   const { account, balances, connect, connecting } = useWallet();
@@ -42,11 +36,7 @@ export function Portfolio() {
     })
     .filter((p) => p.shares > 0);
   const fusd = Number((balances?.fusdBank ?? 0n) + (balances?.fusdErc20 ?? 0n)) / 1e6;
-  const coins = COIN_ROWS.map((c) => {
-    const amount = Number(balances?.coins?.[c.key] ?? 0n) / 10 ** c.decimals;
-    return { ...c, amount, value: amount * price(c.tracks) };
-  }).filter((c) => c.amount > 0);
-  const total = positions.reduce((s, p) => s + p.value, 0) + fusd + coins.reduce((s, c) => s + c.value, 0);
+  const total = positions.reduce((s, p) => s + p.value, 0) + fusd;
 
   return (
     <div className={styles.stack}>
@@ -109,8 +99,8 @@ export function Portfolio() {
 
       <section className={styles.card}>
         <div className={styles.cardTitle}>
-          <h2>Coins</h2>
-          <small>fUSD in bank and ERC-20 form, coins from in-kind redemptions</small>
+          <h2>Wallet</h2>
+          <small>fUSD to buy with, QOR for fees</small>
         </div>
         <table className={styles.table}>
           <tbody>
@@ -128,17 +118,6 @@ export function Portfolio() {
               </td>
               <td className={styles.r}>{money(fusd)}</td>
             </tr>
-            {coins.map((c) => (
-              <tr key={c.key}>
-                <td>
-                  <span className={styles.legName}>
-                    <StockLogo sym={c.tracks} size={20} /> {c.label}
-                  </span>
-                </td>
-                <td className={styles.r}>{c.amount.toPrecision(5)}</td>
-                <td className={styles.r}>{money(c.value)}</td>
-              </tr>
-            ))}
             <tr>
               <td>
                 <span className={styles.legName}>

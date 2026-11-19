@@ -6,8 +6,7 @@ import type { Basket } from "@/lib/darwin/types";
 import { basketTicker } from "@/lib/baskets";
 import { txUrl } from "@/lib/qore/chain";
 import { signAndBroadcast, QOREX_INSTALL_URL, type QorexResult } from "@/lib/qore/qorex";
-import { buildBuy, buildRedeem, buildSell, quoteBuy, quoteRedeem, quoteSell } from "@/lib/qore/trade";
-import { TOKEN_INFO, tokenKeyOf } from "@/lib/qore/chain";
+import { buildBuy, buildSell, quoteBuy, quoteSell } from "@/lib/qore/trade";
 import { useWallet } from "@/lib/qore/wallet";
 import styles from "./app.module.css";
 
@@ -26,13 +25,11 @@ export function TradeCard({ basket }: { basket: Basket }) {
   const { account, connect, connecting, balances, refresh, installed } = useWallet();
   const [side, setSide] = useState<Side>("buy");
   const [amount, setAmount] = useState("");
-  const [inKind, setInKind] = useState(false);
   const [quote, setQuote] = useState<{ out: bigint; fee: bigint } | null>(null);
-  const [kindQuote, setKindQuote] = useState<{ symbol: string; amount: number }[] | null>(null);
   const [quoteErr, setQuoteErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [done, setDone] = useState<(QorexResult & { side: Side; inKind?: boolean }) | null>(null);
+  const [done, setDone] = useState<(QorexResult & { side: Side }) | null>(null);
   const ticker = basketTicker(basket.symbol);
   const debounced = useDebounced(amount);
 
@@ -51,25 +48,8 @@ export function TradeCard({ basket }: { basket: Basket }) {
   useEffect(() => {
     let alive = true;
     setQuote(null);
-    setKindQuote(null);
     setQuoteErr(null);
     if (!parsed) return;
-    if (side === "sell" && inKind) {
-      quoteRedeem(basket.address as Address, parsed)
-        .then((amounts) => {
-          if (!alive) return;
-          setKindQuote(
-            basket.legs.map((l, i) => {
-              const info = TOKEN_INFO[tokenKeyOf(l.address)];
-              return { symbol: info?.symbol ?? l.symbol, amount: Number(amounts[i]) / 10 ** (info?.decimals ?? 18) };
-            }),
-          );
-        })
-        .catch((e) => alive && setQuoteErr(String(e?.shortMessage ?? e?.message ?? e).slice(0, 160)));
-      return () => {
-        alive = false;
-      };
-    }
     const run = side === "buy"
       ? quoteBuy(basket.address as Address, parsed).then((q) => ({ out: q.shares, fee: q.fee }))
       : quoteSell(basket.address as Address, parsed).then((q) => ({ out: q.usdOut, fee: q.fee }));
@@ -79,7 +59,7 @@ export function TradeCard({ basket }: { basket: Basket }) {
     return () => {
       alive = false;
     };
-  }, [parsed, side, inKind, basket.address, basket.legs]);
+  }, [parsed, side, basket.address]);
 
   const max = side === "buy" ? fusd : shares;
   const insufficient = parsed !== null && parsed > max;
@@ -96,12 +76,10 @@ export function TradeCard({ basket }: { basket: Basket }) {
     try {
       const built = side === "buy"
         ? await buildBuy(account, basket.address as Address, parsed, balances.fusdErc20, balances.fusdBank)
-        : inKind
-          ? buildRedeem(account, basket.address as Address, parsed)
-          : await buildSell(account, basket.address as Address, parsed);
-      const memo = side === "buy" ? `Darwin: buy ${ticker}` : inKind ? `Darwin: redeem ${ticker} in kind` : `Darwin: sell ${ticker}`;
+        : await buildSell(account, basket.address as Address, parsed);
+      const memo = side === "buy" ? `Darwin: buy ${ticker}` : `Darwin: sell ${ticker}`;
       const res = await signAndBroadcast(built.msgs, memo, built.gas);
-      setDone({ ...res, side, inKind: side === "sell" && inKind });
+      setDone({ ...res, side });
       setAmount("");
       setTimeout(refresh, 2500);
     } catch (e) {
@@ -158,32 +136,6 @@ export function TradeCard({ basket }: { basket: Basket }) {
         </div>
       </div>
 
-      {side === "sell" && (
-        <div className={styles.tabs} role="radiogroup" aria-label="Receive" style={{ marginBottom: 12 }}>
-          <button type="button" role="radio" aria-checked={!inKind} className={`${styles.tab} ${!inKind ? styles.tabOn : ""}`} onClick={() => setInKind(false)}>
-            Receive fUSD
-          </button>
-          <button type="button" role="radio" aria-checked={inKind} className={`${styles.tab} ${inKind ? styles.tabOn : ""}`} onClick={() => setInKind(true)}>
-            Receive the coins
-          </button>
-        </div>
-      )}
-
-      {kindQuote && (
-        <div className={styles.quote}>
-          {kindQuote.map((k) => (
-            <div key={k.symbol}>
-              <span>{k.symbol}</span>
-              <strong>{k.amount.toPrecision(5)}</strong>
-            </div>
-          ))}
-          <div>
-            <span>Fee</span>
-            <span>none: redemption in kind is free, needs no oracle and never pauses</span>
-          </div>
-        </div>
-      )}
-
       {(quote || quoteErr) && (
         <div className={styles.quote}>
           {quote && (
@@ -221,23 +173,23 @@ export function TradeCard({ basket }: { basket: Basket }) {
           </button>
         )
       ) : (
-        <button type="button" className={styles.cta} disabled={!parsed || !(quote || kindQuote) || insufficient || overCapacity || mintPaused || busy} onClick={() => void submit()}>
+        <button type="button" className={styles.cta} disabled={!parsed || !quote || insufficient || overCapacity || mintPaused || busy} onClick={() => void submit()}>
           {busy
             ? "Sign in QoreX…"
             : mintPaused
-              ? "Minting is paused (selling and redeeming stay open)"
+              ? "Buying is paused (selling stays open)"
               : insufficient
               ? side === "buy" ? "Not enough fUSD" : `Not enough ${ticker}`
               : overCapacity
                 ? `Above the reserve's liquidity (max ~${basket.capacityUsd.toFixed(2)} fUSD)`
-              : side === "buy" ? `Buy ${ticker}` : inKind ? `Redeem ${ticker} in kind` : `Sell ${ticker}`}
+              : side === "buy" ? `Buy ${ticker}` : `Sell ${ticker}`}
         </button>
       )}
 
       {error && <div className={styles.errorBox} style={{ marginTop: 12 }}>{error}</div>}
       {done && (
         <div className={styles.okBox} style={{ marginTop: 12 }}>
-          {done.side === "buy" ? "Bought" : done.inKind ? "Redeemed" : "Sold"}.{" "}
+          {done.side === "buy" ? "Bought" : "Sold"}.{" "}
           {done.shield === "shielded" ? "QoreX confirms the ML-DSA-87 layer is in the committed transaction." : `Signature state: ${done.shield}.`}{" "}
           <a className={styles.a} href={txUrl(done.txHash)} target="_blank" rel="noreferrer">
             View transaction

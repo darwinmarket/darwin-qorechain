@@ -12,7 +12,7 @@ const rows: [string, string, string][] = [
   ["Your buy and sell", "Your QoreX keys: secp256k1 + ML-DSA-87", "QoreX signs a native transaction hybrid; MsgCrossVMCall carries the router call to the EVM. No EVM window is opened for you."],
   ["Keeper relaying", "Scoped EVM window", "The relayer's window admits only Darwin's own contracts and tokens (allowed_targets): a leaked keeper key can touch nothing else."],
   ["Pause new mints", "Guardian (classical key)", "The only power a classical key holds, and the only one that can never cost a holder anything."],
-  ["Redeem in kind", "Nobody", "Always open, needs no oracle, curator or admin."],
+  ["Sell for fUSD", "Your QoreX keys, hybrid", "Always open, even when buying is paused. The vault also keeps an on-chain in-kind exit as a last-resort backstop; the app never uses it."],
 ];
 
 export default function Security() {

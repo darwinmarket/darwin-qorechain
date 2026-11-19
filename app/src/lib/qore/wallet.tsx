@@ -36,7 +36,7 @@ async function readBalances(acc: Account): Promise<Balances> {
   };
   const coin = (denom: string) => BigInt(bank.balances?.find((b) => b.denom === denom)?.amount ?? "0");
   const keys = Object.keys(D.baskets);
-  const coinKeys = ["fBTC", "fETH", "WQOR", "QWAKK"];
+  const coinKeys: string[] = [];
   const [fusdErc20, ...rest] = await Promise.all([
     client.readContract({ address: TOKENS.fUSD, abi: erc20Abi, functionName: "balanceOf", args: [acc.evm] }),
     ...keys.map((k) => client.readContract({ address: D.baskets[k].address as Address, abi: erc20Abi, functionName: "balanceOf", args: [acc.evm] })),
