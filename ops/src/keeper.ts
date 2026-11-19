@@ -95,11 +95,11 @@ async function maybeRebalance() {
 async function maybeDemo() {
   if (!DEMO || Date.now() / 1000 - lastDemo < DEMO_EVERY) return;
   lastDemo = Date.now() / 1000;
-  const keys = ["BLUEDW", "BALDW", "BLUEDW", "BALDW", "QOREDW"];
+  const keys = ["BLUEDW", "BALDW", "BLUEDW", "BALDW", "QOREDW", "DEGENDW"];
   const key = keys[Math.floor(demoSide / 2) % keys.length];
   const held = await treasuryShares(key);
   if (demoSide % 2 === 0 || held === 0n) {
-    const usd = key === "QOREDW" ? "0.2" : String(1 + Math.round(Math.random() * 2));
+    const usd = key === "QOREDW" ? "0.2" : key === "DEGENDW" ? "0.03" : String(1 + Math.round(Math.random() * 2));
     await nativeTrade("buy", key, usd);
   } else {
     await nativeTrade("sell", key, formatEther(held / 2n));
