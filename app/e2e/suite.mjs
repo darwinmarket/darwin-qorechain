@@ -135,6 +135,24 @@ await check("security page lists every contract with its address", async () => {
   return "7 addresses shown";
 });
 
+await check("oracle page lists signed rounds with prices and the cost of a round", async () => {
+  await page.goto(`${BASE}/oracle`, { waitUntil: "networkidle" });
+  await page.waitForSelector("text=/^#\\d+$/", { timeout: 30000 });
+  const rows = await page.locator("text=/^#\\d+$/").count();
+  const cost = await page.waitForSelector("text=/bytes of calldata/", { timeout: 30000 });
+  const txt = await cost.innerText();
+  assert(/4,627-byte ML-DSA-87/.test(txt), txt);
+  return `${rows} rounds, ${txt.slice(0, 60)}…`;
+});
+
+await check("security page shows the keeper's live scoped EVM window", async () => {
+  await page.goto(`${BASE}/security`, { waitUntil: "networkidle" });
+  const el = await page.waitForSelector("text=/scoped to \\d+ contracts/", { timeout: 30000 });
+  const t = await el.innerText();
+  await page.waitForSelector("text=DarwinRouter", { timeout: 10000 });
+  return t.match(/scoped to \d+ contracts/)[0];
+});
+
 await check("unknown basket URL is a 404", async () => {
   const r = await page.goto(`${BASE}/basket/NOPEdw`);
   assert(r.status() === 404, `status ${r.status()}`);
