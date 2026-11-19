@@ -98,6 +98,9 @@ export function NavBar() {
         <Link className={styles.navLink} href="/">
           Baskets
         </Link>
+        <Link className={styles.navLink} href="/portfolio">
+          Portfolio
+        </Link>
         <Link className={styles.navLink} href="/security">
           Post-quantum security
         </Link>
