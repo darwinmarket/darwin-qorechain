@@ -18,5 +18,10 @@ test("no usable answer throws", () => {
 test("toWad is exact to the nano-dollar", () => {
   assert.equal(toWad(1), 10n ** 18n);
   assert.equal(toWad(62374.35), 62374350000000000000000n);
-  assert.equal(toWad(0.0348797179706242), 34879718000000000n);
+  assert.equal(toWad(0.0348797179706242), 34879717970624200n);
+});
+
+test("toWad keeps a memecoin price precise", () => {
+  assert.equal(toWad(0.00005063678424081296), 50636784240813n);
+  assert.throws(() => toWad(0), /bad price/);
 });
