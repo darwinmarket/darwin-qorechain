@@ -37,7 +37,8 @@ export async function buildBuy(acc: Account, basket: Address, usdIn: bigint, erc
   const { shares } = await quoteBuy(basket, usdIn);
   const minShares = (shares * (10_000n - SLIPPAGE_BPS)) / 10_000n;
   msgs.push(crossVmCall(acc.address, ROUTER, encodeFunctionData({ abi: routerAbi, functionName: "buy", args: [basket, usdIn, minShares, acc.evm] })));
-  return { msgs, shares, gas: 1_400_000 + 400_000 * (msgs.length - 1) };
+  // Measured: a 3-leg buy is ~630k EVM gas plus ~730k for the cross-VM call and hybrid check.
+  return { msgs, shares, gas: 2_000_000 + 400_000 * (msgs.length - 1) };
 }
 
 export async function buildSell(acc: Account, basket: Address, shares: bigint) {
@@ -49,7 +50,7 @@ export async function buildSell(acc: Account, basket: Address, shares: bigint) {
   const { usdOut } = await quoteSell(basket, shares);
   const minOut = (usdOut * (10_000n - SLIPPAGE_BPS)) / 10_000n;
   msgs.push(crossVmCall(acc.address, ROUTER, encodeFunctionData({ abi: routerAbi, functionName: "sell", args: [basket, shares, minOut, acc.evm] })));
-  return { msgs, usdOut, gas: 1_300_000 + 400_000 * (msgs.length - 1) };
+  return { msgs, usdOut, gas: 1_600_000 + 400_000 * (msgs.length - 1) };
 }
 
 /** What redeeming `shares` in kind pays, component by component. */
@@ -60,7 +61,7 @@ export async function quoteRedeem(basket: Address, shares: bigint) {
 /** Redeem in kind: burn the shares, receive every component. Needs no oracle, cannot be paused. */
 export function buildRedeem(acc: Account, basket: Address, shares: bigint) {
   const msgs = [crossVmCall(acc.address, basket, encodeFunctionData({ abi: basketAbi, functionName: "redeem", args: [shares, acc.evm] }))];
-  return { msgs, gas: 900_000 };
+  return { msgs, gas: 1_100_000 };
 }
 
 export type _Hex = Hex;
