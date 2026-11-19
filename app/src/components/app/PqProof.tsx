@@ -69,8 +69,11 @@ export function PqProof({ basket }: { basket?: string }) {
         <div className={styles.proofRow}>
           <span className={styles.check}>✓</span>
           <div>
-            <strong>Redemption never stops.</strong>
-            <p>In-kind redemption needs no oracle, no curator and no admin, and cannot be paused.</p>
+            <strong>You hold one token, never the coins.</strong>
+            <p>
+              The vault holds the underlying crypto; you hold the basket token and sell it back for fUSD. Pausing can stop new buys,
+              never sales.
+            </p>
           </div>
         </div>
       </div>

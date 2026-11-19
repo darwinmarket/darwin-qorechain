@@ -6,7 +6,7 @@
  * Sell: [approve shares (only if needed)] + router.sell.
  */
 import { encodeFunctionData, maxUint256, type Address, type Hex } from "viem";
-import { basketAbi, erc20Abi, routerAbi } from "./abis";
+import { erc20Abi, routerAbi } from "./abis";
 import { client, ROUTER, TOKEN_INFO, TOKENS } from "./chain";
 import { convertCoin, crossVmCall, type EncodedMsg } from "./proto";
 import type { Account } from "./qorex";
@@ -51,17 +51,6 @@ export async function buildSell(acc: Account, basket: Address, shares: bigint) {
   const minOut = (usdOut * (10_000n - SLIPPAGE_BPS)) / 10_000n;
   msgs.push(crossVmCall(acc.address, ROUTER, encodeFunctionData({ abi: routerAbi, functionName: "sell", args: [basket, shares, minOut, acc.evm] })));
   return { msgs, usdOut, gas: 1_600_000 + 400_000 * (msgs.length - 1) };
-}
-
-/** What redeeming `shares` in kind pays, component by component. */
-export async function quoteRedeem(basket: Address, shares: bigint) {
-  return (await client.readContract({ address: basket, abi: basketAbi, functionName: "redeemAmounts", args: [shares] })) as readonly bigint[];
-}
-
-/** Redeem in kind: burn the shares, receive every component. Needs no oracle, cannot be paused. */
-export function buildRedeem(acc: Account, basket: Address, shares: bigint) {
-  const msgs = [crossVmCall(acc.address, basket, encodeFunctionData({ abi: basketAbi, functionName: "redeem", args: [shares, acc.evm] }))];
-  return { msgs, gas: 1_100_000 };
 }
 
 export type _Hex = Hex;
