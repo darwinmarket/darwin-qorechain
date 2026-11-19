@@ -165,7 +165,7 @@ node e2e/trade.mjs BLUEdw 2              # connect, buy 2 fUSD of BLUEdw, sell h
 - The reserve sells at oracle prices with a 0.30% spread; Darwin's own baskets are spread-exempt
   for rebalances. A rebalance that would cost more than 1% of NAV reverts.
 - Audit: see [docs/AUDIT.md](docs/AUDIT.md) (two-stage QCAI audit).
-- Tests: unit, fuzz, invariant, on-chain E2E (18/18) and browser E2E (16/16); see [docs/TESTING.md](docs/TESTING.md).
+- Tests: unit, fuzz, invariant, on-chain E2E (18/18) and browser E2E (18/18); see [docs/TESTING.md](docs/TESTING.md).
 - Testnet only: the tokens have no value and the mnemonic used here must never touch mainnet.
 
 ## Credits
