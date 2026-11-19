@@ -27,13 +27,22 @@ function OraclePill() {
 function WalletButton() {
   const { account, connect, connecting, disconnect, balances, installed, error } = useWallet();
   const [open, setOpen] = useState(false);
+  const [asked, setAsked] = useState(false);
   if (!account) {
     return (
       <div className={styles.walletMenu}>
-        <button type="button" className={styles.walletBtn} onClick={() => void connect()} disabled={connecting}>
+        <button
+          type="button"
+          className={styles.walletBtn}
+          onClick={() => {
+            setAsked(true);
+            void connect();
+          }}
+          disabled={connecting}
+        >
           {connecting ? "Connecting…" : "Connect QoreX"}
         </button>
-        {(error || installed === false) && (
+        {asked && (error || installed === false) && (
           <div className={styles.walletDrop}>
             <div className={styles.errorBox}>{error ?? "QoreX is not installed in this browser."}</div>
             <a className={styles.a} href={QOREX_INSTALL_URL} target="_blank" rel="noreferrer">

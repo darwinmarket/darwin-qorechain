@@ -112,4 +112,5 @@
 .pillar p { color: #71716b; font-size: 14px; line-height: 1.5; }
 .homeLower { display: grid; grid-template-columns: minmax(0, 1fr) 420px; gap: 20px; margin-top: 40px; align-items: start; }
 @media (max-width: 980px) { .homeLower { grid-template-columns: 1fr; } }
-.footer { color: #8b8b85; font-size: 12px; text-align: center; padding: 28px 0 0; }
+.footer { background: none !important; color: #8b8b85; font-size: 12px; text-align: center; padding: 28px 0 0 !important; border: 0 !important; }
+.footer a { color: inherit; }
