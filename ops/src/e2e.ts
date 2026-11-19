@@ -237,6 +237,19 @@ async function main() {
   });
 
   // ------------------------------------------------------------------ trading, native lane (QoreX path)
+  // Setup: the browser suite may leave the treasury's fUSD in bank form; bring 3 fUSD back to ERC-20.
+  await check("setup: the treasury holds at least 3 fUSD as ERC-20", async () => {
+    const have = await bal(d.tokens.fUSD, twin);
+    if (have >= 3_000_000n) return `already ${have}`;
+    const { client, address } = await treasuryClient();
+    const need = 3_000_000n - have;
+    const r: any = await client.signAndBroadcast(
+      [{ typeUrl: CONVERT_COIN_TYPE_URL, value: { coin: { denom: `erc20:${d.tokens.fUSD}`, amount: need.toString() }, receiver: twin, sender: address } }],
+      { amount: [{ denom: "uqor", amount: "80000" }], gas: "700000" }, "darwin e2e setup: bank -> ERC-20",
+    );
+    assert(!r.code, `convert-coin code ${r.code}`);
+    return `converted ${need} (tx ${r.transactionHash})`;
+  });
   await check("native lane: hybrid-signed MsgCrossVMCall buy and sell BLUEDW from a coin-118 account", async () => {
     const s0 = await treasuryShares("BLUEDW");
     const h1 = await nativeTrade("buy", "BLUEDW", "1");
