@@ -12,3 +12,5 @@ app/.vercel/
 .DS_Store
 *.log
 e2e/shots/
+app/e2e/shots/
+*.tsbuildinfo
