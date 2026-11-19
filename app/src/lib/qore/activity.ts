@@ -1,11 +1,14 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { parseAbiItem, type Address } from "viem";
-import { client, D, ORACLE, ROUTER } from "./chain";
+import { bytesToHex, decodeFunctionData, parseAbiItem, type Address } from "viem";
+import { routerAbi } from "./abis";
+import { client, D, ORACLE, REST, ROUTER } from "./chain";
 
 export type ActivityItem = {
   kind: "buy" | "sell" | "round" | "rebalance";
+  /** Signed hybrid (secp256k1 + ML-DSA-87) on the native lane and verified by the chain. */
+  hybrid?: boolean;
   basket?: string;
   text: string;
   tx: string;
@@ -24,6 +27,45 @@ const SPAN = 9_000n; // the public RPC answers at most 10,000 blocks per query
 
 const basketKey = (a?: string) =>
   a ? Object.entries(D.baskets).find(([, b]) => b.address.toLowerCase() === a.toLowerCase())?.[0] : undefined;
+
+type CosmosTx = {
+  txhash: string;
+  height: string;
+  timestamp: string;
+  code: number;
+  events: { type: string; attributes: { key: string; value: string }[] }[];
+  tx: { body: { messages: { "@type": string; target_contract?: string; payload?: string; sender?: string }[] } };
+};
+
+const b64 = (s: string) => bytesToHex(Uint8Array.from(atob(s), (c) => c.charCodeAt(0)));
+
+/** Trades sent from QoreX: native MsgCrossVMCall into the router. Their EVM logs are not indexed, so
+ *  they are read from the native tx search and decoded from the calldata they carry. */
+async function readNativeTrades(): Promise<ActivityItem[]> {
+  const q = encodeURIComponent(`crossvm_request.target_contract='${ROUTER.toLowerCase()}'`);
+  const res = await fetch(`${REST}/cosmos/tx/v1beta1/txs?query=${q}`);
+  if (!res.ok) return [];
+  const { tx_responses } = (await res.json()) as { tx_responses?: CosmosTx[] };
+  const out: ActivityItem[] = [];
+  for (const t of tx_responses ?? []) {
+    if (t.code !== 0) continue;
+    const hybrid = t.events.some((e) => e.type === "pqc_hybrid_verify" && e.attributes.some((a) => a.key === "status" && a.value === "verified"));
+    for (const m of t.tx.body.messages) {
+      if (!m["@type"].endsWith("MsgCrossVMCall") || m.target_contract?.toLowerCase() !== ROUTER.toLowerCase() || !m.payload) continue;
+      try {
+        const call = decodeFunctionData({ abi: routerAbi, data: b64(m.payload) });
+        const key = basketKey(call.args[0] as string);
+        const display = D.baskets[key!]?.display ?? "?";
+        const base = { basket: key, tx: t.txhash, block: BigInt(t.height), time: Date.parse(t.timestamp) / 1000, hybrid };
+        if (call.functionName === "buy") out.push({ ...base, kind: "buy", text: `Bought ${display} with ${(Number(call.args[1]) / 1e6).toFixed(2)} fUSD from QoreX` });
+        if (call.functionName === "sell") out.push({ ...base, kind: "sell", text: `Sold ${(Number(call.args[1]) / 1e18).toFixed(3)} ${display} from QoreX` });
+      } catch {
+        /* not a trade */
+      }
+    }
+  }
+  return out;
+}
 
 async function readActivity(onlyBasket?: string): Promise<ActivityItem[]> {
   const head = await client.getBlockNumber();
@@ -46,6 +88,7 @@ async function readActivity(onlyBasket?: string): Promise<ActivityItem[]> {
       items.push({ kind: "rebalance", basket: key, text: `${D.baskets[key!]?.display ?? "Basket"} rebalanced: ${l.args.trades} trade(s), curator ML-DSA-87 signature`, tx, block });
     }
   }
+  items.push(...(await readNativeTrades().catch(() => [])));
   const filtered = onlyBasket ? items.filter((i) => !i.basket || i.basket === onlyBasket) : items;
   return filtered.sort((a, b) => Number(b.block - a.block)).slice(0, 40);
 }
