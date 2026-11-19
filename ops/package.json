@@ -1,0 +1,25 @@
+{
+  "name": "@darwin-qore/ops",
+  "version": "1.0.0",
+  "description": "Darwin on QoreChain: account, window and deployment tooling",
+  "main": "index.js",
+  "scripts": {
+    "status": "tsx src/status.ts"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "MIT",
+  "type": "module",
+  "devDependencies": {
+    "@types/node": "^26.6.6",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2"
+  },
+  "dependencies": {
+    "@cosmjs/stargate": "^0.39.0",
+    "@qorechain/evm": "^0.14.0",
+    "@qorechain/sdk": "^0.14.0",
+    "viem": "2.57.17"
+  },
+  "private": true
+}
