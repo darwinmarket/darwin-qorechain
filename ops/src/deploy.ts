@@ -19,6 +19,7 @@ export const FEST = {
   fUSD: "0x97143B771D34ddb9130b807b135Ae675A5a963CA",
   fETH: "0x02292293c13880a26242690eb70a0e42B8E91c28",
   fBTC: "0x4604e7E45b2ecdbfbDc157103f5B2b62cb16451A",
+  QWAKK: "0xa5b3c3Fb92E2E89555F9909b9004C65F3542eE23", // community memecoin, governance-registered pair
 } as const satisfies Record<string, Address>;
 
 export const BASKETS = [
@@ -37,10 +38,15 @@ export const BASKETS = [
     description: "A bet on QoreChain itself: 40% QOR, 30% ETH, 30% BTC.",
     components: ["WQOR", "fETH", "fBTC"], weights: [4000, 3000, 3000], seedUsd: 1,
   },
+  {
+    key: "DEGENDW", name: "Darwin Degen", display: "DEGENdw",
+    description: "QoreChain's own degen pair: 50% QOR, 50% QWAKK. High risk, for fun.",
+    components: ["WQOR", "QWAKK"], weights: [5000, 5000], seedUsd: 0.4,
+  },
 ] as const;
 
 const NAV_PER_SHARE = 10; // USD at seed
-const DECIMALS: Record<string, number> = { fUSD: 6, fETH: 18, fBTC: 8, WQOR: 18 };
+const DECIMALS: Record<string, number> = { fUSD: 6, fETH: 18, fBTC: 8, WQOR: 18, QWAKK: 6 };
 
 const erc20 = artifact("WQOR").abi; // WQOR is a plain OZ ERC20 plus deposit/withdraw
 const enc = (types: string, values: unknown[]) => encodeAbiParameters(parseAbiParameters(types), values as any) as Hex;
@@ -71,16 +77,17 @@ async function main() {
     await step(`oracle feed ${name}`, () =>
       adminCall(d.oracle, oracleAbi, "addFeed", "addFeed", enc("uint16, string", [id, `${name}/USD`]), [id, `${name}/USD`]));
   }
-  const tokenFeed: Record<string, number> = { fUSD: FEED.USD, fETH: FEED.ETH, fBTC: FEED.BTC, WQOR: FEED.QOR };
+  const tokenFeed: Record<string, number> = { fUSD: FEED.USD, fETH: FEED.ETH, fBTC: FEED.BTC, WQOR: FEED.QOR, QWAKK: FEED.QWAKK };
   for (const [sym, id] of Object.entries(tokenFeed)) {
     await step(`oracle token ${sym}`, () =>
       adminCall(d.oracle, oracleAbi, "setTokenFeed", "setTokenFeed", enc("address, uint16", [d.tokens[sym], id]), [d.tokens[sym], id]));
   }
   await step("oracle first round", () => submitRound(d.oracle));
+  await step("oracle round with QWAKK", () => submitRound(d.oracle));
 
   await step("deploy reserve", async () => { d.reserve = await deploy("deployer", "DarwinReserve", [admin, d.oracle, 30]); });
   const reserveAbi = artifact("DarwinReserve").abi;
-  for (const sym of ["fUSD", "fETH", "fBTC", "WQOR"]) {
+  for (const sym of ["fUSD", "fETH", "fBTC", "WQOR", "QWAKK"]) {
     await step(`reserve list ${sym}`, () =>
       adminCall(d.reserve, reserveAbi, "listToken", "listToken", enc("address, bool", [d.tokens[sym], true]), [d.tokens[sym], true]));
   }
@@ -108,7 +115,7 @@ async function main() {
 
   // ---- seed the baskets at NAV 10 USD per share ----
   const prices = await fetchPrices();
-  const usdOf: Record<string, number> = { fUSD: 1, fETH: prices.ETH, fBTC: prices.BTC, WQOR: prices.QOR };
+  const usdOf: Record<string, number> = { fUSD: 1, fETH: prices.ETH, fBTC: prices.BTC, WQOR: prices.QOR, QWAKK: prices.QWAKK };
   const qorNeeded = BASKETS.reduce((s, b) => {
     const i = (b.components as readonly string[]).indexOf("WQOR");
     return i < 0 ? s : s + (b.seedUsd * b.weights[i]) / 10_000 / prices.QOR;
@@ -131,13 +138,19 @@ async function main() {
       });
       const shares = BigInt(Math.round((b.seedUsd / NAV_PER_SHARE) * 1e6)) * 10n ** 12n;
       console.log(`  ${b.key}: ${amounts.join(", ")} for ${Number(shares) / 1e18} shares`);
+      // Wrap the QOR this basket needs if the deployer does not hold enough WQOR yet.
+      const iq = (b.components as readonly string[]).indexOf("WQOR");
+      if (iq >= 0) {
+        const have = (await publicClient.readContract({ address: d.tokens.WQOR, abi: erc20, functionName: "balanceOf", args: [admin] })) as bigint;
+        if (have < amounts[iq]) await write("deployer", d.tokens.WQOR, erc20, "deposit", [], amounts[iq] - have);
+      }
       await write("deployer", addr, basketAbi, "seed", [amounts, shares, admin]);
       d.baskets[b.key].seed = { amounts: amounts.map(String), shares: shares.toString(), prices: usdOf };
     });
   }
 
   // ---- reserve inventory: everything left, minus a small trading float for the demo account ----
-  for (const sym of ["fBTC", "fETH", "fUSD", "WQOR"]) {
+  for (const sym of ["fBTC", "fETH", "fUSD", "WQOR", "QWAKK"]) {
     await step(`fund reserve ${sym}`, async () => {
       const bal = (await publicClient.readContract({ address: d.tokens[sym], abi: erc20, functionName: "balanceOf", args: [admin] })) as bigint;
       const keep = sym === "fUSD" ? 150n * 10n ** 6n : 0n;
