@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { LogoStack, StockLogo } from "@/components/darwin/StockLogo";
 import { basketTicker } from "@/lib/baskets";
-import { usd } from "@/lib/darwin/format";
+import { money, usd } from "@/lib/darwin/format";
 import { useBaskets, useOracle } from "@/lib/darwin/store";
 import { useWallet } from "@/lib/qore/wallet";
 import styles from "./app.module.css";
@@ -57,7 +57,7 @@ export function Portfolio() {
           </small>
         </div>
         <div className={styles.bNav}>
-          <strong>{usd(total)}</strong>
+          <strong>{money(total)}</strong>
           <small>at the post-quantum oracle&apos;s prices</small>
         </div>
       </header>
@@ -93,7 +93,7 @@ export function Portfolio() {
                   </td>
                   <td className={styles.r}>{shares.toFixed(4)}</td>
                   <td className={styles.r}>{usd(b.navUsd)}</td>
-                  <td className={styles.r}>{usd(value)}</td>
+                  <td className={styles.r}>{money(value)}</td>
                   <td className={styles.r}>
                     <Link className={styles.a} href={`/basket/${basketTicker(b.symbol)}`}>
                       Trade
@@ -125,7 +125,7 @@ export function Portfolio() {
                   ({(Number(balances?.fusdBank ?? 0n) / 1e6).toFixed(2)} bank · {(Number(balances?.fusdErc20 ?? 0n) / 1e6).toFixed(2)} ERC-20)
                 </span>
               </td>
-              <td className={styles.r}>{usd(fusd)}</td>
+              <td className={styles.r}>{money(fusd)}</td>
             </tr>
             {coins.map((c) => (
               <tr key={c.key}>
@@ -135,7 +135,7 @@ export function Portfolio() {
                   </span>
                 </td>
                 <td className={styles.r}>{c.amount.toPrecision(5)}</td>
-                <td className={styles.r}>{usd(c.value)}</td>
+                <td className={styles.r}>{money(c.value)}</td>
               </tr>
             ))}
             <tr>
@@ -145,7 +145,7 @@ export function Portfolio() {
                 </span>
               </td>
               <td className={styles.r}>{(Number(balances?.qor ?? 0n) / 1e6).toFixed(3)}</td>
-              <td className={styles.r}>{usd((Number(balances?.qor ?? 0n) / 1e6) * price("QOR"))}</td>
+              <td className={styles.r}>{money((Number(balances?.qor ?? 0n) / 1e6) * price("QOR"))}</td>
             </tr>
           </tbody>
         </table>

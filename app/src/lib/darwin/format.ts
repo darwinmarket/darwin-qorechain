@@ -64,3 +64,10 @@ export function balanceShort(n: number): string {
   const truncated = Math.trunc(n * 1e4) / 1e4;
   return truncated.toLocaleString(LOCALE, { maximumFractionDigits: 4 });
 }
+
+/** A money amount for display: always 2 decimals, "<$0.01" for dust. */
+export function money(n: number): string {
+  if (!Number.isFinite(n) || n === 0) return "$0.00";
+  if (Math.abs(n) < 0.01) return "<$0.01";
+  return `$${n.toLocaleString(LOCALE, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}

@@ -4,7 +4,7 @@ import { memo, useMemo } from "react";
 import { Change, Chart } from "./Chart";
 import { CompositionTreemap } from "./CompositionTreemap";
 import { LogoStack } from "./StockLogo";
-import { usd } from "@/lib/darwin/format";
+import { money, usd } from "@/lib/darwin/format";
 import { basketTicker } from "@/lib/baskets";
 import { useNavHistory } from "@/lib/darwin/navHistory";
 import type { Basket } from "@/lib/darwin/types";
@@ -58,7 +58,7 @@ export const BasketTile = memo(function BasketTile({ b, onOpen }: { b: Basket; o
           Since launch <Change value={launch} />
         </span>
         <span>
-          {usd(b.tvlUsd)} TVL · {b.legs.length} assets
+          {money(b.tvlUsd)} TVL · {b.legs.length} assets
         </span>
       </footer>
     </BasketLink>
