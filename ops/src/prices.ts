@@ -8,6 +8,9 @@
  *    pool gives a second one through the BTC price. The median of the usable ones is taken.
  */
 import { REST } from "./net.js";
+import { median, toWad } from "./lib/median.js";
+
+export { toWad };
 
 export const FEED = { USD: 1, ETH: 2, BTC: 3, QOR: 4 } as const;
 export type FeedName = keyof typeof FEED;
@@ -27,12 +30,6 @@ async function json(url: string, ms = 6000): Promise<any> {
   }
 }
 
-function median(xs: number[]): number {
-  const s = xs.filter((x) => Number.isFinite(x) && x > 0).sort((a, b) => a - b);
-  if (!s.length) throw new Error("no price source answered");
-  const m = Math.floor(s.length / 2);
-  return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
-}
 
 const SOURCES: Record<"BTC" | "ETH", (() => Promise<number>)[]> = {
   BTC: [
@@ -90,10 +87,6 @@ export async function fetchPrices(): Promise<PriceSet> {
   };
 }
 
-/** USD float -> uint128 with 18 decimals, exact to 1e-9 USD. */
-export function toWad(usd: number): bigint {
-  return BigInt(Math.round(usd * 1e9)) * 10n ** 9n;
-}
 
 if (import.meta.url === `file://${process.argv[1]}`) {
   console.log(await fetchPrices());
