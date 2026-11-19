@@ -5,13 +5,14 @@
  *    (allowed_targets), so a leaked secp256k1 key of the keeper can touch nothing else.
  *  - Oracle: submits an ML-DSA-87 signed round every HEARTBEAT seconds, or sooner when a price
  *    moved more than DEVIATION_BPS.
- *  - Rebalance: every REBALANCE_EVERY seconds, rebalances any basket whose weights drifted more
- *    than DRIFT_BPS, with the curator's ML-DSA-87 signature.
+ *  - Rebalance: weekly (Monday 12:00 UTC) or daily, plus at once on a large drift, with the
+ *    curator's ML-DSA-87 signature (see REBALANCE_SCHEDULE below).
  *  - Demo flow (DEMO_TRADES=1): the treasury trades small amounts from the native lane,
  *    hybrid-signed, like a QoreX user, so the app shows life. It never sells seed shares.
  *
  *   tsx src/keeper.ts
  */
+import { readFileSync, writeFileSync } from "node:fs";
 import { formatEther, type Address } from "viem";
 import { fetchEvmWindow } from "@qorechain/sdk";
 import { evmAccount } from "./accounts.js";
@@ -21,6 +22,7 @@ import { FEED, fetchPrices } from "./prices.js";
 import { submitRound } from "./oracle.js";
 import { rebalance } from "./rebalance.js";
 import { open } from "./window.js";
+import { lastSlot } from "./lib/schedule.js";
 import { evmTwin, nativeTrade, treasuryShares } from "./crossvm.js";
 import { bankBalance } from "./amm.js";
 import { treasuryClient } from "./nativeClient.js";
@@ -28,8 +30,16 @@ import { CONVERT_COIN_TYPE_URL } from "./erc20Msgs.js";
 
 const HEARTBEAT = Number(process.env.HEARTBEAT ?? 600);
 const DEVIATION_BPS = Number(process.env.DEVIATION_BPS ?? 25);
-const REBALANCE_EVERY = Number(process.env.REBALANCE_EVERY ?? 900);
-const DRIFT_BPS = Number(process.env.DRIFT_BPS ?? 150);
+/**
+ * Rebalancing policy: on schedule (weekly by default, Monday 12:00 UTC; or daily at 12:00 UTC) a
+ * basket goes back to target if any weight drifted >= SCHEDULED_DRIFT_BPS. Between two scheduled
+ * runs, a drift >= EMERGENCY_DRIFT_BPS (a crash, a rally) rebalances at once. Checked every 15 min.
+ */
+const REBALANCE_SCHEDULE = (process.env.REBALANCE_SCHEDULE ?? "weekly") as "weekly" | "daily";
+const SCHEDULED_DRIFT_BPS = Number(process.env.SCHEDULED_DRIFT_BPS ?? 100);
+const EMERGENCY_DRIFT_BPS = Number(process.env.EMERGENCY_DRIFT_BPS ?? 500);
+const REBALANCE_CHECK_EVERY = 900;
+const STATE_FILE = new URL("../.keeper-state.json", import.meta.url);
 const DEMO_EVERY = Number(process.env.DEMO_EVERY ?? 2700);
 const DEMO = process.env.DEMO_TRADES === "1";
 const TICK = 60;
@@ -37,7 +47,16 @@ const TICK = 60;
 const oracleAbi = artifact("DarwinOracle").abi;
 const log = (...a: unknown[]) => console.log(new Date().toISOString(), ...a);
 
-let lastRebalance = 0;
+let lastRebalanceCheck = 0;
+
+
+function readState(): { lastScheduled?: string } {
+  try {
+    return JSON.parse(readFileSync(STATE_FILE, "utf8"));
+  } catch {
+    return {};
+  }
+}
 let lastDemo = 0;
 let demoSide = 0;
 
@@ -84,10 +103,18 @@ async function maybeRound() {
 }
 
 async function maybeRebalance() {
-  if (Date.now() / 1000 - lastRebalance < REBALANCE_EVERY) return;
-  lastRebalance = Date.now() / 1000;
+  if (Date.now() / 1000 - lastRebalanceCheck < REBALANCE_CHECK_EVERY) return;
+  lastRebalanceCheck = Date.now() / 1000;
+  const state = readState();
+  const slot = lastSlot(new Date(), REBALANCE_SCHEDULE);
+  const scheduledDue = !state.lastScheduled || new Date(state.lastScheduled) < slot;
   for (const key of Object.keys(loadDeployments().baskets)) {
-    await rebalance(key, DRIFT_BPS).catch((e) => log(`rebalance ${key} failed: ${e.message?.slice(0, 200)}`));
+    const threshold = scheduledDue ? SCHEDULED_DRIFT_BPS : EMERGENCY_DRIFT_BPS;
+    await rebalance(key, threshold).catch((e) => log(`rebalance ${key} failed: ${e.message?.slice(0, 200)}`));
+  }
+  if (scheduledDue) {
+    writeFileSync(STATE_FILE, JSON.stringify({ ...state, lastScheduled: slot.toISOString() }, null, 2));
+    log(`scheduled ${REBALANCE_SCHEDULE} rebalance for the ${slot.toISOString()} slot done`);
   }
 }
 
@@ -144,7 +171,7 @@ async function health() {
   if (bal < 5n * 10n ** 18n) log(`WARNING: relayer has ${formatEther(bal)} QOR left, claim the faucet and fund it`);
 }
 
-log(`keeper up: heartbeat ${HEARTBEAT}s, deviation ${DEVIATION_BPS} bps, rebalance every ${REBALANCE_EVERY}s at ${DRIFT_BPS} bps${DEMO ? `, demo trades every ${DEMO_EVERY}s` : ""}`);
+log(`keeper up: heartbeat ${HEARTBEAT}s, deviation ${DEVIATION_BPS} bps, rebalance ${REBALANCE_SCHEDULE} at 12:00 UTC (${SCHEDULED_DRIFT_BPS} bps) or at once beyond ${EMERGENCY_DRIFT_BPS} bps${DEMO ? `, demo trades every ${DEMO_EVERY}s` : ""}`);
 let ticks = 0;
 for (;;) {
   for (const [name, fn] of [["window", ensureWindow], ["oracle", maybeRound], ["rebalance", maybeRebalance], ["demo", maybeDemo]] as const) {

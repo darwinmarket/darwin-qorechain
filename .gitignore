@@ -14,3 +14,4 @@ app/.vercel/
 e2e/shots/
 app/e2e/shots/
 *.tsbuildinfo
+.keeper-state.json
