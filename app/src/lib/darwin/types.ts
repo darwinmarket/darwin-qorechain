@@ -1,6 +1,6 @@
 export type AssetClass = "crypto";
 
-export type Quote = "USDCx";
+export type Quote = "fUSD";
 
 /** A tokenized stock that can be added to a basket. */
 export type Asset = {
@@ -57,7 +57,7 @@ export type Basket = {
   issuanceAvailable?: number;
   redemptionAvailable?: number;
   legs: Leg[];
-  /** Buyable on Miden today; the others are priced but not yet tradable. */
+  /** Tradable on QoreChain today. */
   live?: boolean;
   /** ISO date the fixed units were set, and the share value on that day. */
   inception?: string;

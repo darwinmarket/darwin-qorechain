@@ -3,16 +3,18 @@
 import { memo, useState, type CSSProperties } from "react";
 
 /** Official coin logos, served locally so nothing depends on a third-party CDN. */
-const COIN_ICONS = new Set(["BTC", "ETH", "SOL", "XMR", "ZEC", "DASH", "NEAR", "XAUT", "PAXG", "LINK", "AAVE", "UNI", "USDC"]);
+const COIN_ICONS = new Set(["BTC", "ETH", "USDC", "QOR"]);
+/** Basket legs are named by what they track; fUSD (the Fest test dollar) shows the dollar mark. */
+const ALIAS: Record<string, string> = { USD: "USDC", FUSD: "USDC", FBTC: "BTC", FETH: "ETH", WQOR: "QOR" };
 /** PNG unless named here. Vector where we have it: these are drawn as small as 18px and scale up
  *  into the basket headers, and the bitmap XAUT was visibly soft at both ends. SOL is the official
  *  wordless gradient logomark, shipped as a vector so it stays crisp at every bubble size. */
-const SVG_ICONS = new Set(["XAUT", "USDC", "SOL"]);
+const SVG_ICONS = new Set(["USDC", "QOR"]);
 
-const logoUrl = (symbol: string) =>
-  COIN_ICONS.has(symbol)
-    ? `/logos/crypto/${symbol}.${SVG_ICONS.has(symbol) ? "svg" : "png"}`
-    : `https://assets.parqet.com/logos/symbol/${symbol}?format=png&size=100`;
+const logoUrl = (raw: string) => {
+  const symbol = ALIAS[raw] ?? raw;
+  return COIN_ICONS.has(symbol) ? `/logos/crypto/${symbol}.${SVG_ICONS.has(symbol) ? "svg" : "png"}` : "";
+};
 
 export const StockLogo = memo(function StockLogo({ sym, size = 22 }: { sym: string; size?: number }) {
   const symbol = sym.trim().toUpperCase();
@@ -20,7 +22,7 @@ export const StockLogo = memo(function StockLogo({ sym, size = 22 }: { sym: stri
   const [failed, setFailed] = useState<string | null>(null);
   const style = { width: size, height: size, borderRadius: 999 };
 
-  if (failed !== src) {
+  if (src && failed !== src) {
     return (
       // Loaded eagerly: these sit above the fold (hero chips, tile headers) and weigh a few kB
       // each, so deferring them only made them pop in after everything else had settled.
