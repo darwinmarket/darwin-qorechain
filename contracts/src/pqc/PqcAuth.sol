@@ -1,0 +1,31 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.24;
+
+import {IQorePQC} from "../interfaces/IQorePQC.sol";
+
+/// @title PqcAuth
+/// @notice Checks that `account` signed `message` with the ML-DSA-87 key it registered on chain.
+/// The key is never stored by Darwin: it is read from QoreChain's key registry on every check, so a
+/// key the account rotates on chain is picked up at once, and a key without proof of possession is
+/// refused.
+library PqcAuth {
+    IQorePQC internal constant PQC_VERIFY = IQorePQC(0x0000000000000000000000000000000000000a01);
+    IQorePQC internal constant PQC_KEYS = IQorePQC(0x0000000000000000000000000000000000000a02);
+
+    error PqcKeyNotRegistered(address account);
+    error PqcKeyNotProven(address account);
+    error BadPqcSignature(address account);
+
+    function requireSigned(address account, bytes memory message, bytes calldata signature) internal view {
+        (bool registered,, bytes memory pubkey, bool proven) = PQC_KEYS.pqcKeyStatus(account);
+        if (!registered || pubkey.length == 0) revert PqcKeyNotRegistered(account);
+        if (!proven) revert PqcKeyNotProven(account);
+        if (!PQC_VERIFY.pqcVerify(pubkey, signature, message)) revert BadPqcSignature(account);
+    }
+
+    /// @notice Whether `account` currently holds a registered, proven ML-DSA-87 key.
+    function hasProvenKey(address account) internal view returns (bool) {
+        (bool registered,, bytes memory pubkey, bool proven) = PQC_KEYS.pqcKeyStatus(account);
+        return registered && proven && pubkey.length != 0;
+    }
+}
