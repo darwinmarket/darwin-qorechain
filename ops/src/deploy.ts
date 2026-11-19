@@ -112,6 +112,11 @@ async function main() {
   await step("deploy router", async () => {
     d.router = await deploy("deployer", "DarwinRouter", [d.tokens.fUSD, d.reserve, 30, admin]);
   });
+  // v2: exact-cost quotes, so small buys of baskets with an 8-decimal leg never revert on rounding.
+  await step("deploy router v2", async () => {
+    d.routerHistory = [...(d.routerHistory ?? []), { address: d.router, retired: new Date().toISOString(), reason: "linear quote could undershoot rounding on 8-decimal legs" }];
+    d.router = await deploy("deployer", "DarwinRouter", [d.tokens.fUSD, d.reserve, 30, admin]);
+  });
 
   // ---- seed the baskets at NAV 10 USD per share ----
   const prices = await fetchPrices();
