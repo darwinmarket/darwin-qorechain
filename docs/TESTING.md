@@ -18,6 +18,7 @@ Reports with every transaction hash: [docs/e2e](e2e).
 ## Coverage (forge coverage, unit and fuzz tests)
 
 | File                                  | % Lines          | % Statements     | % Branches     | % Funcs         |
+|---|---|---|---|---|
 | src/DarwinBasket.sol                  | 99.37% (158/159) | 96.23% (204/212) | 74.19% (23/31) | 95.24% (20/21)  |
 | src/DarwinOracle.sol                  | 100.00% (76/76)  | 92.66% (101/109) | 55.56% (10/18) | 100.00% (12/12) |
 | src/DarwinReserve.sol                 | 94.74% (72/76)   | 83.70% (77/92)   | 36.84% (7/19)  | 93.33% (14/15)  |
