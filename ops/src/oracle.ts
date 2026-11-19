@@ -15,8 +15,11 @@ const abi = artifact("DarwinOracle").abi;
 export async function submitRound(oracle?: Address) {
   const address = (oracle ?? loadDeployments().oracle) as Address;
   const p = await fetchPrices();
-  const ids = [FEED.USD, FEED.ETH, FEED.BTC, FEED.QOR];
-  const prices = [toWad(p.USD), toWad(p.ETH), toWad(p.BTC), toWad(p.QOR)];
+  // Publish every feed the oracle knows, in its own order.
+  const known = (await publicClient.readContract({ address, abi, functionName: "feedIds" })) as number[];
+  const byId = Object.fromEntries(Object.entries(FEED).map(([name, id]) => [id, name])) as Record<number, keyof typeof FEED>;
+  const ids = known.filter((id) => byId[id]);
+  const prices = ids.map((id) => toWad(p[byId[id]]));
   const [round, last] = await Promise.all([
     publicClient.readContract({ address, abi, functionName: "round" }) as Promise<bigint>,
     publicClient.readContract({ address, abi, functionName: "lastTimestamp" }) as Promise<bigint>,
@@ -30,7 +33,7 @@ export async function submitRound(oracle?: Address) {
   const sig = await pqSign("reporter", msg);
   const receipt = await write("deployer", address, abi, "submit", [ts, ids, prices, sig]);
   console.log(
-    `round ${round + 1n}: BTC ${p.BTC} ETH ${p.ETH} QOR ${p.QOR.toFixed(5)} ` +
+    `round ${round + 1n}: BTC ${p.BTC} ETH ${p.ETH} QOR ${p.QOR.toFixed(5)}${ids.includes(FEED.QWAKK) ? ` QWAKK ${p.QWAKK.toExponential(3)}` : ""} ` +
       `(${(sig.length - 2) / 2}-byte ML-DSA-87 sig, gas ${receipt.gasUsed}, tx ${receipt.transactionHash})`,
   );
   return receipt;
