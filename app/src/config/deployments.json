@@ -1,0 +1,113 @@
+{
+  "network": {
+    "chainId": 9800,
+    "cosmosChainId": "qorechain-diana",
+    "rpc": "https://evm-testnet.qore.host"
+  },
+  "roles": {
+    "admin": "0x20807accBc9693B40a17F2EC73a07e6dc77d3f85",
+    "reporter": "0x6A286f3D805c2bE0d653Ec86c1CaD9598373CB2e",
+    "curator": "0xe0BBCcb71b761041B3f3038b3E6cdb392CfbE373",
+    "guardian": "0x20807accBc9693B40a17F2EC73a07e6dc77d3f85",
+    "feeTo": "0x20807accBc9693B40a17F2EC73a07e6dc77d3f85"
+  },
+  "tokens": {
+    "fUSD": "0x97143B771D34ddb9130b807b135Ae675A5a963CA",
+    "fETH": "0x02292293c13880a26242690eb70a0e42B8E91c28",
+    "fBTC": "0x4604e7E45b2ecdbfbDc157103f5B2b62cb16451A",
+    "WQOR": "0xa140f05ff3fec2d757ae758cddc064e2e386b749"
+  },
+  "oracle": "0x26ede83659e3e007f3fe568ee6c6a20df77929e6",
+  "reserve": "0x39a401ae133e80b05c6f7076bc0bc6d5e3df1a23",
+  "baskets": {
+    "BLUEDW": {
+      "address": "0x033e85e85853bcf9b580c5613f373eb739bd9c2a",
+      "name": "Darwin Blue Chip",
+      "display": "BLUEdw",
+      "description": "The two crypto majors, half and half: 50% BTC, 50% ETH.",
+      "components": [
+        "fBTC",
+        "fETH"
+      ],
+      "weights": [
+        5000,
+        5000
+      ],
+      "seed": {
+        "amounts": [
+          "160316",
+          "56490472881748496"
+        ],
+        "shares": "20000000000000000000",
+        "prices": {
+          "fUSD": 1,
+          "fETH": 1770.21,
+          "fBTC": 62376.7,
+          "WQOR": 0.03486644162686922
+        }
+      }
+    },
+    "BALDW": {
+      "address": "0x5e8290cfe9ad6487c7336780b0069ecb9b9b92cd",
+      "name": "Darwin Balanced",
+      "display": "BALdw",
+      "description": "BTC and ETH with a 30% dollar cushion: 35% BTC, 35% ETH, 30% USD.",
+      "components": [
+        "fBTC",
+        "fETH",
+        "fUSD"
+      ],
+      "weights": [
+        3500,
+        3500,
+        3000
+      ],
+      "seed": {
+        "amounts": [
+          "112221",
+          "39543331017223944",
+          "60000000"
+        ],
+        "shares": "20000000000000000000",
+        "prices": {
+          "fUSD": 1,
+          "fETH": 1770.21,
+          "fBTC": 62376.7,
+          "WQOR": 0.03486644162686922
+        }
+      }
+    },
+    "QOREDW": {
+      "address": "0x16b1463475aa75d80519bc2743d137b507cb2fe0",
+      "name": "Darwin Qore Ecosystem",
+      "display": "QOREdw",
+      "description": "A bet on QoreChain itself: 40% QOR, 30% ETH, 30% BTC.",
+      "components": [
+        "WQOR",
+        "fETH",
+        "fBTC"
+      ],
+      "weights": [
+        4000,
+        3000,
+        3000
+      ],
+      "seed": {
+        "amounts": [
+          "11472349380550121472",
+          "169471418645245",
+          "480"
+        ],
+        "shares": "100000000000000000",
+        "prices": {
+          "fUSD": 1,
+          "fETH": 1770.21,
+          "fBTC": 62376.7,
+          "WQOR": 0.03486644162686922
+        }
+      }
+    }
+  },
+  "router": "0x6b4d9220db397d4490ce4acc6ff63e4386a39de3",
+  "deployedAt": "2026-11-19T19:54:49.262Z"
+}
