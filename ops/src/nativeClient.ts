@@ -43,7 +43,7 @@ export async function sendFromRole(
 ): Promise<string> {
   const acc = await evmAccount(role);
   const { accountNumber, sequence } = await accountSequence(acc.cosmos);
-  const signer = new EthNativeSigner(acc, { signMode: mode, rest: REST });
+  const signer = new EthNativeSigner(acc, { signMode: mode, rest: REST, registry: qorechainRegistry(ERC20_REGISTRY_TYPES) });
   const transport = await StargateClient.connect(RPC);
   try {
     const res = await signer.signAndBroadcast(transport, {
