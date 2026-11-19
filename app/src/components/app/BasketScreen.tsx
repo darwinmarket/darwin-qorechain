@@ -76,7 +76,7 @@ export function BasketScreen({ symbol }: { symbol: string }) {
           <small>Trade fee</small>
           <strong>0.30%</strong>
         </div>
-        <div className={styles.stat} title="Weekly, Monday 12:00 UTC, when a weight drifted 1% or more; at once beyond a 5% drift. Every rebalance is signed by the curator with ML-DSA-87.">
+        <div className={styles.stat} title="Only every Monday at 12:00 UTC, when a weight drifted 1% or more. Every rebalance is signed by the curator with ML-DSA-87.">
           <small>Next rebalance</small>
           <strong>
             {nextSlot(new Date(), "weekly").toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" })} 12:00 UTC

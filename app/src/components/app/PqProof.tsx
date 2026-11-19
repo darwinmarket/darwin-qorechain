@@ -42,8 +42,8 @@ export function PqProof({ basket }: { basket?: string }) {
             <strong>Rebalances signed by the curator.</strong>
             <p>
               The {b ? b.display : "basket"} trades only with an ML-DSA-87 signature of the curator {short(D.roles.curator)} over the
-              exact trades, and reverts if a rebalance costs more than 1% of NAV. Rebalances run every Monday at
-              12:00 UTC when a weight drifted 1% or more, and at once beyond a 5% drift.
+              exact trades, and reverts if a rebalance costs more than 1% of NAV. Rebalances run only every Monday
+              at 12:00 UTC, when a weight drifted 1% or more.
             </p>
           </div>
         </div>
