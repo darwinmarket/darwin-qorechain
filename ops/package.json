@@ -4,7 +4,16 @@
   "description": "Darwin on QoreChain: account, window and deployment tooling",
   "main": "index.js",
   "scripts": {
-    "status": "tsx src/status.ts"
+    "typecheck": "tsc -p .",
+    "status": "tsx src/status.ts",
+    "fund": "tsx src/fund.ts",
+    "window": "tsx src/window.ts",
+    "deploy": "tsx src/deploy.ts",
+    "oracle": "tsx src/oracle.ts",
+    "prices": "tsx src/prices.ts",
+    "trade": "tsx src/trade.ts",
+    "rebalance": "tsx src/rebalance.ts",
+    "keeper": "tsx src/keeper.ts"
   },
   "keywords": [],
   "author": "",
