@@ -61,13 +61,24 @@ contract DarwinRouter is ReentrancyGuard {
         }
     }
 
-    /// @notice Shares bought for `usdIn` fUSD, after the fee. Prices a 1-share probe, then scales.
+    /// @notice Shares bought for `usdIn` fUSD, after the fee.
+    /// @dev Prices a 1-share probe and scales, then checks the exact cost of that many shares and
+    /// shrinks them until it fits the budget. The check matters for small buys: every component
+    /// amount is rounded up to its smallest unit, and one satoshi of an 8-decimal BTC leg can cost
+    /// more than the headroom of a linear estimate.
     function quoteBuy(DarwinBasket basket, uint256 usdIn) public view returns (uint256 shares, uint256 fee) {
         fee = Math.mulDiv(usdIn, feeBps, 10_000);
         uint256 budget = Math.mulDiv(usdIn - fee, 10_000 - BUY_BUFFER_BPS, 10_000);
         uint256 unitCost = costOf(basket, 1e18);
         if (unitCost == 0) revert TooSmall();
         shares = Math.mulDiv(budget, 1e18, unitCost);
+        for (uint256 i; i < 4 && shares != 0; ++i) {
+            uint256 cost = costOf(basket, shares);
+            if (cost <= budget) return (shares, fee);
+            // shrink in proportion to the overshoot, plus one unit of slack each pass
+            shares = Math.mulDiv(shares, budget, cost) * (10_000 - 10 * (i + 1)) / 10_000;
+        }
+        if (shares != 0 && costOf(basket, shares) > budget) revert TooSmall();
     }
 
     /// @notice fUSD paid for `shares`, after the fee.
