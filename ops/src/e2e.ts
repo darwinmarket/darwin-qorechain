@@ -97,6 +97,26 @@ async function main() {
 
   console.log(`deployer ${deployer}, treasury ${treasuryAddr} (EVM ${twin})\n`);
 
+  // ------------------------------------------------------------------ setup
+  await check("setup: no basket is paused and the deployer has approved the current router", async () => {
+    const out: string[] = [];
+    for (const [k, b] of Object.entries(d.baskets) as [string, any][]) {
+      if (await read<boolean>(b.address, basketAbi, "mintPaused")) {
+        await adminCall(b.address, basketAbi, "setMintPaused", "setMintPaused", encodeAbiParameters(parseAbiParameters("bool"), [false]), [false]);
+        out.push(`unpaused ${k}`);
+      }
+      if ((await read<bigint>(b.address, erc20, "allowance", [deployer, d.router])) === 0n) {
+        await write("deployer", b.address, erc20, "approve", [d.router, 2n ** 255n]);
+        out.push(`approved ${k}`);
+      }
+    }
+    if ((await read<bigint>(d.tokens.fUSD, erc20, "allowance", [deployer, d.router])) === 0n) {
+      await write("deployer", d.tokens.fUSD, erc20, "approve", [d.router, 2n ** 255n]);
+      out.push("approved fUSD");
+    }
+    return out.join(", ") || "nothing to do";
+  });
+
   // ------------------------------------------------------------------ precompiles
   await check("precompile: every role has a proven ML-DSA-87 key on chain", async () => {
     const pqcAbi = [{ type: "function", name: "pqcKeyStatus", stateMutability: "view", inputs: [{ type: "address" }], outputs: [{ type: "bool" }, { type: "uint8" }, { type: "bytes" }, { type: "bool" }] }] as const;
@@ -200,15 +220,19 @@ async function main() {
   // ------------------------------------------------------------------ guardian pause
   await check("guardian: pausing mints blocks buys but not redemptions; only the admin's PQ signature unpauses", async () => {
     const p = await write("deployer", blue, basketAbi, "pauseMint");
-    assert(await read<boolean>(blue, basketAbi, "mintPaused"), "paused");
-    const buyErr = await revertName(d.router, routerAbiAll, "buy", [blue, 1_000_000n, 0n, deployer]);
-    assert(buyErr.startsWith("MintIsPaused"), `buy while paused: ${buyErr}`);
-    const shares = await bal(blue, deployer);
-    const redeemOk = await revertName(blue, basketAbi, "redeem", [shares / 1000n, deployer]);
-    assert(redeemOk === "NO_REVERT", `redeem while paused: ${redeemOk}`);
-    const u = await adminCall(blue, basketAbi, "setMintPaused", "setMintPaused", encodeAbiParameters(parseAbiParameters("bool"), [false]), [false]);
-    assert(!(await read<boolean>(blue, basketAbi, "mintPaused")), "unpaused");
-    return `pause ${p.transactionHash}, buy refused (${buyErr}), redeem simulated OK, unpause ${u.transactionHash}`;
+    try {
+      assert(await read<boolean>(blue, basketAbi, "mintPaused"), "paused");
+      const buyErr = await revertName(d.router, routerAbiAll, "buy", [blue, 1_000_000n, 0n, deployer]);
+      assert(buyErr.startsWith("MintIsPaused"), `buy while paused: ${buyErr}`);
+      const shares = await bal(blue, deployer);
+      const redeemOk = await revertName(blue, basketAbi, "redeem", [shares / 1000n, deployer]);
+      assert(redeemOk === "NO_REVERT", `redeem while paused: ${redeemOk}`);
+      return `pause ${p.transactionHash}, buy refused (${buyErr}), redeem simulated OK`;
+    } finally {
+      // always leave the basket open, even when an assertion above failed
+      await adminCall(blue, basketAbi, "setMintPaused", "setMintPaused", encodeAbiParameters(parseAbiParameters("bool"), [false]), [false]);
+      assert(!(await read<boolean>(blue, basketAbi, "mintPaused")), "unpaused");
+    }
   });
 
   // ------------------------------------------------------------------ trading, EVM lane
