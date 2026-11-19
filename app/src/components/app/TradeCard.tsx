@@ -83,6 +83,9 @@ export function TradeCard({ basket }: { basket: Basket }) {
 
   const max = side === "buy" ? fusd : shares;
   const insufficient = parsed !== null && parsed > max;
+  // The reserve sells the components at oracle prices from its inventory: a buy above what it can
+  // deliver would revert on chain, so it is refused here first.
+  const overCapacity = side === "buy" && parsed !== null && Number(parsed) / 1e6 > basket.capacityUsd * 0.98;
 
   async function submit() {
     if (!account || !parsed || !balances) return;
@@ -217,11 +220,13 @@ export function TradeCard({ basket }: { basket: Basket }) {
           </button>
         )
       ) : (
-        <button type="button" className={styles.cta} disabled={!parsed || !(quote || kindQuote) || insufficient || busy} onClick={() => void submit()}>
+        <button type="button" className={styles.cta} disabled={!parsed || !(quote || kindQuote) || insufficient || overCapacity || busy} onClick={() => void submit()}>
           {busy
             ? "Sign in QoreX…"
             : insufficient
               ? side === "buy" ? "Not enough fUSD" : `Not enough ${ticker}`
+              : overCapacity
+                ? `Above the reserve's liquidity (max ~${basket.capacityUsd.toFixed(2)} fUSD)`
               : side === "buy" ? `Buy ${ticker}` : inKind ? `Redeem ${ticker} in kind` : `Sell ${ticker}`}
         </button>
       )}
