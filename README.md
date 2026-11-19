@@ -36,7 +36,7 @@ precompiles against keys registered on chain:
 | User buy and sell | the user's QoreX keys, hybrid | the chain's hybrid ante check, then `MsgCrossVMCall` into the router |
 | Keeper relaying | scoped EVM window | `allowed_targets` = Darwin's contracts and tokens only |
 | Pause new mints | guardian (classical key) | the only classical power, and it can never cost a holder anything |
-| Redeem in kind | nobody | always open: no oracle, curator or admin involved |
+| Sell the basket token for fUSD | the user's QoreX keys, hybrid | always open, even when buying is paused |
 
 Signatures are domain-separated (tag, chain id, contract, nonce, deadline) and the contracts
 expose the exact bytes to sign (`roundMessage`, `rebalanceMessage`, `weightsMessage`,
@@ -160,8 +160,10 @@ node e2e/trade.mjs BLUEdw 2              # connect, buy 2 fUSD of BLUEdw, sell h
 
 ## Security notes
 
-- Redemption is in kind and unconditional: if the oracle stops, the curator disappears or the admin
-  key is lost, holders still take their coins back.
+- Users only ever hold fUSD and basket tokens: the vault holds the coins, and the way out is
+  selling the basket token for fUSD through the router. As a last-resort backstop the basket
+  contract also keeps an in-kind `redeem` that needs no oracle, curator or admin; the app never
+  exposes it.
 - The oracle refuses a round that moves any price more than 15%, a round that is not the next one,
   a timestamp that is not newer, or one more than 2 minutes in the future. Readers refuse prices
   older than 30 minutes, so a stalled oracle stops buys and sells through the router, never

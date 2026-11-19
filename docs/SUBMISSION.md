@@ -19,8 +19,8 @@ verified by `pqcVerify` against the key registered on chain before a price is st
 rebalance carries the curator's signature over the exact trades and reverts if it would cost more
 than 1% of NAV. Every admin action needs the admin's ML-DSA-87 signature; no function trusts
 `msg.sender` for admin powers. User trades are hybrid-signed by QoreX on the native lane and reach
-the EVM through `MsgCrossVMCall`. Redemption in kind never stops, even if the oracle, the curator
-and the admin all disappear.
+the EVM through `MsgCrossVMCall`. Users only ever touch fUSD and the basket token: the vault buys and
+holds the coins, and users exit by selling the basket token for fUSD.
 
 Darwin is already live on Miden mainnet (app.darwin.market, 120+ wallets). This is its
 post-quantum port, written during the fest.
