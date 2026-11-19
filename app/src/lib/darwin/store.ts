@@ -14,7 +14,7 @@ export type OracleFeed = { feed: number; tracks: string; price: number; updatedA
 export type OracleState = { round: number; lastTimestamp: number; feeds: OracleFeed[]; reporter: Address; maxAge: number };
 
 async function readOracle(): Promise<OracleState> {
-  const feeds = [1, 2, 3, 4];
+  const feeds = [1, 2, 3, 4, 5];
   const [round, lastTimestamp, reporter, maxAge, ...latest] = await Promise.all([
     client.readContract({ address: ORACLE, abi: oracleAbi, functionName: "round" }),
     client.readContract({ address: ORACLE, abi: oracleAbi, functionName: "lastTimestamp" }),
@@ -22,7 +22,7 @@ async function readOracle(): Promise<OracleState> {
     client.readContract({ address: ORACLE, abi: oracleAbi, functionName: "maxAge" }),
     ...feeds.map((f) => client.readContract({ address: ORACLE, abi: oracleAbi, functionName: "latest", args: [f] })),
   ]);
-  const tracks = ["", "USD", "ETH", "BTC", "QOR"];
+  const tracks = ["", "USD", "ETH", "BTC", "QOR", "QWAKK"];
   return {
     round: Number(round),
     lastTimestamp: Number(lastTimestamp),

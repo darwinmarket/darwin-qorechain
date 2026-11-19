@@ -8,4 +8,5 @@ export const COINS: Record<string, { name: string; yahoo?: string }> = {
   ETH: { name: "Ether", yahoo: "ETH-USD" },
   USD: { name: "US dollar" },
   QOR: { name: "QoreChain" },
+  QWAKK: { name: "Qwakk" },
 };

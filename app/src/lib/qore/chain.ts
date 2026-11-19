@@ -38,6 +38,7 @@ export const TOKEN_INFO: Record<string, { symbol: string; tracks: string; decima
   fETH: { symbol: "fETH", tracks: "ETH", decimals: 18, feed: 2, denom: `erc20:${D.tokens.fETH}` },
   fBTC: { symbol: "fBTC", tracks: "BTC", decimals: 8, feed: 3, denom: `erc20:${D.tokens.fBTC}` },
   WQOR: { symbol: "WQOR", tracks: "QOR", decimals: 18, feed: 4 },
+  QWAKK: { symbol: "QWAKK", tracks: "QWAKK", decimals: 6, feed: 5, denom: `erc20:${D.tokens.QWAKK}` },
 };
 
 export const tokenKeyOf = (address: string) =>

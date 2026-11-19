@@ -18,7 +18,7 @@ import { PqProof } from "./PqProof";
 import { TradeCard } from "./TradeCard";
 import styles from "./app.module.css";
 
-const TOKEN_LABEL: Record<string, string> = { BTC: "fBTC", ETH: "fETH", USD: "fUSD", QOR: "WQOR" };
+const TOKEN_LABEL: Record<string, string> = { BTC: "fBTC", ETH: "fETH", USD: "fUSD", QOR: "WQOR", QWAKK: "QWAKK" };
 
 export function BasketScreen({ symbol }: { symbol: string }) {
   const { data: baskets, error } = useBaskets();
