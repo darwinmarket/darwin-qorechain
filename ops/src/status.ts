@@ -9,6 +9,12 @@ async function bank(address: string) {
   return (j.balances ?? []).map((b) => `${b.amount} ${b.denom.replace(/^erc20:(0x.{6}).*/, "erc20:$1…")}`).join(", ") || "empty";
 }
 
+function describeWindow(w: any): string {
+  if (!w?.found) return "none";
+  const scope = w.nativeOnly ? "native-only" : w.allowedTargets?.length ? `scoped to ${w.allowedTargets.length} targets` : "unscoped";
+  return `${w.live ? "live" : "closed"}, ${w.remainingBlocks} blocks, ${w.remainingTxs}/${w.maxTxs} txs left, ${scope}`;
+}
+
 const t = await treasury();
 const ts = await fetchPqcStatus({ rest: REST, address: t.native.address });
 console.log(`treasury ${t.native.address}`);
@@ -20,5 +26,5 @@ for (const role of ["deployer", "reporter", "curator"] as Role[]) {
   const w = await fetchEvmWindow({ rest: REST, address: a.cosmos }).catch(() => null);
   const bal = await publicClient.getBalance({ address: a.evm as `0x${string}` });
   console.log(`${role.padEnd(8)} ${a.evm} ${a.cosmos}`);
-  console.log(`  pqc: ${s.registered ? (isRegisteredPqcKey(s, a.pqc.publicKey) ? "registered" : "registered, DIFFERENT key") : "not registered"}  window: ${w && (w as any).found ? JSON.stringify(w) : "none"}  evm balance: ${formatEther(bal)} QOR`);
+  console.log(`  pqc: ${s.registered ? (isRegisteredPqcKey(s, a.pqc.publicKey) ? "registered" : "registered, DIFFERENT key") : "not registered"}  window: ${describeWindow(w)}  evm balance: ${formatEther(bal)} QOR`);
 }
