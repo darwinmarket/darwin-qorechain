@@ -8,7 +8,7 @@ import { LogoStack, StockLogo } from "@/components/darwin/StockLogo";
 import "@/components/darwin/darwin-ui.css";
 import { instrumentSans } from "@/components/darwin/shell";
 import { basketTicker } from "@/lib/baskets";
-import { usd } from "@/lib/darwin/format";
+import { money, usd } from "@/lib/darwin/format";
 import { RANGES, useNavHistory } from "@/lib/darwin/navHistory";
 import { useBaskets } from "@/lib/darwin/store";
 import type { Range } from "@/lib/darwin/types";
@@ -61,7 +61,7 @@ export function BasketScreen({ symbol }: { symbol: string }) {
       <div className={styles.stats}>
         <div className={styles.stat}>
           <small>Total value locked</small>
-          <strong>{usd(basket.tvlUsd)}</strong>
+          <strong>{money(basket.tvlUsd)}</strong>
         </div>
         <div className={styles.stat}>
           <small>Shares outstanding</small>
@@ -69,7 +69,7 @@ export function BasketScreen({ symbol }: { symbol: string }) {
         </div>
         <div className={styles.stat}>
           <small>Buy capacity now</small>
-          <strong>{basket.capacityUsd > 0 ? usd(basket.capacityUsd) : "—"}</strong>
+          <strong>{basket.capacityUsd > 0 ? money(basket.capacityUsd) : "—"}</strong>
         </div>
         <div className={styles.stat}>
           <small>Trade fee</small>
@@ -126,7 +126,7 @@ export function BasketScreen({ symbol }: { symbol: string }) {
                     </td>
                     <td className={styles.r}>{l.perShare.toPrecision(4)}</td>
                     <td className={styles.r}>{usd(l.priceUsd)}</td>
-                    <td className={styles.r}>{usd(l.valueUsd)}</td>
+                    <td className={styles.r}>{money(l.valueUsd)}</td>
                     <td className={styles.r}>
                       {(100 * l.weight).toFixed(2)}% <span className={styles.drift}>/ {(100 * (l.targetWeight ?? 0)).toFixed(0)}%</span>
                     </td>
