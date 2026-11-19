@@ -12,11 +12,12 @@ import { median, toWad } from "./lib/median.js";
 
 export { toWad };
 
-export const FEED = { USD: 1, ETH: 2, BTC: 3, QOR: 4 } as const;
+export const FEED = { USD: 1, ETH: 2, BTC: 3, QOR: 4, QWAKK: 5 } as const;
 export type FeedName = keyof typeof FEED;
 
 const FUSD = "erc20:0x97143B771D34ddb9130b807b135Ae675A5a963CA";
 const FBTC = "erc20:0x4604e7E45b2ecdbfbDc157103f5B2b62cb16451A";
+const QWAKK = "erc20:0xa5b3c3Fb92E2E89555F9909b9004C65F3542eE23";
 
 async function json(url: string, ms = 6000): Promise<any> {
   const ctl = new AbortController();
@@ -73,17 +74,32 @@ async function qor(btcUsd: number): Promise<{ price: number; sources: number }> 
   return { price: median(quotes), sources: quotes.length };
 }
 
-export interface PriceSet { USD: number; ETH: number; BTC: number; QOR: number; detail: Record<string, number> }
+/** QWAKK (6 decimals) in USD: its QOR price in the QWAKK/QOR pools times the QOR price. */
+async function qwakk(qorUsd: number): Promise<{ price: number; sources: number }> {
+  const { pools } = (await json(`${REST}/qorechain/amm/v1/pools`)) as { pools: Pool[] };
+  const quotes: number[] = [];
+  for (const p of pools) {
+    if (p.status !== "active") continue;
+    const [q, u] = p.token_a === QWAKK && p.token_b === "uqor" ? [Number(p.reserve_a), Number(p.reserve_b)]
+      : p.token_b === QWAKK && p.token_a === "uqor" ? [Number(p.reserve_b), Number(p.reserve_a)] : [0, 0];
+    if (q > 1e9 && u > 1e9) quotes.push((u / q) * qorUsd); // both sides 6 decimals
+  }
+  return { price: median(quotes), sources: quotes.length };
+}
+
+export interface PriceSet { USD: number; ETH: number; BTC: number; QOR: number; QWAKK: number; detail: Record<string, number> }
 
 export async function fetchPrices(): Promise<PriceSet> {
   const [btc, eth] = await Promise.all([spot("BTC"), spot("ETH")]);
   const q = await qor(btc.price);
+  const w = await qwakk(q.price);
   return {
     USD: 1,
     ETH: eth.price,
     BTC: btc.price,
     QOR: q.price,
-    detail: { btcSources: btc.sources, ethSources: eth.sources, qorPools: q.sources },
+    QWAKK: w.price,
+    detail: { btcSources: btc.sources, ethSources: eth.sources, qorPools: q.sources, qwakkPools: w.sources },
   };
 }
 
