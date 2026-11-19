@@ -13,6 +13,7 @@ import { RANGES, useNavHistory } from "@/lib/darwin/navHistory";
 import { useBaskets } from "@/lib/darwin/store";
 import type { Range } from "@/lib/darwin/types";
 import { addressUrl, D } from "@/lib/qore/chain";
+import { nextSlot } from "@/lib/schedule";
 import { Activity } from "./Activity";
 import { PqProof } from "./PqProof";
 import { TradeCard } from "./TradeCard";
@@ -74,6 +75,12 @@ export function BasketScreen({ symbol }: { symbol: string }) {
         <div className={styles.stat}>
           <small>Trade fee</small>
           <strong>0.30%</strong>
+        </div>
+        <div className={styles.stat} title="Weekly, Monday 12:00 UTC, when a weight drifted 1% or more; at once beyond a 5% drift. Every rebalance is signed by the curator with ML-DSA-87.">
+          <small>Next rebalance</small>
+          <strong>
+            {nextSlot(new Date(), "weekly").toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" })} 12:00 UTC
+          </strong>
         </div>
       </div>
 
