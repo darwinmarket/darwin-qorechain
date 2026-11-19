@@ -22,10 +22,4 @@ library PqcAuth {
         if (!proven) revert PqcKeyNotProven(account);
         if (!PQC_VERIFY.pqcVerify(pubkey, signature, message)) revert BadPqcSignature(account);
     }
-
-    /// @notice Whether `account` currently holds a registered, proven ML-DSA-87 key.
-    function hasProvenKey(address account) internal view returns (bool) {
-        (bool registered,, bytes memory pubkey, bool proven) = PQC_KEYS.pqcKeyStatus(account);
-        return registered && proven && pubkey.length != 0;
-    }
 }
