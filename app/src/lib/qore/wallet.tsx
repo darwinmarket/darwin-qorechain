@@ -12,6 +12,8 @@ export type Balances = {
   fusdBank: bigint; // faucet form
   fusdErc20: bigint; // ERC-20 form on the EVM twin
   shares: Record<string, bigint>;
+  /** ERC-20 coins held on the EVM twin (what an in-kind redemption pays). */
+  coins: Record<string, bigint>;
 };
 
 type WalletState = {
@@ -34,15 +36,20 @@ async function readBalances(acc: Account): Promise<Balances> {
   };
   const coin = (denom: string) => BigInt(bank.balances?.find((b) => b.denom === denom)?.amount ?? "0");
   const keys = Object.keys(D.baskets);
-  const [fusdErc20, ...shares] = await Promise.all([
+  const coinKeys = ["fBTC", "fETH", "WQOR"];
+  const [fusdErc20, ...rest] = await Promise.all([
     client.readContract({ address: TOKENS.fUSD, abi: erc20Abi, functionName: "balanceOf", args: [acc.evm] }),
     ...keys.map((k) => client.readContract({ address: D.baskets[k].address as Address, abi: erc20Abi, functionName: "balanceOf", args: [acc.evm] })),
+    ...coinKeys.map((k) => client.readContract({ address: TOKENS[k], abi: erc20Abi, functionName: "balanceOf", args: [acc.evm] })),
   ]);
+  const shares = rest.slice(0, keys.length);
+  const coins = rest.slice(keys.length);
   return {
     qor: coin("uqor"),
     fusdBank: coin(TOKEN_INFO.fUSD.denom!),
     fusdErc20: fusdErc20 as bigint,
     shares: Object.fromEntries(keys.map((k, i) => [k, shares[i] as bigint])),
+    coins: Object.fromEntries(coinKeys.map((k, i) => [k, coins[i] as bigint])),
   };
 }
 
