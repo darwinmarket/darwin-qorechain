@@ -98,3 +98,45 @@ contract DarwinRouterTest is DarwinTest {
         assertLe(value, usdIn * 1e12);
     }
 }
+
+/// Regression: small buys of a basket with an 8-decimal leg (fBTC) used to revert, because rounding
+/// one satoshi up costs more than the 0.2% headroom of a linear quote. Found by the testnet battery.
+contract RouterRoundingTest is DarwinTest {
+    DarwinRouter router;
+
+    function setUp() public override {
+        super.setUp();
+        router = new DarwinRouter(IERC20(address(fUSD)), reserve, 30, treasury);
+    }
+
+    function _qore() internal returns (DarwinBasket qore) {
+        address[] memory comps = new address[](3);
+        uint16[] memory w = new uint16[](3);
+        (comps[0], comps[1], comps[2]) = (address(wQOR), address(fETH), address(fBTC));
+        (w[0], w[1], w[2]) = (4_000, 3_000, 3_000);
+        qore = new DarwinBasket("Q", "QOREDW", "", oracle, reserve, admin, curator, guardian, comps, w);
+        uint256[] memory a = new uint256[](3);
+        // a tiny basket, like on the testnet: 1 USD of value for 0.1 shares
+        (a[0], a[1], a[2]) = (8e18, 0.00015e18, 500);
+        wQOR.mint(address(this), a[0]);
+        fETH.mint(address(this), a[1]);
+        fBTC.mint(address(this), a[2]);
+        wQOR.approve(address(qore), a[0]);
+        fETH.approve(address(qore), a[1]);
+        fBTC.approve(address(qore), a[2]);
+        qore.seed(a, 0.1e18, address(this));
+    }
+
+    function testFuzz_smallBuysNeverRevertOnRounding(uint256 usdIn) public {
+        DarwinBasket qore = _qore();
+        usdIn = bound(usdIn, 20_000, 2_000_000); // 0.02 to 2 fUSD
+        fUSD.mint(alice, usdIn);
+        vm.startPrank(alice);
+        fUSD.approve(address(router), usdIn);
+        (uint256 quoted,) = router.quoteBuy(qore, usdIn);
+        uint256 shares = router.buy(qore, usdIn, quoted, alice);
+        vm.stopPrank();
+        assertEq(shares, quoted);
+        assertLe(fUSD.balanceOf(alice), usdIn);
+    }
+}
