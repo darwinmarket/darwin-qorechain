@@ -4,7 +4,7 @@ import { memo, useMemo } from "react";
 import { Change, Chart } from "./Chart";
 import { CompositionTreemap } from "./CompositionTreemap";
 import { LogoStack } from "./StockLogo";
-import { indexLevel, usd } from "@/lib/darwin/format";
+import { usd } from "@/lib/darwin/format";
 import { basketTicker } from "@/lib/baskets";
 import { useNavHistory } from "@/lib/darwin/navHistory";
 import type { Basket } from "@/lib/darwin/types";
@@ -27,7 +27,7 @@ export const BasketTile = memo(function BasketTile({ b, onOpen }: { b: Basket; o
       basket={b}
       onOpen={onOpen}
       className={`${styles.tile}${soon ? ` ${styles.soon}` : ""}`}
-      ariaLabel={`Open ${b.name}, ${basketTicker(b.symbol)}. Index ${indexLevel(b.navUsd)}.`}
+      ariaLabel={`Open ${b.name}, ${basketTicker(b.symbol)}. NAV ${usd(b.navUsd)} per share.`}
     >
       {soon && <span className={styles.soonBadge}>Soon</span>}
       <header className={styles.head}>
@@ -37,8 +37,8 @@ export const BasketTile = memo(function BasketTile({ b, onOpen }: { b: Basket; o
           <small>{basketTicker(b.symbol)}</small>
         </span>
         <span className={styles.value}>
-          <strong className="num">{indexLevel(b.navUsd)}</strong>
-          <small>Index base 100</small>
+          <strong className="num">{usd(b.navUsd)}</strong>
+          <small>NAV per share</small>
         </span>
       </header>
 
@@ -57,7 +57,9 @@ export const BasketTile = memo(function BasketTile({ b, onOpen }: { b: Basket; o
         <span>
           Since launch <Change value={launch} />
         </span>
-        <span>{b.legs.length} assets</span>
+        <span>
+          {usd(b.tvlUsd)} TVL · {b.legs.length} assets
+        </span>
       </footer>
     </BasketLink>
   );

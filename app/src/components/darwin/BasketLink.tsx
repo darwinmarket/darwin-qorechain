@@ -4,6 +4,7 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 
 import type { Basket } from "@/lib/darwin/types";
+import { basketTicker } from "@/lib/baskets";
 
 /**
  * A basket opens its page on the standalone front; inside the app it hands the
@@ -38,7 +39,7 @@ export function BasketLink({
     );
   }
   return (
-    <Link href={`/basket/${basket.address}`} className={className} aria-label={ariaLabel}>
+    <Link href={`/basket/${basketTicker(basket.symbol)}`} className={className} aria-label={ariaLabel}>
       {children}
     </Link>
   );
