@@ -14,6 +14,7 @@ const ALLOWED = [
   /^cosmos\/upgrade\/v1beta1\/applied_plan\/[a-z0-9.-]{1,40}$/,
   /^qorechain\/[a-z]+\/v1\/(params|protocol_features|evm_limits)$/,
   /^qorechain\/pqc\/v1\/account\/qor1[02-9ac-hj-np-z]{38}$/,
+  /^qorechain\/pqc\/v1\/evm_window\/qor1[02-9ac-hj-np-z]{38}$/,
   /^qorechain\/amm\/v1\/pools$/,
 ];
 

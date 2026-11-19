@@ -1,5 +1,6 @@
 import { D, ORACLE, RESERVE, ROUTER, addressUrl } from "@/lib/qore/chain";
 import styles from "@/components/app/app.module.css";
+import { WindowPanel } from "@/components/app/WindowPanel";
 
 export const metadata = { title: "Post-quantum security" };
 
@@ -45,6 +46,7 @@ export default function Security() {
           </tbody>
         </table>
       </section>
+      <WindowPanel />
       <section className={styles.card}>
         <div className={styles.cardTitle}>
           <h2>Contracts on qorechain-diana (EVM chain 9800)</h2>
