@@ -14,7 +14,8 @@
     "trade": "tsx src/trade.ts",
     "rebalance": "tsx src/rebalance.ts",
     "keeper": "tsx src/keeper.ts",
-    "e2e": "tsx src/e2e.ts"
+    "e2e": "tsx src/e2e.ts",
+    "test": "tsx --test test/*.test.ts"
   },
   "keywords": [],
   "author": "",
