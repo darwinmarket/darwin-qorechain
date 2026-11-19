@@ -48,6 +48,6 @@ const sold = await page.waitForSelector("text=/^Sold\\./", { timeout: 120000 }).
 console.log("sell:", sold ? (await sold.innerText()).slice(0, 200) : "no confirmation");
 await page.screenshot({ path: "/tmp/darwin-shots/e2e-sell.png" });
 
-const reqs = await page.evaluate(() => window.__qorexMock.requests.filter((r) => r.method === "signAndBroadcast").map((r) => ({ outcome: r.outcome, result: r.result })));
+const reqs = await page.evaluate(() => window.__qorexMock.requests.filter((r) => r.method.endsWith("signAndBroadcast")).map((r) => ({ outcome: r.outcome, result: r.result })));
 console.log(JSON.stringify(reqs, null, 1).slice(0, 1500));
 await browser.close();
