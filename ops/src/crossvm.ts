@@ -59,7 +59,7 @@ export async function nativeTrade(cmd: "approve" | "approveBasket" | "buy" | "se
     if (allowance < shares) msgs.push(crossVmCallMsg(address, basket, encodeFunctionData({ abi: erc20, functionName: "approve", args: [d.router, maxUint256] })));
     msgs.push(crossVmCallMsg(address, d.router, encodeFunctionData({ abi: routerAbi, functionName: "sell", args: [basket, shares, 0n, me] })));
   }
-  const gas = 1_300_000 + 400_000 * (msgs.length - 1);
+  const gas = 2_000_000 + 400_000 * (msgs.length - 1);
   const res: any = await client.signAndBroadcast(msgs, { amount: [{ denom: "uqor", amount: String(Math.ceil(gas * 0.11)) }], gas: String(gas) }, `darwin: ${cmd} via cross-VM`);
   if (res.code) throw new Error(`native ${cmd} failed: ${res.rawLog}`);
   console.log(`native ${cmd} ${key ?? ""} ${amount ?? ""}: hybrid-signed tx ${res.transactionHash} (gas ${res.gasUsed})`);
