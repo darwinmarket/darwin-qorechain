@@ -33,6 +33,7 @@ jobs:
           cache-dependency-path: ops/package-lock.json
       - run: npm ci
       - run: npm run typecheck
+      - run: npm test
 
   app:
     runs-on: ubuntu-latest
