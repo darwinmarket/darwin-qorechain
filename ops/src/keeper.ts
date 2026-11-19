@@ -21,7 +21,10 @@ import { FEED, fetchPrices } from "./prices.js";
 import { submitRound } from "./oracle.js";
 import { rebalance } from "./rebalance.js";
 import { open } from "./window.js";
-import { nativeTrade, treasuryShares } from "./crossvm.js";
+import { evmTwin, nativeTrade, treasuryShares } from "./crossvm.js";
+import { bankBalance } from "./amm.js";
+import { treasuryClient } from "./nativeClient.js";
+import { CONVERT_COIN_TYPE_URL } from "./erc20Msgs.js";
 
 const HEARTBEAT = Number(process.env.HEARTBEAT ?? 600);
 const DEVIATION_BPS = Number(process.env.DEVIATION_BPS ?? 25);
@@ -99,12 +102,40 @@ async function maybeDemo() {
   const key = keys[Math.floor(demoSide / 2) % keys.length];
   const held = await treasuryShares(key);
   if (demoSide % 2 === 0 || held === 0n) {
-    const usd = key === "QOREDW" ? "0.2" : key === "DEGENDW" ? "0.03" : String(1 + Math.round(Math.random() * 2));
-    await nativeTrade("buy", key, usd);
+    const want = key === "QOREDW" ? 0.2 : key === "DEGENDW" ? 0.03 : 1 + Math.round(Math.random() * 2);
+    const d = loadDeployments();
+    const { address } = await treasuryClient();
+    let erc = Number((await publicClient.readContract({ address: d.tokens.fUSD, abi: artifact("WQOR").abi, functionName: "balanceOf", args: [evmTwin(address)] })) as bigint) / 1e6;
+    if (erc < want) {
+      // top up from the faucet's bank-form fUSD, if any
+      const bank = await bankBalance(address, `erc20:${d.tokens.fUSD}`);
+      if (bank > 0n) {
+        await toTwin(`erc20:${d.tokens.fUSD}`, bank);
+        erc += Number(bank) / 1e6;
+      }
+    }
+    const usd = Math.min(want, Math.floor(erc * 0.9 * 100) / 100);
+    if (usd < 0.02) {
+      log("demo: treasury is out of fUSD, claim the faucet (skipping)");
+      demoSide++;
+      return;
+    }
+    await nativeTrade("buy", key, usd.toFixed(2));
   } else {
     await nativeTrade("sell", key, formatEther(held / 2n));
   }
   demoSide++;
+}
+
+/** Move the treasury's bank-form coin to ERC-20 on its own EVM twin. */
+async function toTwin(denom: string, amount: bigint) {
+  const { client, address } = await treasuryClient();
+  const res: any = await client.signAndBroadcast(
+    [{ typeUrl: CONVERT_COIN_TYPE_URL, value: { coin: { denom, amount: amount.toString() }, receiver: evmTwin(address), sender: address } }],
+    { amount: [{ denom: "uqor", amount: "80000" }], gas: "700000" }, "darwin keeper: faucet fUSD to ERC-20",
+  );
+  if (res.code) throw new Error(`convert failed: ${res.rawLog}`);
+  log(`demo: converted ${amount} faucet fUSD to ERC-20 (tx ${res.transactionHash})`);
 }
 
 async function health() {
