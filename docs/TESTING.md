@@ -4,9 +4,10 @@ Four layers, from pure logic to the live chain. Every layer is run before a chan
 
 | Layer | Where | What | Run |
 |---|---|---|---|
-| Unit and fuzz | `contracts/test/*.t.sol` | 76 tests: oracle rounds and refusals, PQ admin, reserve pricing, basket mint/redeem/rebalance, router, WQOR, QOREDW | `cd contracts && forge test` |
+| Unit and fuzz | `contracts/test/*.t.sol` | 77 tests: oracle rounds and refusals, PQ admin, reserve pricing, basket mint/redeem/rebalance, router, WQOR, QOREDW | `cd contracts && forge test` |
 | Invariant | `contracts/test/invariant` | 4 invariants under random mints, redeems, buys and sells (256 runs x 500 calls each): shares fully backed, NAV per share never drops at fixed prices, router keeps nothing, weights sum to 100% | `forge test --match-path "test/invariant/*"` |
-| On-chain E2E | `ops/src/e2e.ts` | 18 checks on qorechain-diana against the real `pqcVerify` and `pqcKeyStatus` precompiles: forged, tampered, replayed and stale signatures refused; admin, guardian, router, in-kind redemption, native cross-VM trades, ERC-20 conversions, curator rebalances | `cd ops && npm run e2e` (stop the keeper first) |
+| On-chain E2E | `ops/src/e2e.ts` | 20 checks on qorechain-diana against the real `pqcVerify` and `pqcKeyStatus` precompiles: forged, tampered, replayed and stale signatures refused; admin, guardian, router, in-kind redemption, native cross-VM trades, ERC-20 conversions, curator rebalances | `cd ops && npm run e2e` (stop the keeper first) |
+| Multi-user battery | `ops/src/battery.ts` | 8 fresh QoreX-style users trade all four baskets in parallel (buys, sells, in-kind redemptions, faucet-form and ERC-20 fUSD), every trade's hybrid signature checked on chain, then solvency, NAV and router invariants; leftover gas returned | `cd ops && npm run battery` |
 | Browser E2E | `app/e2e/suite.mjs` | 20 checks in Chromium with the QoreX test double (real hybrid signing, real broadcast), each followed by on-chain assertions | `cd app && npm run build && npm start & node e2e/suite.mjs` |
 
 Locally the precompiles do not exist, so `test/utils/MockPqc.sol` is etched at `0x…0A01` and
@@ -29,3 +30,15 @@ Reports with every transaction hash: [docs/e2e](e2e).
 
 Uncovered branches are mostly the `require`-style guards on constructor arguments and the
 duplicate-entry paths of `listToken`.
+
+## What the batteries found
+
+- **Router rounding on small buys** (fixed in router v2): a linear quote could undershoot the cost
+  when an 8-decimal leg (fBTC) is rounded up to the satoshi; small QOREdw buys reverted. Reproduced
+  in `RouterRoundingTest`, fixed by checking the exact cost of the quoted shares.
+- **Gas limits**: 3-leg buys through a cross-VM call need ~1.36M gas; the app now sends 2.0M.
+- **Reserve depth**: parallel QOR-heavy buys drain the WQOR and QWAKK inventory; the app and the
+  battery refuse buys above the reserve's liquidity before signing.
+- **Test hygiene**: a failed guardian check left BLUEdw paused; the check now always unpauses, and
+  every suite verifies baskets are open first. A paused basket stays reachable for selling and
+  redeeming in the app.
