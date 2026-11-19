@@ -11,6 +11,7 @@
 import type { Address, Hex } from "viem";
 import { artifact, loadDeployments, pqSign, write } from "./evm.js";
 import { publicClient } from "./net.js";
+import { planMoves } from "./lib/planner.js";
 
 const basketAbi = artifact("DarwinBasket").abi;
 const reserveAbi = artifact("DarwinReserve").abi;
@@ -29,27 +30,17 @@ export async function plan(key: string) {
   })) as [Address[], number[], bigint[], bigint[], number[]];
   const total = values.reduce((a, b) => a + b, 0n);
   const drift = tokens.map((_, i) => weights[i] - targets[i]);
-  // USD (18 dec) to move per component: + overweight (sell), - underweight (buy)
-  const excess = tokens.map((_, i) => values[i] - (total * BigInt(targets[i])) / 10_000n);
-  const sellers = excess.map((e, i) => ({ i, e })).filter((x) => x.e > 0n).sort((a, b) => (b.e > a.e ? 1 : -1));
-  const buyers = excess.map((e, i) => ({ i, e: -e })).filter((x) => x.e > 0n).sort((a, b) => (b.e > a.e ? 1 : -1));
+  const moves = planMoves(tokens.map((_, i) => ({ value: values[i], targetBps: targets[i] })));
   const trades: Trade[] = [];
-  for (const s of sellers) {
-    for (const b of buyers) {
-      if (s.e === 0n) break;
-      const usd = s.e < b.e ? s.e : b.e;
-      if (usd === 0n) continue;
-      // amountIn of the seller's token worth `usd`
-      const unit = (await publicClient.readContract({ address: d.reserve, abi: reserveAbi, functionName: "valueOf", args: [tokens[s.i], 10n ** 30n] })) as bigint;
-      const amountIn = (usd * 10n ** 30n) / unit;
-      if (amountIn === 0n || amountIn > balances[s.i]) continue;
-      const out = (await publicClient.readContract({
-        address: d.reserve, abi: reserveAbi, functionName: "quoteExactIn", args: [basket, tokens[s.i], tokens[b.i], amountIn],
-      })) as bigint;
-      trades.push({ tokenIn: tokens[s.i], tokenOut: tokens[b.i], amountIn, minAmountOut: (out * 995n) / 1000n });
-      s.e -= usd;
-      b.e -= usd;
-    }
+  for (const m of moves) {
+    // amountIn of the seller's token worth `m.usd`, at the reserve's oracle price
+    const unit = (await publicClient.readContract({ address: d.reserve, abi: reserveAbi, functionName: "valueOf", args: [tokens[m.from], 10n ** 30n] })) as bigint;
+    const amountIn = (m.usd * 10n ** 30n) / unit;
+    if (amountIn === 0n || amountIn > balances[m.from]) continue;
+    const out = (await publicClient.readContract({
+      address: d.reserve, abi: reserveAbi, functionName: "quoteExactIn", args: [basket, tokens[m.from], tokens[m.to], amountIn],
+    })) as bigint;
+    trades.push({ tokenIn: tokens[m.from], tokenOut: tokens[m.to], amountIn, minAmountOut: (out * 995n) / 1000n });
   }
   return { basket, tokens, targets, weights, drift, total, trades };
 }
