@@ -11,3 +11,4 @@ app/.next/
 app/.vercel/
 .DS_Store
 *.log
+e2e/shots/
