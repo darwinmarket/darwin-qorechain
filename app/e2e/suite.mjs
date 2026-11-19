@@ -116,15 +116,15 @@ async function trade({ display, side, amount, inKind = false }) {
 }
 
 // ------------------------------------------------------------------------------- pages
-await check("home: three baskets with live NAV, oracle pill and activity", async () => {
+await check("home: every basket with live NAV, oracle pill and activity", async () => {
   await page.goto(BASE, { waitUntil: "networkidle" });
   for (const b of Object.values(D.baskets)) await page.waitForSelector(`text=${b.name}`, { timeout: 30000 });
   await page.waitForSelector("text=/PQ oracle round \\d+/", { timeout: 30000 });
   await page.waitForSelector("text=/Oracle round \\d+: 4 prices, ML-DSA-87 verified/", { timeout: 30000 });
   const navs = await page.locator("text=/^\\$\\d+\\.\\d\\d$/").allInnerTexts();
-  assert(navs.length >= 3, `NAVs shown: ${navs.join(", ")}`);
+  assert(navs.length >= Object.keys(D.baskets).length, `NAVs shown: ${navs.join(", ")}`);
   await page.screenshot({ path: `${SHOTS}home.png` });
-  return `NAVs ${navs.slice(0, 3).join(", ")}`;
+  return `NAVs ${navs.slice(0, Object.keys(D.baskets).length).join(", ")}`;
 });
 
 await check("security page lists every contract with its address", async () => {
@@ -132,7 +132,7 @@ await check("security page lists every contract with its address", async () => {
   for (const a of [D.oracle, D.reserve, D.router, ...Object.values(D.baskets).map((b) => b.address)]) {
     await page.waitForSelector(`text=${a}`, { timeout: 10000 });
   }
-  return "7 addresses shown";
+  return `${3 + Object.keys(D.baskets).length} addresses shown`;
 });
 
 await check("oracle page lists signed rounds with prices and the cost of a round", async () => {
@@ -172,7 +172,7 @@ await check("connect QoreX from the navbar; the portfolio shows the account", as
 });
 
 // ------------------------------------------------------------------------------- trades
-for (const [display, key, usd] of [["BLUEdw", "BLUEDW", 1], ["BALdw", "BALDW", 1], ["QOREdw", "QOREDW", 0.2]]) {
+for (const [display, key, usd] of [["BLUEdw", "BLUEDW", 1], ["BALdw", "BALDW", 1], ["QOREdw", "QOREDW", 0.2], ["DEGENdw", "DEGENDW", 0.05]]) {
   await check(`buy ${display} with ${usd} fUSD (one hybrid-signed tx)`, async () => {
     const s0 = await bal(D.baskets[key].address, me.twin);
     const r = await trade({ display, side: "buy", amount: usd });
@@ -236,6 +236,19 @@ await check("an amount above the balance disables the button", async () => {
   assert(await btn.isDisabled(), "disabled");
   return "Not enough fUSD (disabled)";
 });
+
+await check("a buy above the reserve's liquidity is refused before signing", async () => {
+  await page.goto(`${BASE}/basket/DEGENdw`, { waitUntil: "networkidle" });
+  await page.waitForSelector("text=/Balance/", { timeout: 30000 });
+  await page.getByLabel("fUSD to pay").fill("5");
+  const btn = page.getByRole("button", { name: /Above the reserve's liquidity/ });
+  await btn.waitFor({ timeout: 30000 });
+  assert(await btn.isDisabled(), "disabled");
+  return await btn.innerText();
+});
+
+await page.goto(`${BASE}/basket/BALdw`, { waitUntil: "networkidle" });
+await page.waitForSelector("text=/Balance/", { timeout: 30000 });
 
 await check("a rejected signature in QoreX shows an error and sends nothing", async () => {
   await page.evaluate(() => window.__qorexMock.rejectNext());
