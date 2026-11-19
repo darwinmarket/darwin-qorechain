@@ -15,6 +15,7 @@
     "fUSD": "0x97143B771D34ddb9130b807b135Ae675A5a963CA",
     "fETH": "0x02292293c13880a26242690eb70a0e42B8E91c28",
     "fBTC": "0x4604e7E45b2ecdbfbDc157103f5B2b62cb16451A",
+    "QWAKK": "0xa5b3c3Fb92E2E89555F9909b9004C65F3542eE23",
     "WQOR": "0xa140f05ff3fec2d757ae758cddc064e2e386b749"
   },
   "steps": {
@@ -56,7 +57,17 @@
     "fund reserve fBTC": "2026-11-19T19:54:44.966Z",
     "fund reserve fETH": "2026-11-19T19:54:45.873Z",
     "fund reserve fUSD": "2026-11-19T19:54:47.565Z",
-    "fund reserve WQOR": "2026-11-19T19:54:49.262Z"
+    "fund reserve WQOR": "2026-11-19T19:54:49.262Z",
+    "oracle feed QWAKK": "2026-11-19T21:25:03.560Z",
+    "oracle token QWAKK": "2026-11-19T21:25:05.431Z",
+    "oracle round with QWAKK": "2026-11-19T21:25:09.432Z",
+    "reserve list QWAKK": "2026-11-19T21:25:11.293Z",
+    "deploy DEGENDW": "2026-11-19T21:25:13.025Z",
+    "reserve exempt DEGENDW": "2026-11-19T21:25:16.490Z",
+    "approve WQOR for DEGENDW": "2026-11-19T21:25:18.561Z",
+    "approve QWAKK for DEGENDW": "2026-11-19T21:25:19.423Z",
+    "seed DEGENDW": "2026-11-19T21:25:22.843Z",
+    "fund reserve QWAKK": "2026-11-19T21:25:23.768Z"
   },
   "oracle": "0x26ede83659e3e007f3fe568ee6c6a20df77929e6",
   "reserve": "0x39a401ae133e80b05c6f7076bc0bc6d5e3df1a23",
@@ -145,6 +156,34 @@
           "fETH": 1770.21,
           "fBTC": 62376.7,
           "WQOR": 0.03486644162686922
+        }
+      }
+    },
+    "DEGENDW": {
+      "address": "0x48775d391021698298f6fcdb1826ba3a59db8d91",
+      "name": "Darwin Degen",
+      "display": "DEGENdw",
+      "description": "QoreChain's own degen pair: 50% QOR, 50% QWAKK. High risk, for fun.",
+      "components": [
+        "WQOR",
+        "QWAKK"
+      ],
+      "weights": [
+        5000,
+        5000
+      ],
+      "seed": {
+        "amounts": [
+          "5766097391820282880",
+          "3949842277"
+        ],
+        "shares": "40000000000000000",
+        "prices": {
+          "fUSD": 1,
+          "fETH": 1743.71,
+          "fBTC": 61538.05,
+          "WQOR": 0.03468550501483336,
+          "QWAKK": 0.00005063493322713778
         }
       }
     }
