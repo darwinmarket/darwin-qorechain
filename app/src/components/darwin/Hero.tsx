@@ -24,7 +24,7 @@ function BasketChip({ basket, onOpen }: { basket: Basket; onOpen?: (symbol: stri
       className={`${styles.chip}${soon ? ` ${styles.soon}` : ""}`}
       ariaLabel={`Open ${basket.name}, ${basketTicker(basket.symbol)}. NAV ${usd(basket.navUsd)}.`}
     >
-      {soon && <span className={styles.soonTag}>Soon</span>}
+      {soon && <span className={styles.soonTag}>{basket.paused ? "Paused" : "Soon"}</span>}
       <span className={styles.identity}>
         <LogoStack legs={legs} size={26} />
         <span className={styles.name}>
