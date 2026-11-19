@@ -20,7 +20,10 @@ export function Activity({ basket, title = "On-chain activity" }: { basket?: str
         {data?.map((i) => (
           <div key={`${i.tx}-${i.kind}-${i.text}`} className={styles.feedRow}>
             <span className={`${styles.feedIcon} ${ICON[i.kind][1]}`}>{ICON[i.kind][0]}</span>
-            <span>{i.text}</span>
+            <span>
+              {i.text}
+              {i.hybrid && <span className={styles.feedMeta}> · ML-DSA-87 + secp256k1, verified</span>}
+            </span>
             <a className={`${styles.a} ${styles.feedMeta}`} href={txUrl(i.tx)} target="_blank" rel="noreferrer">
               #{i.block.toString()}
             </a>
