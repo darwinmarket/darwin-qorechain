@@ -14,7 +14,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
 import { calendarDayYear, indexLevel, usd } from "@/lib/darwin/format";
-import { RANGES, useNavHistory } from "@/lib/darwin/navHistory";
+import { moveLabel, RANGES, useNavHistory } from "@/lib/darwin/navHistory";
 import { useBaskets } from "@/lib/darwin/store";
 import { basketTicker } from "@/lib/baskets";
 import type { Basket, Leg, Range } from "@/lib/darwin/types";
@@ -55,12 +55,12 @@ function Identity({ basket, symbol, name }: { basket?: Basket; symbol: string; n
 }
 
 /** NAV per share and the move over the selected window. */
-function Quote({ basket, change, range }: { basket?: Basket; change: number | null; range: Range }) {
+function Quote({ basket, change, range, suffix }: { basket?: Basket; change: number | null; range: Range; suffix?: string }) {
   return (
     <span className={s.quote}>
       <span className={`${s.quoteValue} num`}>{basket ? level(basket.navUsd) : "—"}</span>
       <span className={s.quoteMeta}>
-        <Change value={change} suffix={range} />
+        <Change value={change} suffix={suffix ?? range} />
         <span>Index base 100 at launch</span>
       </span>
     </span>
@@ -246,7 +246,7 @@ export function BasketScreen({
             <Identity basket={basket} symbol={symbol} name={name} />
             {basket?.description && <p className={s.tagline}>{basket.description}</p>}
           </div>
-          <Quote basket={basket} change={history.change} range={range} />
+          <Quote basket={basket} change={history.change} range={range} suffix={moveLabel(history, range)} />
         </div>
         <div className={s.grid}>
           <div className={s.column}>
