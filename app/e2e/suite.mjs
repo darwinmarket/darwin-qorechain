@@ -171,7 +171,10 @@ await check("a round's link opens Darwin's transaction page with the decoded rou
   await page.waitForSelector("text=/Oracle round #\\d+/", { timeout: 30000 });
   await page.waitForSelector("text=Admitted by a post-quantum EVM window", { timeout: 10000 });
   await page.waitForSelector("text=qorechain-diana (testnet)");
-  return href;
+  // the reporter's ML-DSA-87 signature, re-verified in the page with @qorechain/pqc
+  await page.waitForSelector("[data-browser-check]", { timeout: 60000 });
+  assert((await page.locator("[data-browser-check]").getAttribute("data-browser-check")) === "true", "round verified in the browser, next round rejected");
+  return `${href}, ML-DSA-87 re-verified in the browser`;
 });
 
 await check("Portfolio and Activity ask to connect when signed out", async () => {
@@ -247,7 +250,18 @@ await check("sell half of BALdw for fUSD", async () => {
   const r = await trade({ display: "BALdw", key: "BALDW", side: "sell", amount: (Number(shares) / 1e18 / 2).toFixed(6) });
   const u1 = await bal(D.tokens.fUSD, twin);
   assert(u1 > u0, `fUSD ${u0} -> ${u1}`);
-  return `+${(Number(u1 - u0) / 1e6).toFixed(3)} fUSD, msgs [${r.types.join(", ")}]`;
+  return `+${(Number(u1 - u0) / 1e6).toFixed(3)} fUSD, msgs [${r.types.join(", ")}], tx ${r.hash}`;
+});
+
+await check("a trade's page re-verifies its hybrid signature in the browser (QoreSign)", async () => {
+  const last = results.filter((x) => x.ok && /tx [0-9A-F]{64}$/.test(x.detail)).at(-1);
+  assert(last, "a trade hash from an earlier check");
+  const hash = last.detail.match(/tx ([0-9A-F]{64})$/)[1];
+  await page.goto(`${BASE}/tx/${hash}`, { waitUntil: "networkidle" });
+  await page.waitForSelector("[data-browser-check]", { timeout: 60000 });
+  const text = await page.locator("[data-browser-check]").innerText();
+  assert((await page.locator("[data-browser-check]").getAttribute("data-browser-check")) === "true", text);
+  return `${hash.slice(0, 12)}…: ${text}`;
 });
 
 await check("faucet fUSD (bank form) is converted in the same transaction as the buy", async () => {
