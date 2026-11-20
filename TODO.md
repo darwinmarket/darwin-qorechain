@@ -1,12 +1,13 @@
 # To do before 2 December 2026
 
-## Build (at the end)
+## Build
 
-- [x] **4th basket, degen: DEGENDW (display DEGENdw)** — deployed `0x48775d391021698298f6fcdb1826ba3a59db8d91`. QOR + QWAKK (QWAKK is the community memecoin
-      registered by governance, `0xa5b3c3Fb92E2E89555F9909b9004C65F3542eE23`, 6 decimals; pool 6
-      QWAKK/QOR on the native AMM). Needs: a QWAKK/USD feed in the oracle (priced from pool 6 x QOR),
-      QWAKK listed on the reserve with inventory (QWAKK bought on the AMM), deploy + seed + spread
-      exemption via `ops/src/deploy.ts`, then sync the app (`npm run sync`) and add it to the E2E suites.
+- [x] 4 baskets live: BLUEDW, BALDW, QOREDW v4, DEGENDW v2 (`deployments/diana.json`).
+- [ ] **v2 redeploy** (after the faucet, needs QOR): oracle, reserve, the four baskets and the router
+      on the fixed contracts (feed ids sorted, 60 s round spacing, ML-DSA-87 algorithm check, one-shot
+      seed, `setOracle`); seeds minted to an unspendable address; keeper and app synced; E2E updated
+      (`TooSoon` / `FeedsNotSorted` expectations); all suites rerun green.
+- [ ] Refill the reserve's QOR and QWAKK so the QOR baskets can fill more than cents.
 
 ## Only the team can do
 
