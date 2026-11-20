@@ -9,9 +9,12 @@ There is one call site for both precompiles: `PqcAuth.requireSigned` (`contracts
 | Target weights | curator | `DarwinBasket.setTargetWeights` | the basket's composition |
 | 16 admin functions | admin | `PqcAdmin._authorizeAdmin` | every power over the protocol and its funds |
 | Test-token minting | admin | `DarwinTestToken.mint` | fQOR and fQWAKK supply |
-| User trades | the user | the relayer (QoreSign) + the chain (hybrid `MsgExec`, the user's EVM window) | what is traded for whom |
+| User trades and withdrawals | the user | `DarwinAccount.execute` (and the relayer first, with QoreSign) | what the user's account does, call by call |
+| Accounts' allowed targets | admin | `DarwinAccountFactory.setTarget` (`PqcAdmin`) | which contracts a user's account may call |
 
-The 16 admin functions: oracle `addFeed`, `setTokenFeed`, `setReporter`, `setParams`; reserve `listToken`, `setSpread`, `setSpreadExempt`, `withdraw`, `setOracle`; basket `setMintPaused`, `setCurator`, `setGuardian`, `setReserve`, `setMaxRebalanceLoss`, `setOracle`; and `setAdmin` on each. Each admin signature works once (nonce) and expires (deadline).
+The 16 admin functions: oracle `addFeed`, `setTokenFeed`, `setReporter`, `setParams`; reserve `listToken`, `setSpread`, `setSpreadExempt`, `withdraw`, `setOracle`; basket `setMintPaused`, `setCurator`, `setGuardian`, `setReserve`, `setMaxRebalanceLoss`, `setOracle`; and `setAdmin` on each. Each admin signature works once (nonce) and expires (deadline). The account factory adds a seventeenth, `setTarget`.
+
+A user's Darwin account goes through the same `PqcAuth.requireSigned`, with the user's own registered key: it rebuilds the text QoreX signed (account, nonce, deadline, hash of the calls) and checks it before any call. See [Darwin Accounts](/chain/accounts).
 
 ## What a leaked secp256k1 key can do
 

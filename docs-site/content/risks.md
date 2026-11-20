@@ -8,11 +8,13 @@ The tokens have no value and the network is a testnet: it can be reset, upgraded
 
 ## The relayer
 
-A QoreX user trades through Darwin's relayer (see [QoreX & the Relayer](/chain/relayer)).
+A QoreX user trades through a [Darwin account](/chain/accounts); Darwin's relayer submits the user's signed messages and pays the gas (see [QoreX & the Relayer](/chain/relayer)).
 
-- **What it can do.** For the 24 hours of the grant, send `MsgCrossVMCall` and `MsgConvertCoin` as the user. The grant is generic for those two types: technically, the relayer could call any EVM contract as the user while it lasts.
-- **What bounds it.** It acts only on intents whose secp256k1 and ML-DSA-87 signatures verify against the user's on-chain key, each used once and expiring within 10 minutes. The chain admits its EVM calls only through the user's own EVM window (transaction count, value, expiry). The grant expires on its own and can be revoked. Every action is a public `MsgExec` naming the user as sender.
-- **If it stops.** Trades from QoreX stop. Holdings do not: redeeming in kind is permissionless.
+- **What it cannot do.** Change a call (the signature fails on chain), replay a message (the nonce moved), or make an account call a contract outside Darwin's router, baskets and fUSD. The list of allowed targets changes only with the admin's ML-DSA-87 signature.
+- **Deposits and withdrawals.** The fUSD passes through the relayer for one transaction each way: the user's `MsgSend` to the relayer, converted onto the account; or the account's transfer to the relayer, converted back to the user's wallet. A custody of seconds. Each deposit is credited once (the relayer's memo, read back from the chain), and a withdrawal cut halfway is completed by `settleWithdrawals()` before the next withdrawal and in the daily cron.
+- **What it can do.** Refuse or delay a message. Nothing moves without one.
+- **If it stops.** Trades from QoreX stop, and fUSD cannot be converted back to bank form through Darwin. Holdings do not: the account accepts signed messages from any submitter, and redeeming in kind is permissionless.
+- **Shares bought before Darwin accounts.** Selling them uses the original path: for the 24 hours of a grant, the relayer may send `MsgCrossVMCall` and `MsgConvertCoin` as the user. It acts only on intents whose signatures verify against the user's on-chain key, each used once and expiring within 10 minutes; the chain admits its EVM calls only through the user's own EVM window; the grant expires on its own and can be revoked.
 
 ## The oracle
 
@@ -34,7 +36,7 @@ So they hold **fQOR and fQWAKK**: Darwin test tokens priced by the same QOR and 
 
 ## Keys
 
-The deployer's secp256k1 key relays transactions and holds the guardian role, which can only pause new mints. It cannot change a price, a weight, a trade or a parameter, or move the reserve's funds. Each EVM window also caps the value it admits.
+The deployer's secp256k1 key relays transactions and holds the guardian role, which can only pause new mints. It cannot change a price, a weight, a trade or a parameter, or move the reserve's funds. Each EVM window also caps the value it admits. The relayer's key can submit only to the account factory (its window is scoped to it), where every call needs the owner's ML-DSA-87 signature.
 
 ## Known limitations
 

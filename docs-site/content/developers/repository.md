@@ -12,13 +12,17 @@ contracts/   Solidity 0.8.28, Foundry, OpenZeppelin
   DarwinRouter.sol      buy or sell a whole basket with fUSD in one call
   DarwinTestToken.sol   fQOR, fQWAKK: price-tracking stand-ins, ML-DSA-87 minting
   WQOR.sol              wrapped QOR
+  account/              DarwinAccount, DarwinAccountFactory: users' accounts, ML-DSA-87 only
 ops/         TypeScript, QoreChain SDK, viem
-  relayer.ts            executes QoreX users' signed intents through authz
+  relayer.ts            the original relayer: signed intents through authz (shares bought before accounts)
+  deploy-accounts.ts    deploys the account factory; scopes the relayer's window to it
+  account-check.ts      the account path end to end on the testnet, through the app's API
   keeper.ts             local keeper; in production app/src/server does it on demand
   prices.ts             BTC/ETH spot median, QOR market price, QWAKK pool median
   oracle.ts, rebalance.ts, window.ts, deploy.ts, redeploy-v2.ts, ...
 app/         Next.js: Darwin's mainnet front on QoreChain
-  src/lib/qore/         chain reads, QoreX, the relayer client, in-browser verification
+  src/lib/qore/         chain reads, QoreX, the account and relayer clients, in-browser verification
+  src/server/           keys, keeper on demand, accounts.ts (the account relayer), relayer.ts (original)
   src/app/api/          REST proxy, relayer proxy, trades summary, price history
 docs/        audit map, pricing, testing, CBOM, submission, E2E reports
 docs-site/   this documentation
@@ -30,8 +34,8 @@ deployments/diana.json  every address, role, seed and retired version
 | Kit | Used for |
 |---|---|
 | QoreChain SDK (`@qorechain/sdk`, `@qorechain/evm`) | key derivation, hybrid signing, PQC registration, EVM windows |
-| QoreSign (`@qorechain/qoresign`) | intent verification in the relayer; in-browser checks of committed transactions |
-| qorechain-pqc (`@qorechain/pqc`) | in-browser verification of oracle rounds |
+| QoreSign (`@qorechain/qoresign`) | both halves of every signed message checked in the relayer; in-browser checks of committed transactions |
+| qorechain-pqc (`@qorechain/pqc`) | in-browser verification of account trades and oracle rounds |
 | QoreChain React (`@qorechain/react`) | the PQC key badge |
 | Wallet adapter (`@qorechain/wallet-adapter`) | QoreX capability checks and requests |
 | QoreX integrations (`@qorechain/qorex-wallet-mock`) | browser end-to-end tests |

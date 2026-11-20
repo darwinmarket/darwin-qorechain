@@ -60,7 +60,7 @@ Every change went through the same loop, and "done" meant the last step passed:
 | A failed guardian check left a basket paused | the next suite run | the check always unpauses; every suite first verifies no basket is paused |
 | Keeper demo trades sold the seed shares | on-chain balances | demo trades moved to the treasury, then disabled |
 | Hero copy kept Miden's "held privately in your wallet", untrue on QoreChain | reviewing the cover image before submission | copy now states what is true here |
-| Every trade path was tested with the QoreX test double, which signs anything; the real QoreX refuses cross-VM calls and ERC-20 conversions | the team trading from the real QoreX extension | a diagnostic page mapped what QoreX signs; trades became ML-DSA-87 signed intents executed by a relayer through authz, verified with the real wallet |
+| Every trade path was tested with the QoreX test double, which signs anything; the real QoreX refuses cross-VM calls and ERC-20 conversions | the team trading from the real QoreX extension | a diagnostic page mapped what QoreX signs; trades became ML-DSA-87 signed intents executed by a relayer through authz, verified with the real wallet; later, DarwinAccounts (an account contract checking the user's ML-DSA-87 signature with `pqcVerify`) removed the EVM window and the grant for new trades |
 
 ## Tools and context
 

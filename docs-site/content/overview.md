@@ -25,7 +25,7 @@ fBTC, fETH and fUSD are the fest's test tokens for BTC, ETH and dollars. fQOR an
 
 ## Architecture in one picture
 
-<Diagram src="/images/architecture.svg" alt="QoreX signs a trade intent with secp256k1 and ML-DSA-87. Darwin's relayer verifies it against the user's on-chain key and sends an authz MsgExec, admitted by the user's EVM window. Inside, the router takes the fee, buys each component from the reserve at oracle prices and the basket mints shares to the user. The oracle stores only rounds signed by the reporter's ML-DSA-87 key; the curator signs rebalances; the admin signs every admin action." width="900" caption="Every arrow that changes state carries an ML-DSA-87 signature checked on chain or against an on-chain key." />
+<Diagram src="/images/architecture.svg" alt="QoreX signs a trade as plain text with secp256k1 and ML-DSA-87. Darwin's relayer checks both halves against the user's on-chain keys and submits it to the user's Darwin account, which verifies the ML-DSA-87 signature with pqcVerify before calling the router. The router takes the fee, buys each component from the reserve at oracle prices and the basket mints shares to the user. The oracle stores only rounds signed by the reporter's ML-DSA-87 key; the curator signs rebalances; the admin signs every admin action." width="900" caption="Every arrow that changes state carries an ML-DSA-87 signature checked on chain or against an on-chain key." />
 
 ## The six parts
 
@@ -37,9 +37,9 @@ fBTC, fETH and fUSD are the fest's test tokens for BTC, ETH and dollars. fQOR an
 
 4. **The oracle.** `DarwinOracle` stores prices only from rounds signed by the reporter's ML-DSA-87 key, with a 15% circuit breaker and rounds at least 60 seconds apart. See [Oracle](/chain/oracle).
 
-5. **The relayer.** QoreX, QoreChain's wallet, does not sign cross-VM calls. A QoreX user signs a **trade intent**; Darwin's relayer verifies it and executes it as the user through an expiring authz grant. See [QoreX & the Relayer](/chain/relayer).
+5. **Your Darwin account and the relayer.** QoreX, QoreChain's wallet, does not send EVM transactions. Each QoreX user gets a **Darwin account**, a contract controlled only by the user's registered ML-DSA-87 key. The user signs a trade as text; Darwin's relayer submits it and pays the gas; the account checks the signature with `pqcVerify` before it trades. No EVM window, no grant. See [Darwin Accounts](/chain/accounts).
 
-6. **Your wallet.** QoreX, with your secp256k1 and ML-DSA-87 keys. Your basket tokens sit on your own account; Darwin has no key that moves them.
+6. **Your wallet.** QoreX, with your secp256k1 and ML-DSA-87 keys. Your basket tokens sit on your Darwin account; only your ML-DSA-87 key moves them.
 
 ## What the chain enforces, and what Darwin's services do
 
@@ -49,13 +49,13 @@ fBTC, fETH and fUSD are the fest's test tokens for BTC, ETH and dollars. fQOR an
 | A rebalance executes exactly the trades the curator signed, and loses at most 1% of NAV at oracle prices | `DarwinBasket.rebalance` |
 | Every admin power (16 functions, including moving the reserve's funds) needs the admin's ML-DSA-87 signature | `PqcAdmin`: no function checks `msg.sender` for admin powers |
 | A basket's shares are always backed in kind, and redeeming in kind needs no price, no curator and no admin | `DarwinBasket.redeem` |
-| Your trade is the one you signed | The relayer verifies your intent with QoreSign before acting; the router enforces your minimum |
-| Keeping prices fresh, executing trades for QoreX users | **Darwin's services.** Operator actions, bounded by the rules above. See [Risks](/risks) |
+| Your trade is the one you signed | Your Darwin account: `pqcVerify` over the exact calls, a single-use nonce, Darwin's contracts only; the router enforces your minimum |
+| Keeping prices fresh, submitting QoreX users' signed trades, converting fUSD deposits and withdrawals | **Darwin's services.** Operator actions, bounded by the rules above. See [Risks](/risks) |
 
 ## What Darwin on QoreChain is not
 
-It is not a mainnet product: the tokens are testnet tokens and have no value. It is also not trustless end to end: a QoreX user's trades go through Darwin's relayer, within limits the user sets and can revoke. [Risks](/risks) says this in full.
+It is not a mainnet product: the tokens are testnet tokens and have no value. It is also not trustless end to end: Darwin's relayer submits a QoreX user's trades (it cannot change them), and fUSD deposits and withdrawals pass through it for one transaction each way. [Risks](/risks) says this in full.
 
 ## Status
 
-Live on the QoreChain testnet, four baskets, buy and sell from QoreX. Full picture on [Status](/reference/status).
+Live on the QoreChain testnet, four baskets, buy and sell from QoreX with one signature per trade. Full picture on [Status](/reference/status).

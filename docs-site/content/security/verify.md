@@ -4,7 +4,15 @@ You do not have to take the chain's word, or Darwin's. Each transaction page in 
 
 ## A trade
 
-QoreSign's `inspectTransaction` (`@qorechain/qoresign`) re-reads the committed transaction and checks both its secp256k1 signature and its ML-DSA-87 layer against the keys the signer registered on chain, over the sign-bytes version the network verifies. A relayed trade shows the relayer's signature and the user it was relayed for.
+A trade made through a [Darwin account](/chain/accounts) shows **Signed by** with the owner's address and the summary the owner signed. The page then verifies the owner's ML-DSA-87 signature with `@qorechain/pqc`, in your browser:
+
+1. it decodes `factory.execute(owner, calls, summary, deadline, pqSignature)` from the calldata;
+2. it reads the account's nonce for this trade from its `Executed` event;
+3. it rebuilds the exact text, `qorechain-msg-v1|qorechain-diana|` + summary, account, nonce, deadline and the hash of the calls, as the account did on chain;
+4. it verifies the 4,627-byte signature against the owner's registered key;
+5. it checks that the same signature **fails** for nonce + 1.
+
+For any native transaction, QoreSign's `inspectTransaction` (`@qorechain/qoresign`) re-reads the committed transaction and checks both its secp256k1 signature and its ML-DSA-87 layer against the keys the signer registered on chain, over the sign-bytes version the network verifies. A trade relayed on the path used before Darwin accounts shows the relayer's signature and the user it was relayed for.
 
 ## An oracle round
 

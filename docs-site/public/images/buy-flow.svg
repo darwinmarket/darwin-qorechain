@@ -11,40 +11,40 @@
 <rect width="1160" height="430" fill="#201e17"/>
 <rect x="22" y="22" width="1116" height="386" fill="none" stroke="#f5f2e8" stroke-opacity="0.10" rx="8"/>
 <text x="56" y="64" fill="#f5f2e8" font-size="21" font-weight="600">One buy, one signature</text>
-<text x="56" y="88" fill="#a69f8c" font-size="13">You sign the intent. The relayer verifies it and the chain executes it as you, inside your grant and your EVM window.</text>
+<text x="56" y="88" fill="#a69f8c" font-size="13">You sign plain text in QoreX. Your Darwin account checks it on chain. No EVM window, no grant, no gas for the trade.</text>
 <rect x="56" y="124" width="235" height="210" rx="12" fill="#201e17" stroke="#e2c57e" stroke-opacity="0.5" stroke-width="1.5"/>
 <circle cx="86" cy="156" r="14" fill="url(#gold)"/><text x="86" y="161" fill="#ffffff" font-size="14" font-weight="700" text-anchor="middle">1</text>
-<text x="110" y="161" fill="#f5f2e8" font-size="14.5" font-weight="700">You sign the intent</text>
-<text x="76" y="196" fill="#a69f8c" font-size="12">In QoreX: action, basket,</text>
-<text x="76" y="216" fill="#a69f8c" font-size="12">fUSD in, minimum shares,</text>
-<text x="76" y="236" fill="#a69f8c" font-size="12">nonce, expiry.</text>
+<text x="110" y="161" fill="#f5f2e8" font-size="14.5" font-weight="700">You sign the text</text>
+<text x="76" y="196" fill="#a69f8c" font-size="12">In QoreX: the trade, your</text>
+<text x="76" y="216" fill="#a69f8c" font-size="12">account, nonce, deadline,</text>
+<text x="76" y="236" fill="#a69f8c" font-size="12">hash of the exact calls.</text>
 <text x="76" y="256" fill="#a69f8c" font-size="12">secp256k1 + ML-DSA-87.</text>
 <text x="76" y="300" fill="#e2c57e" font-size="12" font-weight="600">your signature</text>
 <path d="M293 229 L325 229" stroke="#e2c57e" stroke-width="2" marker-end="url(#b)"/>
 <rect x="329" y="124" width="235" height="210" rx="12" fill="#2d2b22" stroke="#474334" stroke-width="1.5"/>
 <circle cx="359" cy="156" r="14" fill="#474334"/><text x="359" y="161" fill="#f5f2e8" font-size="14" font-weight="700" text-anchor="middle">2</text>
 <text x="383" y="161" fill="#f5f2e8" font-size="14.5" font-weight="700">The relayer checks</text>
-<text x="349" y="196" fill="#a69f8c" font-size="12">QoreSign verifies it against</text>
-<text x="349" y="216" fill="#a69f8c" font-size="12">your on-chain ML-DSA-87</text>
-<text x="349" y="236" fill="#a69f8c" font-size="12">key. Fields, expiry, and a</text>
-<text x="349" y="256" fill="#a69f8c" font-size="12">nonce never used before.</text>
-<text x="349" y="300" fill="#a69f8c" font-size="12" font-weight="600">refuses replays</text>
+<text x="349" y="196" fill="#a69f8c" font-size="12">Both halves against your</text>
+<text x="349" y="216" fill="#a69f8c" font-size="12">on-chain keys (QoreSign).</text>
+<text x="349" y="236" fill="#a69f8c" font-size="12">A trade paying your own</text>
+<text x="349" y="256" fill="#a69f8c" font-size="12">account. Then it submits.</text>
+<text x="349" y="300" fill="#a69f8c" font-size="12" font-weight="600">pays the gas</text>
 <path d="M566 229 L598 229" stroke="#e2c57e" stroke-width="2" marker-end="url(#b)"/>
 <rect x="602" y="124" width="235" height="210" rx="12" fill="#2d2b22" stroke="#474334" stroke-width="1.5"/>
 <circle cx="632" cy="156" r="14" fill="#474334"/><text x="632" y="161" fill="#f5f2e8" font-size="14" font-weight="700" text-anchor="middle">3</text>
-<text x="656" y="161" fill="#f5f2e8" font-size="14.5" font-weight="700">The chain executes</text>
-<text x="622" y="196" fill="#a69f8c" font-size="12">MsgExec as you, admitted by</text>
-<text x="622" y="216" fill="#a69f8c" font-size="12">your EVM window. The router</text>
-<text x="622" y="236" fill="#a69f8c" font-size="12">takes 0.30%, buys components</text>
+<text x="656" y="161" fill="#f5f2e8" font-size="14.5" font-weight="700">Your account checks</text>
+<text x="622" y="196" fill="#a69f8c" font-size="12">pqcVerify against your</text>
+<text x="622" y="216" fill="#a69f8c" font-size="12">ML-DSA-87 key, nonce used</text>
+<text x="622" y="236" fill="#a69f8c" font-size="12">once. Then the router buys</text>
 <text x="622" y="256" fill="#a69f8c" font-size="12">from the reserve, mints.</text>
-<text x="622" y="300" fill="#a69f8c" font-size="12" font-weight="600">router + basket</text>
+<text x="622" y="300" fill="#a69f8c" font-size="12" font-weight="600">enforced on chain</text>
 <path d="M839 229 L871 229" stroke="#e2c57e" stroke-width="2" marker-end="url(#b)"/>
 <rect x="875" y="124" width="235" height="210" rx="12" fill="#201e17" stroke="#e2c57e" stroke-opacity="0.5" stroke-width="1.5"/>
 <circle cx="905" cy="156" r="14" fill="url(#gold)"/><text x="905" y="161" fill="#ffffff" font-size="14" font-weight="700" text-anchor="middle">4</text>
 <text x="929" y="161" fill="#f5f2e8" font-size="14.5" font-weight="700">The shares are yours</text>
-<text x="895" y="196" fill="#a69f8c" font-size="12">An ERC-20 balance on your</text>
-<text x="895" y="216" fill="#a69f8c" font-size="12">account. Darwin has no key</text>
-<text x="895" y="236" fill="#a69f8c" font-size="12">that moves it. The relayer</text>
-<text x="895" y="256" fill="#a69f8c" font-size="12">paid the gas.</text>
+<text x="895" y="196" fill="#a69f8c" font-size="12">On your Darwin account.</text>
+<text x="895" y="216" fill="#a69f8c" font-size="12">Only your ML-DSA-87 key</text>
+<text x="895" y="236" fill="#a69f8c" font-size="12">moves them. First buy:</text>
+<text x="895" y="256" fill="#a69f8c" font-size="12">one fUSD deposit before.</text>
 <text x="895" y="300" fill="#e2c57e" font-size="12" font-weight="600">done</text>
 </svg>

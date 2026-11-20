@@ -13,14 +13,14 @@ That is what lets Darwin put its three dangerous keys (prices, rebalances, admin
 
 | Feature | Where in Darwin |
 |---|---|
-| Hybrid ML-DSA-87 transactions | every transaction: user setup, the relayer's `MsgExec`, the keeper's rounds |
+| Hybrid ML-DSA-87 transactions | every transaction: users' fUSD deposits, the relayer's conversions, the keeper's rounds |
 | PQC key registration with proof of possession | every role (deployer, reporter, curator, relayer) |
-| ML-DSA-87 message signatures | every trade intent (QoreX `signArbitrary`) |
-| EVM windows, scoped and per user | the keeper's window scoped to Darwin's contracts; each user's own window admits relayed trades |
-| `pqcVerify`, `pqcKeyStatus` in Solidity | `PqcAuth`, the single call site |
-| Authz grants | users to the relayer, 24 hours |
-| Cross-VM calls (native to EVM) | every trade |
-| Fest tokens fUSD, fETH, fBTC | three of the baskets' components and the quote asset |
+| ML-DSA-87 message signatures | every trade and withdrawal (QoreX `signArbitrary`), verified on chain by the user's Darwin account |
+| EVM windows, scoped | the keeper's window scoped to Darwin's contracts; the relayer's scoped to the account factory |
+| `pqcVerify`, `pqcKeyStatus` in Solidity | `PqcAuth`, the single call site, used by the oracle, baskets, admin and every user's Darwin account |
+| Authz grants | only for selling shares bought before Darwin accounts (users to the relayer, 24 hours) |
+| Cross-VM calls (native to EVM) | the keeper's and tests' trades from the native lane; sales of shares bought before Darwin accounts |
+| Fest tokens fUSD, fETH, fBTC | three of the baskets' components and the quote asset; fUSD moved between bank and ERC-20 form with `MsgConvertCoin` / `MsgConvertERC20` |
 | Native AMM pools | QWAKK's price (pool 6); the reserve's first QOR and QWAKK |
 
 ## What it looked like on mainnet

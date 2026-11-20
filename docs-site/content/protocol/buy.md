@@ -1,6 +1,6 @@
 # Buying
 
-<Diagram src="/images/buy-flow.svg" alt="The four steps of a buy: you sign an intent, the relayer verifies it, the chain executes it as you, the shares are yours." width="900" caption="Step 1 is your only signature." />
+<Diagram src="/images/buy-flow.svg" alt="The four steps of a buy: you sign plain text in QoreX, the relayer checks it and submits it, your Darwin account verifies the ML-DSA-87 signature on chain and calls the router, the shares are on your account." width="900" caption="Step 1 is your only signature." />
 
 ## The router call
 
@@ -16,13 +16,14 @@ The router holds nothing between transactions.
 
 ## From QoreX
 
-The trade is an intent signed with QoreX's `signArbitrary`, executed by Darwin's relayer as an authz `MsgExec`:
+The trade is plain text signed with QoreX's `signArbitrary`, submitted by Darwin's relayer to the user's [Darwin account](/chain/accounts), which checks the ML-DSA-87 signature with `pqcVerify` before making the calls:
 
-| Inner message | When |
+| Call made by the account | When |
 |---|---|
-| `MsgConvertCoin` | your ERC-20 fUSD is short of `usdIn`: the faucet's bank-form fUSD is converted |
-| `MsgCrossVMCall` → fUSD `approve(router)` | the router's allowance is short |
-| `MsgCrossVMCall` → router `buy(...)` | always |
+| fUSD `approve(router, max)` | the router's allowance is short |
+| router `buy(basket, usdIn, minShares, account)` | always; the shares go to the account itself |
+
+The account needs fUSD in ERC-20 form. When it holds less than `usdIn`, the app first asks QoreX to sign one `MsgSend` of the difference (bank-form faucet fUSD) to the relayer, which converts exactly that amount onto the account (`MsgConvertCoin`, receiver = the account). No EVM window, no grant; the relayer pays the trade's gas.
 
 See [How a Trade Works](/how-it-works).
 

@@ -46,6 +46,7 @@ export const navigation: NavSection[] = [
       { title: 'Hybrid Signing & Keys', href: '/chain/hybrid-signing' },
       { title: 'EVM Windows', href: '/chain/evm-windows' },
       { title: 'Oracle', href: '/chain/oracle' },
+      { title: 'Darwin Accounts', href: '/chain/accounts' },
       { title: 'QoreX & the Relayer', href: '/chain/relayer' },
     ],
   },

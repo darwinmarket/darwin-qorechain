@@ -10,8 +10,9 @@
 | **Curator** | The key that signs target weights and rebalances |
 | **Admin** | The key whose ML-DSA-87 signature authorises every admin action |
 | **Guardian** | The one classical power: pause new mints |
-| **Relayer** | Darwin's service that executes QoreX users' signed trade intents through authz |
-| **Intent** | A JSON trade request a user signs with QoreX's `signArbitrary` |
+| **Darwin account** | A user's contract account (`DarwinAccount`), controlled only by the ML-DSA-87 key the user registered; it checks each signed message with `pqcVerify` |
+| **Relayer** | Darwin's service that submits QoreX users' signed messages to their Darwin accounts and pays the gas; it also converts fUSD deposits and withdrawals |
+| **Intent** | Before Darwin accounts: a JSON trade request signed with QoreX's `signArbitrary`, executed through authz; still used to sell shares bought then |
 | **ML-DSA-87** | The NIST post-quantum signature standard (FIPS 204) QoreChain uses, category 5 |
 | **Hybrid signature** | secp256k1 + ML-DSA-87 on the same transaction |
 | **Proof of possession** | Proof, at registration, that the account holds its ML-DSA-87 secret key |
