@@ -200,8 +200,9 @@ await check("Security tab: oracle feeds, rounds, rules, the keeper's scoped wind
 });
 
 await check("a round's link opens Darwin's transaction page with the decoded round and its PQ evidence", async () => {
-  const href = await page.locator("a[href^='/tx/']").first().getAttribute("href");
-  await page.goto(BASE + href, { waitUntil: "networkidle" });
+  // Darwin's own tx page (not the external explorer); the href carries the base path, if any
+  const href = await page.locator("a[href*='/tx/']:not([href^='http'])").first().getAttribute("href");
+  await page.goto(new URL(href, page.url()).toString(), { waitUntil: "domcontentloaded" });
   await page.waitForSelector("text=/Oracle round #\\d+/", { timeout: 30000 });
   await page.waitForSelector("text=Admitted by a post-quantum EVM window", { timeout: 10000 });
   await page.waitForSelector("text=qorechain-diana (testnet)");
