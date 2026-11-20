@@ -44,7 +44,10 @@ function pb(fields) {
 }
 
 const results = [];
+/** ONLY=<regex> runs the matching checks alone (each trade costs testnet QOR in fees). */
+const ONLY = process.env.ONLY ? new RegExp(process.env.ONLY, "i") : null;
 async function check(name, fn) {
+  if (ONLY && !ONLY.test(name)) return;
   const t0 = Date.now();
   try {
     const detail = (await fn()) ?? "";
@@ -201,6 +204,14 @@ await check("Connect wallet connects QoreX; the account shows in the navbar", as
   await tab("Portfolio");
   await page.waitForSelector("text=Portfolio value", { timeout: 30000 });
   return addrs.native;
+});
+
+await check("the account menu shows the account's registered ML-DSA-87 key (@qorechain/react)", async () => {
+  await page.locator(".account-menu > button").first().click();
+  await page.waitForSelector("[data-pqc-badge=true]", { timeout: 30000 });
+  const text = await page.locator("[data-pqc-badge]").innerText();
+  await page.keyboard.press("Escape");
+  return text;
 });
 
 // fUSD in ERC-20 form on the twin for the trades below
