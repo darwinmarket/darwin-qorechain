@@ -366,7 +366,7 @@ await check("a signature declined in QoreX shows a toast and sends nothing", asy
 
 await check("Activity lists the account's trades from the chain", async () => {
   await sleep(8000);
-  await page.goto(BASE, { waitUntil: "networkidle" });
+  await page.goto(BASE, { waitUntil: "domcontentloaded" });
   await tab("Activity");
   await page.waitForSelector("text=/^(Buy|Sell)$/", { timeout: 45000 });
   const n = await page.locator("text=/^(Buy|Sell)$/").count();
