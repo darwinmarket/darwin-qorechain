@@ -88,10 +88,18 @@ async function accountTrades(REST: string, address: string): Promise<TradeEntry[
   } catch {
     return [];
   }
-  const qs = new URLSearchParams({ query: `ethereum_tx.recipient='${getAddress(FACTORY)}'`, order_by: "ORDER_BY_DESC", "pagination.limit": "100" });
-  const r = await fetch(`${REST}/cosmos/tx/v1beta1/txs?${qs}`, { headers: { accept: "application/json", "user-agent": "darwin-qorechain" }, cache: "no-store" }).catch(() => null);
-  if (!r?.ok) return [];
-  const txs = (((await r.json()) as { tx_responses?: any[] }).tx_responses ?? []);
+  // every page (the latest 100 missed older trades once the battery passed 100 transactions)
+  const page = async (n: number): Promise<{ txs: any[]; total: number }> => {
+    const qs = new URLSearchParams({ query: `ethereum_tx.recipient='${getAddress(FACTORY)}'`, order_by: "ORDER_BY_DESC", "pagination.limit": "100", page: String(n) });
+    const r = await fetch(`${REST}/cosmos/tx/v1beta1/txs?${qs}`, { headers: { accept: "application/json", "user-agent": "darwin-qorechain" }, cache: "no-store" }).catch(() => null);
+    if (!r?.ok) return { txs: [], total: 0 };
+    const j = (await r.json()) as { tx_responses?: any[]; total?: string; pagination?: { total?: string } };
+    return { txs: j.tx_responses ?? [], total: Number(j.total ?? j.pagination?.total ?? 0) };
+  };
+  const first = await page(1);
+  const pages = Math.min(20, Math.ceil(first.total / 100));
+  const rest = await Promise.all(Array.from({ length: Math.max(0, pages - 1) }, (_, i) => page(i + 2)));
+  const txs = [first, ...rest].flatMap((p) => p.txs);
   const out: TradeEntry[] = [];
   for (const t of txs) {
     const m = t.tx?.body?.messages?.[0];

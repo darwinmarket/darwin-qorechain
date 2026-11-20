@@ -87,15 +87,25 @@ export async function freshRound(): Promise<string> {
   const age = Math.floor(Date.now() / 1000) - Number(last);
   if (age < FRESH_SECONDS) return `round fresh (${age}s)`;
   await ensureWindow();
-  try {
-    return await submitRound();
-  } catch (e) {
-    // another caller published in the meantime
-    const now = (await client.readContract({ address: D.oracle, abi: oracleAbi, functionName: "lastTimestamp" })) as bigint;
-    if (Math.floor(Date.now() / 1000) - Number(now) < FRESH_SECONDS) return "round published by another call";
-    throw e;
+  const ageNow = async () =>
+    Math.floor(Date.now() / 1000) - Number((await client.readContract({ address: D.oracle, abi: oracleAbi, functionName: "lastTimestamp" })) as bigint);
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      return await submitRound();
+    } catch (e) {
+      // Parallel calls race for the same round (and the deployer's sequence): wait for the
+      // winner's round to land, then look again (found by the multi-user battery).
+      await new Promise((r) => setTimeout(r, 5000 + Math.random() * 3000));
+      const a = await ageNow();
+      if (a < FRESH_SECONDS) return "round published by another call";
+      // the router accepts prices up to 30 minutes old: a trade need not wait for a round it can live without
+      if (attempt === 1 && a < STALE_LIMIT - 120) return `round not refreshed (${a}s old, still valid): ${String((e as Error)?.message ?? e).split("\n")[0].slice(0, 80)}`;
+      if (attempt === 1) throw e;
+    }
   }
+  return "round";
 }
+const STALE_LIMIT = 30 * 60;
 
 export async function daily(): Promise<string[]> {
   const out = [await ensureWindow()];

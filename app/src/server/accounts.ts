@@ -36,7 +36,7 @@ import { privateKeyToAccount } from "viem/accounts";
 import { accountAbi, accountErc20Abi, accountRouterAbi, factoryAbi, FACTORY, textFor, type Call } from "@/lib/qore/account";
 import { erc20Abi } from "@/lib/qore/abis";
 import { diana, EVM_RPC, ROUTER, TOKEN_INFO, TOKENS } from "@/lib/qore/chain";
-import { bankSend, convertCoin, convertErc20 } from "@/lib/qore/proto";
+import { convertCoin, convertErc20 } from "@/lib/qore/proto";
 import { account, RELAYERS, type Role } from "./keys";
 import { CHAIN_ID, client, D, json, REST, sendNative } from "./chain";
 import { freshRound } from "./keeper";
@@ -105,6 +105,9 @@ const humane = (reason: string) =>
           : reason;
 
 const twinOf = (qor1: string) => parseAddress(qor1).hex as Address;
+/** 1 uqor to the depositor. MsgSend is a type the signer's registry knows: it takes the object form
+ *  (a hand-encoded value would be re-encoded as an empty message). */
+const marker = (from: string, to: string) => ({ typeUrl: "/cosmos.bank.v1beta1.MsgSend", value: { fromAddress: from, toAddress: to, amount: [{ denom: "uqor", amount: "1" }] } }) as any;
 
 /** The relayer of the pool that serves `owner`: fixed by its address, so a user's calls stay in order. */
 export function relayerFor(owner: string): Role {
@@ -213,7 +216,7 @@ async function credit(owner: string, role: Role, amount: bigint, hash: string) {
     if (await relayerMemo(role, tag, owner)) return { account: acc, amount: String(amount), already: true as const };
     const rel = await account(role);
     // the 1 uqor marker to the depositor makes this credit findable by relayerMemo()
-    const out = await sendNative(role, [convertCoin(rel.cosmos, acc, FUSD_DENOM, amount) as any, bankSend(rel.cosmos, owner, "uqor", 1n) as any], 2_000_000, tag);
+    const out = await sendNative(role, [convertCoin(rel.cosmos, acc, FUSD_DENOM, amount) as any, marker(rel.cosmos, owner)], 2_000_000, tag);
     done.add(tag);
     return { account: acc, amount: String(amount), txHash: out };
   });
@@ -391,12 +394,16 @@ export async function execute(req: ExecuteRequest) {
       const reason = revertReason(e);
       throw new Error(reason ? `refused before sending: ${humane(reason)}` : String((e as Error)?.message ?? e).split("\n")[0]);
     }
+    // Another instance can take this relayer's sequence at the same moment: the send then fails
+    // ("nonce too low"), or the transaction is accepted and later dropped from the mempool, with
+    // no error at all (found by the battery). Either way it is sent again, as long as the account's
+    // nonce shows the message has not been executed.
     let hash: Hex | undefined;
-    for (let attempt = 0; !hash; attempt++) {
+    let receipt: Awaited<ReturnType<typeof client.waitForTransactionReceipt>> | undefined;
+    for (let attempt = 0; !receipt; attempt++) {
       try {
         hash = await w.writeContract({ address: FACTORY, abi: factoryAbi, functionName: "execute", args, account: w.account!, chain: diana, gas: (gas * 125n) / 100n } as any);
       } catch (e) {
-        // another instance used this relayer's sequence at the same moment: take the next one
         if (attempt < 4 && nonceRace(e)) {
           await new Promise((r) => setTimeout(r, 1500 + Math.random() * 1500));
           if ((await nonceOf(acc)) !== nonce) throw new Error("this message was already executed");
@@ -404,15 +411,22 @@ export async function execute(req: ExecuteRequest) {
         }
         throw e;
       }
+      receipt = await client.waitForTransactionReceipt({ hash: hash!, timeout: 30_000 }).catch(() => undefined);
+      if (!receipt) {
+        const still = await client.getTransaction({ hash: hash! }).catch(() => null);
+        if (still) receipt = await client.waitForTransactionReceipt({ hash: hash!, timeout: 60_000 });
+        else if ((await nonceOf(acc)) !== nonce) throw new Error("this message was already executed");
+        else if (attempt >= 4) throw new Error(`transaction ${hash} was dropped, five times`);
+      }
     }
-    const receipt = await client.waitForTransactionReceipt({ hash, timeout: 120_000 });
     if (receipt.status !== "success") throw new Error(`reverted on chain in ${hash}`);
+    hash = receipt.transactionHash;
     let returned: string | undefined;
     if (what.kind === "withdraw") {
       const tag = `darwin withdraw ${hash}`;
       returned = await sendNative(role, [convertErc20(rel.cosmos, owner, TOKENS.fUSD, what.amount!) as any], 2_000_000, tag);
       done.add(tag);
     }
-    return { txHash: hash, account: acc, kind: what.kind, returned, gasUsed: String(receipt.gasUsed) };
+    return { txHash: hash!, account: acc, kind: what.kind, returned, gasUsed: String(receipt.gasUsed) };
   });
 }
