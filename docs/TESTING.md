@@ -4,11 +4,11 @@ Four layers, from pure logic to the live chain. Every layer is run before a chan
 
 | Layer | Where | What | Run |
 |---|---|---|---|
-| Unit and fuzz | `contracts/test/*.t.sol` | 77 tests: oracle rounds and refusals, PQ admin, reserve pricing, basket mint/redeem/rebalance, router, WQOR, QOREDW | `cd contracts && forge test` |
+| Unit and fuzz | `contracts/test/*.t.sol` | 81 tests: oracle rounds and refusals, PQ admin, reserve pricing, basket mint/redeem/rebalance, router, WQOR, QOREDW | `cd contracts && forge test` |
 | Invariant | `contracts/test/invariant` | 4 invariants under random mints, redeems, buys and sells (256 runs x 500 calls each): shares fully backed, NAV per share never drops at fixed prices, router keeps nothing, weights sum to 100% | `forge test --match-path "test/invariant/*"` |
-| On-chain E2E | `ops/src/e2e.ts` | 20 checks on qorechain-diana against the real `pqcVerify` and `pqcKeyStatus` precompiles: forged, tampered, replayed and stale signatures refused; admin, guardian, router, in-kind redemption, native cross-VM trades, ERC-20 conversions, curator rebalances | `cd ops && npm run e2e` (stop the keeper first) |
+| On-chain E2E | `ops/src/e2e.ts` | 23 checks on qorechain-diana against the real `pqcVerify` and `pqcKeyStatus` precompiles: forged, tampered, replayed and stale signatures refused; admin, guardian, router, in-kind redemption, native cross-VM trades, ERC-20 conversions, curator rebalances (restoring the basket's own targets), every basket pinned to its published weights, and a second opinion from the official `qore` CLI | `cd ops && npm run e2e` (stop the keeper first) |
 | Multi-user battery | `ops/src/battery.ts` | 8 fresh QoreX-style users trade all four baskets in parallel (buys, sells, in-kind redemptions, faucet-form and ERC-20 fUSD), every trade's hybrid signature checked on chain, then solvency, NAV and router invariants; leftover gas returned | `cd ops && npm run battery` |
-| Browser E2E | `app/e2e/suite.mjs` | 21 checks in Chromium with the QoreX test double (real hybrid signing, real broadcast), each followed by on-chain assertions | `cd app && npm run build && npm start & node e2e/suite.mjs` |
+| Browser E2E | `app/e2e/suite.mjs` | 24 checks in Chromium with the QoreX test double (real hybrid signing, real broadcast), each followed by on-chain assertions; the app's own in-browser ML-DSA-87 verification of a round and of a trade; the PQC key badge; buys sized to the vault's capacity (SKIP, not FAIL, when the testnet reserve is empty) | `cd app && npm run build && npm start & npm run e2e` (`ONLY=<regex>` for a subset) |
 
 Locally the precompiles do not exist, so `test/utils/MockPqc.sol` is etched at `0x…0A01` and
 `0x…0A02`: a signature is valid when it equals `keccak256("ok", key, message)`. The on-chain suite
@@ -42,3 +42,17 @@ duplicate-entry paths of `listToken`.
 - **Test hygiene**: a failed guardian check left BLUEdw paused; the check now always unpauses, and
   every suite verifies baskets are open first. A paused basket stays reachable for selling and
   redeeming in the app.
+
+## What the 2026-11-20 review found
+
+- **QOR was priced about 10x too high.** The oracle read QOR from two testnet AMM pools that
+  disagree with each other; it now uses QOR's market price. See [PRICING.md](PRICING.md).
+- **QWAKK's chart history was invented.** It was drawn as today's QWAKK/QOR ratio times QOR's
+  history, back to August, although QWAKK only trades since 2026-11-18 and its ratio moved x14.6.
+  It is now replayed swap by swap from its pool, and a check asserts nothing is drawn before then.
+- **The curator check reset a production basket.** It set BLUEDW back to 50/50 after a test
+  rebalance, written before BLUEDW moved to 70/30. It now restores the basket's own targets in a
+  `finally`, and a new check pins every basket to its published weights.
+- **Navbar tabs on a transaction page** went home instead of opening the tab (`/?tab=…` now).
+- **Reserve depth at market prices**: the QOR baskets can fill only cents until the reserve holds
+  more QOR and QWAKK; the trade card states the capacity to four decimals.
