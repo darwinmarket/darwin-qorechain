@@ -16,3 +16,4 @@ app/e2e/shots/
 *.tsbuildinfo
 .keeper-state.json
 .qwakk-samples.json
+.relayer-nonces.json
