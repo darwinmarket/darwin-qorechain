@@ -33,7 +33,11 @@ const nameOf = (symbol: string) => BASKETS.find((b) => b.symbol === symbol)?.nam
 export function QoreApp() {
   const { account, connect, connecting, disconnect, installed, error } = useWallet();
   const toast = useToast();
-  const [tab, setTab] = useState<Tab>("Baskets");
+  // `/?tab=Activity` opens a tab directly (the transaction page's navbar links here).
+  const [tab, setTab] = useState<Tab>(() => {
+    const t = typeof window === "undefined" ? null : new URLSearchParams(window.location.search).get("tab");
+    return (TABS as readonly string[]).includes(t ?? "") ? (t as Tab) : "Baskets";
+  });
   const [openSymbol, setOpenSymbol] = useState<string | null>(() =>
     typeof window === "undefined" ? null : basketSymbolFromLocation(window.location),
   );
