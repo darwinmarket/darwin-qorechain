@@ -304,6 +304,8 @@ export async function settleWithdrawals(): Promise<string[]> {
   const out: string[] = [];
   for (const t of r.tx_responses ?? []) {
     if (Date.now() - Date.parse(t.timestamp) > 48 * 3600_000) continue;
+    // a withdrawal younger than two minutes may still be finishing in its own call
+    if (Date.now() - Date.parse(t.timestamp) < 120_000) continue;
     if (t.code !== 0 || t.events?.some((e: any) => e.type === "ethereum_tx" && e.attributes.some((a: any) => a.key === "ethereumTxFailed"))) continue;
     const raw = t.tx?.body?.messages?.[0]?.raw;
     const hash = t.events?.find((e: any) => e.type === "ethereum_tx")?.attributes?.find((a: any) => a.key === "ethereumTxHash")?.value;
@@ -424,7 +426,14 @@ export async function execute(req: ExecuteRequest) {
     let returned: string | undefined;
     if (what.kind === "withdraw") {
       const tag = `darwin withdraw ${hash}`;
-      returned = await sendNative(role, [convertErc20(rel.cosmos, owner, TOKENS.fUSD, what.amount!) as any], 2_000_000, tag);
+      try {
+        returned = await sendNative(role, [convertErc20(rel.cosmos, owner, TOKENS.fUSD, what.amount!) as any], 2_000_000, tag);
+      } catch (e) {
+        // returned meanwhile by a settle in another call? then the user has its fUSD: not a failure
+        await new Promise((r) => setTimeout(r, 3000));
+        if (!(await relayerMemo(role, tag, owner).catch(() => false))) throw e;
+        returned = "returned by settleWithdrawals";
+      }
       done.add(tag);
     }
     return { txHash: hash!, account: acc, kind: what.kind, returned, gasUsed: String(receipt.gasUsed) };
