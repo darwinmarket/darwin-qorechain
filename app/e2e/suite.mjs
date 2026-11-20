@@ -159,6 +159,15 @@ await check("Security tab: oracle feeds, rounds, rules, the keeper's scoped wind
   return "all sections";
 });
 
+await check("a round's link opens Darwin's transaction page with the decoded round and its PQ evidence", async () => {
+  const href = await page.locator("a[href^='/tx/']").first().getAttribute("href");
+  await page.goto(BASE + href, { waitUntil: "networkidle" });
+  await page.waitForSelector("text=/Oracle round #\\d+/", { timeout: 30000 });
+  await page.waitForSelector("text=Admitted by a post-quantum EVM window", { timeout: 10000 });
+  await page.waitForSelector("text=qorechain-diana (testnet)");
+  return href;
+});
+
 await check("Portfolio and Activity ask to connect when signed out", async () => {
   await tab("Portfolio");
   await page.waitForSelector("text=Connect a wallet to see your holdings and positions.");
