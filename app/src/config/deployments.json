@@ -18,11 +18,13 @@
     "QWAKK": "0xa5b3c3Fb92E2E89555F9909b9004C65F3542eE23",
     "WQOR": "0xa140f05ff3fec2d757ae758cddc064e2e386b749"
   },
-  "oracle": "0x26ede83659e3e007f3fe568ee6c6a20df77929e6",
-  "reserve": "0x39a401ae133e80b05c6f7076bc0bc6d5e3df1a23",
+  "oracle": "0xabe07a51e1974d36970b40d3c1c84da37364685f",
+  "reserve": "0x3a87144e2193db059228f5b982ffb2bdf65bc264",
   "baskets": {
     "BLUEDW": {
-      "address": "0x033e85e85853bcf9b580c5613f373eb739bd9c2a",
+      "address": "0xc35a0eb298693a011d26132eb7f4b8aca8112f92",
+      "version": 2,
+      "stack": 2,
       "name": "Darwin Blue Chip",
       "display": "BLUEdw",
       "description": "Bitcoin-led crypto majors: 70% BTC, 30% ETH.",
@@ -36,26 +38,24 @@
       ],
       "seed": {
         "amounts": [
-          "160316",
-          "56490472881748496"
+          "113901",
+          "17321316189079488"
         ],
-        "shares": "20000000000000000000",
+        "shares": "10000000000000000000",
+        "to": "0x000000000000000000000000000000000000dEaD",
         "prices": {
           "fUSD": 1,
-          "fETH": 1770.21,
-          "fBTC": 62376.7,
-          "WQOR": 0.03486644162686922
+          "fETH": 1731.97,
+          "fBTC": 61456.6625,
+          "WQOR": 0.003292,
+          "QWAKK": 0.000004814666269587106
         }
-      },
-      "history": [
-        {
-          "date": "2026-11-20",
-          "change": "target weights 50/50 -> 70/30 (curator-signed), rebalanced"
-        }
-      ]
+      }
     },
     "BALDW": {
-      "address": "0x5e8290cfe9ad6487c7336780b0069ecb9b9b92cd",
+      "address": "0xfe862c4947626bc9c86bcee12d82153f8286df9a",
+      "version": 2,
+      "stack": 2,
       "name": "Darwin Balanced",
       "display": "BALdw",
       "description": "BTC and ETH with a 30% dollar cushion: 35% BTC, 35% ETH, 30% USD.",
@@ -71,22 +71,25 @@
       ],
       "seed": {
         "amounts": [
-          "112221",
-          "39543331017223944",
-          "60000000"
+          "56950",
+          "20208202220592736",
+          "30000000"
         ],
-        "shares": "20000000000000000000",
+        "shares": "10000000000000000000",
+        "to": "0x000000000000000000000000000000000000dEaD",
         "prices": {
           "fUSD": 1,
-          "fETH": 1770.21,
-          "fBTC": 62376.7,
-          "WQOR": 0.03486644162686922
+          "fETH": 1731.97,
+          "fBTC": 61456.6625,
+          "WQOR": 0.003292,
+          "QWAKK": 0.000004814666269587106
         }
       }
     },
     "QOREDW": {
-      "address": "0x2a78aedc518aadbd99f2f206d82c1cfd2863f961",
-      "version": 4,
+      "address": "0x8061be1bcdd9c230c8376c381e14878890dc8dae",
+      "version": 5,
+      "stack": 2,
       "name": "Darwin Qore Ecosystem",
       "display": "QOREdw",
       "description": "QoreChain's ecosystem: 60% QOR, 25% ETH, 15% QWAKK.",
@@ -99,11 +102,28 @@
         6000,
         2500,
         1500
-      ]
+      ],
+      "seed": {
+        "amounts": [
+          "18226002430133657600",
+          "14434430157566",
+          "3115480733"
+        ],
+        "shares": "10000000000000000",
+        "to": "0x000000000000000000000000000000000000dEaD",
+        "prices": {
+          "fUSD": 1,
+          "fETH": 1731.97,
+          "fBTC": 61456.6625,
+          "WQOR": 0.003292,
+          "QWAKK": 0.000004814666269587106
+        }
+      }
     },
     "DEGENDW": {
-      "address": "0x77cf407ef0ded53ff39d0eb83e1ece1049d733a6",
-      "version": 2,
+      "address": "0x0b11e4be57144c2bc3d430aef61c9e93b342c779",
+      "version": 3,
+      "stack": 2,
       "name": "Darwin Degen",
       "display": "DEGENdw",
       "description": "QoreChain's degen pair: 70% QWAKK, 30% QOR. High risk, for fun.",
@@ -114,16 +134,36 @@
       "weights": [
         3000,
         7000
-      ]
+      ],
+      "seed": {
+        "amounts": [
+          "9113001215066828800",
+          "14538910088"
+        ],
+        "shares": "10000000000000000",
+        "to": "0x000000000000000000000000000000000000dEaD",
+        "prices": {
+          "fUSD": 1,
+          "fETH": 1731.97,
+          "fBTC": 61456.6625,
+          "WQOR": 0.003292,
+          "QWAKK": 0.000004814666269587106
+        }
+      }
     }
   },
-  "router": "0x9a3ec4cc1163ee8fdce4049944178da6d74972c9",
+  "router": "0xf402f3ce6505be9ba382ddf0bc53c27c1bd1d018",
   "deployedAt": "2026-11-19T19:54:49.262Z",
   "routerHistory": [
     {
       "address": "0x6b4d9220db397d4490ce4acc6ff63e4386a39de3",
       "retired": "2026-11-19T22:03:53.948Z",
       "reason": "linear quote could undershoot rounding on 8-decimal legs"
+    },
+    {
+      "address": "0x9a3ec4cc1163ee8fdce4049944178da6d74972c9",
+      "retired": "2026-11-20T13:25:48.963Z",
+      "reason": "v2 stack"
     }
   ],
   "basketHistory": [
@@ -234,6 +274,123 @@
       },
       "retired": "2026-11-20T10:55:35.666Z",
       "reason": "v2: new components or reseed at market prices"
+    },
+    {
+      "key": "BLUEDW",
+      "address": "0x033e85e85853bcf9b580c5613f373eb739bd9c2a",
+      "name": "Darwin Blue Chip",
+      "display": "BLUEdw",
+      "description": "Bitcoin-led crypto majors: 70% BTC, 30% ETH.",
+      "components": [
+        "fBTC",
+        "fETH"
+      ],
+      "weights": [
+        7000,
+        3000
+      ],
+      "seed": {
+        "amounts": [
+          "160316",
+          "56490472881748496"
+        ],
+        "shares": "20000000000000000000",
+        "prices": {
+          "fUSD": 1,
+          "fETH": 1770.21,
+          "fBTC": 62376.7,
+          "WQOR": 0.03486644162686922
+        }
+      },
+      "history": [
+        {
+          "date": "2026-11-20",
+          "change": "target weights 50/50 -> 70/30 (curator-signed), rebalanced"
+        }
+      ],
+      "retired": "2026-11-20T13:25:48.963Z",
+      "reason": "v2 stack: fixed oracle, ML-DSA-87 algorithm check, one-shot seed"
+    },
+    {
+      "key": "BALDW",
+      "address": "0x5e8290cfe9ad6487c7336780b0069ecb9b9b92cd",
+      "name": "Darwin Balanced",
+      "display": "BALdw",
+      "description": "BTC and ETH with a 30% dollar cushion: 35% BTC, 35% ETH, 30% USD.",
+      "components": [
+        "fBTC",
+        "fETH",
+        "fUSD"
+      ],
+      "weights": [
+        3500,
+        3500,
+        3000
+      ],
+      "seed": {
+        "amounts": [
+          "112221",
+          "39543331017223944",
+          "60000000"
+        ],
+        "shares": "20000000000000000000",
+        "prices": {
+          "fUSD": 1,
+          "fETH": 1770.21,
+          "fBTC": 62376.7,
+          "WQOR": 0.03486644162686922
+        }
+      },
+      "retired": "2026-11-20T13:25:48.963Z",
+      "reason": "v2 stack: fixed oracle, ML-DSA-87 algorithm check, one-shot seed"
+    },
+    {
+      "key": "QOREDW",
+      "address": "0x2a78aedc518aadbd99f2f206d82c1cfd2863f961",
+      "version": 4,
+      "name": "Darwin Qore Ecosystem",
+      "display": "QOREdw",
+      "description": "QoreChain's ecosystem: 60% QOR, 25% ETH, 15% QWAKK.",
+      "components": [
+        "WQOR",
+        "fETH",
+        "QWAKK"
+      ],
+      "weights": [
+        6000,
+        2500,
+        1500
+      ],
+      "retired": "2026-11-20T13:25:48.963Z",
+      "reason": "v2 stack: fixed oracle, ML-DSA-87 algorithm check, one-shot seed"
+    },
+    {
+      "key": "DEGENDW",
+      "address": "0x77cf407ef0ded53ff39d0eb83e1ece1049d733a6",
+      "version": 2,
+      "name": "Darwin Degen",
+      "display": "DEGENdw",
+      "description": "QoreChain's degen pair: 70% QWAKK, 30% QOR. High risk, for fun.",
+      "components": [
+        "WQOR",
+        "QWAKK"
+      ],
+      "weights": [
+        3000,
+        7000
+      ],
+      "retired": "2026-11-20T13:25:48.963Z",
+      "reason": "v2 stack: fixed oracle, ML-DSA-87 algorithm check, one-shot seed"
     }
-  ]
+  ],
+  "stackHistory": [
+    {
+      "stack": 1,
+      "oracle": "0x26ede83659e3e007f3fe568ee6c6a20df77929e6",
+      "reserve": "0x39a401ae133e80b05c6f7076bc0bc6d5e3df1a23",
+      "router": "0x9a3ec4cc1163ee8fdce4049944178da6d74972c9",
+      "retired": "2026-11-20T13:25:48.963Z"
+    }
+  ],
+  "stack": 2
 }
