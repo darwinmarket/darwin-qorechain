@@ -166,7 +166,7 @@ Requirements: Foundry, Node 20+.
 ```bash
 git clone --recursive https://github.com/darwinmarket/darwin-qorechain && cd darwin-qorechain
 
-# contracts: 83 unit, fuzz and invariant tests, mock precompiles locally
+# contracts: 94 unit, fuzz and invariant tests, mock precompiles locally
 cd contracts && forge test && cd ..
 
 # app, against the live testnet deployment
@@ -221,7 +221,7 @@ node e2e/trade.mjs BLUEdw 2              # one trade: connect, buy 2 fUSD of BLU
   `pqcKeyStatus` call sits and which tests cover it).
 - Cryptographic inventory: [docs/cbom](docs/cbom) (QoreScan CBOM; QoreChain's endpoints already
   negotiate the hybrid post-quantum key exchange X25519MLKEM768).
-- Tests: 83 unit, fuzz and invariant tests; on-chain E2E (23/23); an 8-user parallel battery
+- Tests: 94 unit, fuzz and invariant tests; on-chain E2E (23/23); an 8-user parallel battery
   (48/48 trades); browser E2E (25 checks; the last full run, `docs/e2e/browser-2026-11-20T1210.md`, is 24/24 from
   before the PQC-badge check, which passes on its own); see [docs/TESTING.md](docs/TESTING.md).
 - Testnet only: the tokens have no value and the mnemonic used here must never touch mainnet.
