@@ -57,3 +57,23 @@ export function convertCoin(sender: string, receiver: Hex, denom: string, amount
   const value = new Writer().bytes(1, coin).string(2, receiver).string(3, sender).finish();
   return { typeUrl: CONVERT_COIN_TYPE_URL, value };
 }
+
+export const CONVERT_ERC20_TYPE_URL = "/cosmos.evm.erc20.v1.MsgConvertERC20";
+export const SEND_TYPE_URL = "/cosmos.bank.v1beta1.MsgSend";
+
+/**
+ * Move an ERC-20 balance of `sender` back to its bank form on `receiver` (both qor1: the chain
+ * decodes the sender as bech32 and refuses its 0x form).
+ *   cosmos.evm.erc20.v1.MsgConvertERC20 { contract_address=1, amount=2, receiver=3, sender=4 }
+ */
+export function convertErc20(sender: string, receiver: string, contract: Hex, amount: bigint): EncodedMsg {
+  const value = new Writer().string(1, contract).string(2, amount.toString()).string(3, receiver).string(4, sender).finish();
+  return { typeUrl: CONVERT_ERC20_TYPE_URL, value };
+}
+
+/** cosmos.bank.v1beta1.MsgSend { from_address=1, to_address=2, amount=3 (Coin) }: QoreX shows and signs it. */
+export function bankSend(from: string, to: string, denom: string, amount: bigint): EncodedMsg {
+  const coin = new Writer().string(1, denom).string(2, amount.toString()).finish();
+  const value = new Writer().string(1, from).string(2, to).bytes(3, coin).finish();
+  return { typeUrl: SEND_TYPE_URL, value };
+}
