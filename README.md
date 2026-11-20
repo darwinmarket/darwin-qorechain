@@ -14,7 +14,7 @@ fest.
 |---|---|---|---|
 | Darwin Blue Chip | BLUEdw (`BLUEDW`) | 70% BTC, 30% ETH | `0x033e85e85853bcf9b580c5613f373eb739bd9c2a` |
 | Darwin Balanced | BALdw (`BALDW`) | 35% BTC, 35% ETH, 30% USD | `0x5e8290cfe9ad6487c7336780b0069ecb9b9b92cd` |
-| Darwin Qore Ecosystem | QOREdw (`QOREDW`) | 40% QOR, 20% BTC, 20% ETH, 20% QWAKK | `0x7c051cda46971306b05252c7354c226eb37c3e96` (v1 `0x16b1…2fe0` retired) |
+| Darwin Qore Ecosystem | QOREdw (`QOREDW`) | 50% QOR, 25% ETH, 25% QWAKK | `0xe0f6f58dbcb03f863ccf0bea8c2a5a8e16494b6b` (v3; v1 `0x16b1…2fe0` and v2 `0x7c05…3e96` retired) |
 | Darwin Degen | DEGENdw (`DEGENDW`) | 50% QOR, 50% QWAKK | `0x48775d391021698298f6fcdb1826ba3a59db8d91` |
 
 BTC, ETH and USD are held as the Fest test tokens fBTC, fETH and fUSD; QOR as WQOR; QWAKK is
