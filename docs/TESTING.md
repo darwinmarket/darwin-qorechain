@@ -6,9 +6,9 @@ Four layers, from pure logic to the live chain. Every layer is run before a chan
 |---|---|---|---|
 | Unit and fuzz | `contracts/test/*.t.sol` | 85 tests: oracle rounds and refusals, PQ admin, reserve pricing, basket mint/redeem/rebalance, router, WQOR, QOREDW | `cd contracts && forge test` |
 | Invariant | `contracts/test/invariant` | two campaigns of 256 runs x 500 calls. At fixed prices (random mints, redeems, buys, sells): shares fully backed, NAV per share never drops, router keeps nothing, weights sum to 100%, sells refused only for an empty reserve or dust. With the oracle's prices walking (signed rounds a minute apart, up to ±10% each): still fully backed, **in-kind redemption never fails**, sells refused only for known reasons, router keeps nothing. Failures are counted, never swallowed | `forge test --match-path "test/invariant/*"` |
-| On-chain E2E | `ops/src/e2e.ts` | 26 checks on qorechain-diana against the real `pqcVerify` and `pqcKeyStatus` precompiles: forged, tampered, replayed and stale signatures refused; admin, guardian, router, in-kind redemption, native cross-VM trades, ERC-20 conversions, curator rebalances (restoring the basket's own targets), every basket pinned to its published weights, a feed twice in a round and a round seconds after the last refused, every seed at `0x…dEaD`, and a second opinion from the official `qore` CLI | `cd ops && npm run e2e` (stop the keeper first) |
+| On-chain E2E | `ops/src/e2e.ts` | 27 checks on qorechain-diana against the real `pqcVerify` and `pqcKeyStatus` precompiles: forged, tampered, replayed and stale signatures refused; admin, guardian, router, in-kind redemption, native cross-VM trades, ERC-20 conversions, curator rebalances (restoring the basket's own targets), every basket pinned to its published weights, a feed twice in a round and a round seconds after the last refused, every seed at `0x…dEaD`, the relayer executing an ML-DSA-87 signed intent as the user and refusing a replay and a tampered intent, and a second opinion from the official `qore` CLI | `cd ops && npm run e2e` (stop the keeper first) |
 | Multi-user battery | `ops/src/battery.ts` | 8 fresh QoreX-style users trade all four baskets in parallel (buys, sells, in-kind redemptions, faucet-form and ERC-20 fUSD), every trade's hybrid signature checked on chain, then solvency, NAV and router invariants; the users then exit the QOR baskets (whose QOR and QWAKK inventory is scarce) and leftover gas is returned | `cd ops && npm run battery` |
-| Browser E2E | `app/e2e/suite.mjs` | 25 checks in Chromium with the QoreX test double (real hybrid signing, real broadcast), each followed by on-chain assertions; the app's own in-browser ML-DSA-87 verification of a round and of a trade; the PQC key badge; buys sized to the vault's capacity (SKIP, not FAIL, when the testnet reserve is empty) | `cd app && npm run build && npm start & npm run e2e` (`ONLY=<regex>` for a subset) |
+| Browser E2E | `app/e2e/suite.mjs` | 25 checks in Chromium with the QoreX test double (real hybrid signing, real broadcast); every trade is an intent signed with `signArbitrary` and executed by the relayer, checked on chain (`MsgExec`, hybrid signature, the user's EVM window); the app's own in-browser ML-DSA-87 verification of a round and of a trade; the PQC key badge; buys sized to the vault's capacity (SKIP, not FAIL, when the testnet reserve is empty) | `cd app && npm run build && npm start & npm run e2e` (`ONLY=<regex>` for a subset) |
 
 Locally the precompiles do not exist, so `test/utils/MockPqc.sol` is etched at `0x…0A01` and
 `0x…0A02`: a signature is valid when it equals `keccak256("ok", key, message)`. The on-chain suite
@@ -56,3 +56,14 @@ duplicate-entry paths of `listToken`.
 - **Navbar tabs on a transaction page** went home instead of opening the tab (`/?tab=…` now).
 - **Reserve depth at market prices**: the QOR baskets can fill only cents until the reserve holds
   more QOR and QWAKK; the trade card states the capacity to four decimals.
+
+## What a real QoreX found (2026-11-20)
+
+The test double signs every message type; the real QoreX extension does not. A buy from the real
+wallet failed with "QoreX cannot show what /cosmos.evm.erc20.v1.MsgConvertCoin does". A diagnostic
+page (`app/src/app/debug/qorex`) then asked the real QoreX to sign one message type at a time:
+bank sends, authz grants and CosmWasm calls are shown and signed; `MsgCrossVMCall`,
+`MsgConvertCoin` and `MsgConvertERC20` are refused. A grant executed by a third party further needs
+the user's own EVM window (`did not send this call itself, and its EVM authorisation window does
+not admit it`). Hence the relayer design, verified with the real QoreX on testnet
+(tx `4DCBD85715036495D6C32CF3A07AF7DD0ADE6C01191BE69470A9EFFA03986BA3`).
