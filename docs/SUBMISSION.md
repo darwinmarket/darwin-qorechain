@@ -25,7 +25,7 @@ precompiles against keys registered with proof of possession:
 - every oracle round carries the reporter's ML-DSA-87 signature, checked by `pqcVerify` before a
   price is stored, with a 15% circuit breaker;
 - every rebalance carries the curator's signature over the exact trades, and reverts if it would
-  cost more than 1% of NAV; rebalances run once a week, Mondays 12:00 UTC;
+  lose more than 1% of NAV at oracle prices; rebalances run once a week, Mondays 12:00 UTC;
 - every admin action (15 of them, including moving the reserve's funds) needs the admin's
   ML-DSA-87 signature; no function trusts `msg.sender` for admin powers;
 - every user trade is hybrid-signed (secp256k1 + ML-DSA-87) by QoreX on the native lane and reaches
@@ -61,7 +61,8 @@ post-quantum port, written during the fest, with the same front.
   (forged, tampered, replayed, stale and expired signatures refused, plus a second opinion from the
   `qore` CLI); an 8-user parallel battery; 25 browser checks with the QoreX test double and real
   hybrid signing. Reports with every tx hash in `docs/e2e`.
-- **Audit:** two-stage QCAI audit and the post-quantum design map in `docs/AUDIT.md`; QoreScan
+- **Audit:** the two-stage QCAI audit (run by the team on the dashboard) and the post-quantum
+  design map in `docs/AUDIT.md`; QoreScan
   CBOM in `docs/cbom`.
 - **Hard parts:** QoreX cannot sign EVM transactions, so trades go native to EVM by cross-VM call;
   the EVM lane needs coin-60 keys; EVM logs of cross-VM calls are not in `eth_getLogs`, so the app
@@ -120,4 +121,4 @@ EVM, `MsgCrossVMCall`), which the form does not list.
 - QCAI audit, stage 1 and stage 2, same setting (Ethereum EVM/Solidity); reports in `docs/audit/`,
   findings mapped in `docs/AUDIT.md`.
 - The 3-minute video.
-- The cover image (16:9, 1200x675 or more): `docs/cover.png`.
+- Upload the cover image: `docs/cover.png` (2400x1350, 16:9).
