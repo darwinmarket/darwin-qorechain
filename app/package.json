@@ -16,6 +16,8 @@
   "dependencies": {
     "@qorechain/pqc": "^0.2.3",
     "@qorechain/qoresign": "^0.2.0",
+    "@qorechain/react": "^0.14.0",
+    "@qorechain/sdk": "^0.14.0",
     "@tanstack/react-query": "^5.100.10",
     "clsx": "^1.2.1",
     "next": "15.5.28",
