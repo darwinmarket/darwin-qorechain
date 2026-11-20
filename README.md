@@ -3,7 +3,8 @@
 **Crypto baskets that survive Q-Day.** Buy a whole portfolio as one token. Every price that values
 it is signed with ML-DSA-87 and checked on chain by `pqcVerify`, every rebalance needs the curator's
 post-quantum signature, and every trade you make from QoreX is hybrid-signed (secp256k1 +
-ML-DSA-87). No ECDSA key alone can move a Darwin basket.
+ML-DSA-87). No ECDSA key alone can change a price, a weight, a trade or a parameter, or move
+the reserve's funds (what one still can do is listed under [Known limitations](#known-limitations)).
 
 Built for **Build Before Q-Day**, the QoreChain Developer Fest, on the `qorechain-diana` testnet.
 Category: **Post-Quantum dApp**. Darwin is already live on Miden mainnet at
@@ -213,14 +214,32 @@ node e2e/trade.mjs BLUEdw 2              # one trade: connect, buy 2 fUSD of BLU
 - The reserve's inventory is managed by the team (`ops/src/refill.ts` wraps QOR or sends tokens,
   `ops/src/amm.ts` buys on QoreChain's native AMM); the app refuses buys above what it holds.
 - The reserve sells at oracle prices with a 0.30% spread; Darwin's own baskets are spread-exempt
-  for rebalances. A rebalance that would cost more than 1% of NAV reverts.
-- Audit: see [docs/AUDIT.md](docs/AUDIT.md) (two-stage QCAI audit, and where each `pqcVerify` /
+  for rebalances. A rebalance that would lose more than 1% of NAV at oracle prices reverts (it
+  bounds the curator against the oracle, not execution against the wider market).
+- Audit: see [docs/AUDIT.md](docs/AUDIT.md) (the two-stage QCAI audit, to be run by the team on
+  the dashboard, and where each `pqcVerify` /
   `pqcKeyStatus` call sits and which tests cover it).
 - Cryptographic inventory: [docs/cbom](docs/cbom) (QoreScan CBOM; QoreChain's endpoints already
   negotiate the hybrid post-quantum key exchange X25519MLKEM768).
 - Tests: 83 unit, fuzz and invariant tests; on-chain E2E (23/23); an 8-user parallel battery
-  (48/48 trades); browser E2E (25 checks: 24/25 on the last full run, the one failure the test wallet running out of testnet QOR for gas, green on rerun); see [docs/TESTING.md](docs/TESTING.md).
+  (48/48 trades); browser E2E (25 checks; the last full run, `docs/e2e/browser-2026-11-20T1210.md`, is 24/24 from
+  before the PQC-badge check, which passes on its own); see [docs/TESTING.md](docs/TESTING.md).
 - Testnet only: the tokens have no value and the mnemonic used here must never touch mainnet.
+
+## Known limitations
+
+Found by our own review on 2026-11-20 (an independent read of the repo, as a juror would). Fixed in
+code and tested; the testnet deployment moves to them with the v2 redeploy:
+
+| Limitation | Status |
+|---|---|
+| Duplicate feed ids in one round could chain the 15% breaker; rounds could follow each other within seconds | **fixed in code**: ids strictly increasing, rounds at least 60 s apart (`test_aFeedAppearsOnceARound`, `test_roundsAreAtLeastAMinuteApart`); live with the v2 oracle |
+| `PqcAuth` assumed the registered key is ML-DSA-87 | **fixed in code**: algorithm id 1 enforced (`test_aKeyOfAnotherAlgorithmIsRefused`) |
+| A basket emptied by redemptions could be re-seeded by the classical seeder key | **fixed in code**: one-shot seed (`test_aBasketIsSeededOnceEvenIfEmptiedLater`) |
+| The oracle address was fixed in the reserve and baskets | **fixed in code**: `setOracle`, ML-DSA-87 admin only |
+| The seed shares sit on the deployer, whose secp256k1 key relays through the keeper's EVM window: a stolen key could sell them | v2 seeds to an unspendable address, so no classical key holds shares |
+| QWAKK's only market is a thin pool, whose spot could be pumped | **fixed**: the oracle uses the pool's 30-minute median; QOR needs two of three quotes, else QOR and QWAKK sit out the round |
+| The reserve trades at the oracle price with a 0.30% spread, which arbitrage can farm around updates | accepted on testnet; a staleness-dependent spread is the mainnet answer |
 
 ## Credits
 
