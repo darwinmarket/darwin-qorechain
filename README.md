@@ -43,6 +43,13 @@ Signatures are domain-separated (tag, chain id, contract, nonce, deadline) and t
 expose the exact bytes to sign (`roundMessage`, `rebalanceMessage`, `weightsMessage`,
 `adminMessage`), so off-chain signers never re-implement the encoding.
 
+**Don't trust the chain's word, check it in your browser.** Every transaction page in the app
+re-verifies the signatures itself: a trade's hybrid signature with QoreSign
+(`@qorechain/qoresign`, both the ML-DSA-87 layer and secp256k1, against the keys the signer
+registered), and an oracle round by rebuilding `roundMessage` from the calldata and verifying the
+reporter's 4,627-byte ML-DSA-87 signature with `@qorechain/pqc`, then checking that the same
+signature fails for the next round number.
+
 ## How a trade works
 
 ```
@@ -81,7 +88,8 @@ ops/         TypeScript, @qorechain/sdk 0.14, viem
   rebalance.ts          curator: plans drift trades, signs them, relays
   amm.ts, refill.ts     buy on the native AMM (QWAKK), refill the reserve
   crossvm.ts            trade from the native lane, as QoreX users do
-  keeper.ts             one loop: scoped window, oracle heartbeat/deviation, drift rebalances
+  keeper.ts             one loop: scoped window, oracle heartbeat (10 min or a 0.25% move),
+                        the weekly rebalance (Mondays 12:00 UTC, curator-signed)
 app/         Next.js 15, React 18, viem: Darwin's mainnet front (same frame, navbar, home, basket
              screen and trade card) on QoreChain, with QoreX; tabs Baskets, Portfolio, Activity, Security
 deployments/diana.json  every address, role and seed
@@ -111,14 +119,44 @@ WQOR `0xa140f05ff3fec2d757ae758cddc064e2e386b749` (see `deployments/diana.json`)
 
 ## Kits and network functions used
 
-- **QoreChain SDK (TypeScript)** `@qorechain/sdk` 0.14 and `@qorechain/evm`: account derivation,
-  canonical ML-DSA-87 keys, hybrid signing (`TxClient`, `EthNativeSigner`), `pqcSign`, PQC key
-  registration with proof of possession, EVM windows.
-- **QoreX integrations** `@qorechain/qorex-wallet-mock`: end-to-end tests with real hybrid signing.
-- **Network functions:** ML-DSA-87 hybrid transactions; PQC key registration with proof of
-  possession; EVM window, scoped; PQC signature verification in Solidity (`pqcVerify`); PQC key
-  status in Solidity (`pqcKeyStatus`); Fest test tokens fUSD, fETH, fBTC and `MsgConvertCoin`;
-  cross-VM calls (native to EVM); AMM pools (QOR price).
+Each kit does a real job in Darwin:
+
+| Kit | Where | What it does for Darwin |
+|---|---|---|
+| QoreChain SDK (TS) `@qorechain/sdk`, `@qorechain/evm` | `ops/` | account derivation, canonical ML-DSA-87 keys, hybrid signing (`TxClient`, `EthNativeSigner`), `pqcSign`, PQC key registration with proof of possession, EVM windows |
+| QoreSign `@qorechain/qoresign` | `app/src/lib/qore/verify.ts` | re-checks a trade's committed hybrid signature in the browser (`inspectTransaction`), reads registered keys (`fetchPqKeyStatus`) |
+| qorechain-pqc `@qorechain/pqc` | `app/src/lib/qore/verify.ts` | verifies the oracle reporter's ML-DSA-87 signature in the browser, plus a tamper check |
+| QoreChain React `@qorechain/react` | account menu | `PqcStatusBadge`: is the connected account's ML-DSA-87 key registered |
+| Wallet adapter `@qorechain/wallet-adapter` | `app/src/lib/qore/qorex.ts` | QoreX capability check, request validation, `qorexSignAndBroadcast`, `isQorexRejection` |
+| QoreX integrations `@qorechain/qorex-wallet-mock` | `app/e2e/` | browser end-to-end tests with real hybrid signing and broadcast |
+| MCP + qore CLI `@qorechain/qore-cli`, `@qorechain/mcp` | `ops/src/e2e.ts`, `.mcp.json` | a second opinion in the on-chain suite (tier, layer, proof of possession); AI agents read Darwin's deployment through MCP |
+| QoreScan `@qorechain/qorescan` | `docs/cbom/`, `npm run cbom` | Darwin's CycloneDX 1.6 CBOM, a DORA mapping and a crypto-agility template |
+
+**Network functions:** ML-DSA-87 hybrid transactions (every user trade); PQC key registration
+with proof of possession (every role); EVM window, scoped (the keeper's `allowed_targets`); PQC
+signature verification in Solidity (`pqcVerify`); PQC key status in Solidity (`pqcKeyStatus`);
+Fest test tokens fUSD, fETH, fBTC with `MsgConvertCoin`/`MsgConvertERC20`; cross-VM calls (native
+to EVM, `MsgCrossVMCall`); AMM pools (QWAKK bought on the native AMM, QWAKK's price replayed from
+its pool); MCP server and qore CLI; QoreScan.
+
+### Testnet addresses
+
+| Address | Role |
+|---|---|
+| `qor1h92yt25my24uwl8tkju7h0yl6gez6zpcyen9q5` | treasury and test trader (QoreX, coin 118): hybrid-signed cross-VM trades |
+| `qor1yzq84n9uj6fmgzsh7tk88gr7dhrh60u95gpw8p` | deployer, admin, relayer (`0x20807acc…`): scoped EVM window, ML-DSA-87 admin signatures |
+| `qor1dg5x70vqts47p4jnajrvrjketxph8jewxe3phs` | oracle reporter (`0x6A286f3D…`): signs every price round |
+| `qor1uzauedcmwcgyrvlnqw9numxm8yk0hcmnyvuq5u` | curator (`0xe0BBCcb7…`): signs weights and rebalances |
+
+### Pricing and rebalancing
+
+BTC and ETH are the median of four spot APIs; QOR is its market price (CoinGecko and MEXC);
+QWAKK's price in QOR comes from its only market, pool 6 of the native AMM. The charts replay the
+same sources, QWAKK swap by swap since its pool opened. Details and the repricing of round 60:
+[docs/PRICING.md](docs/PRICING.md).
+
+Baskets rebalance once a week, **Mondays at 12:00 UTC**, with trades the curator signs with
+ML-DSA-87; there is no drift-triggered rebalance in between.
 
 ## Run it
 
@@ -157,7 +195,9 @@ End-to-end in a browser, with real hybrid signing by the QoreX test double:
 
 ```bash
 cd app && npm run build && npm start &   # port 3032
-node e2e/trade.mjs BLUEdw 2              # connect, buy 2 fUSD of BLUEdw, sell half
+npm run e2e                              # the full browser suite (24 checks)
+ONLY="buy BLUEdw|declined" npm run e2e   # a subset: each trade costs testnet QOR in fees
+node e2e/trade.mjs BLUEdw 2              # one trade: connect, buy 2 fUSD of BLUEdw, sell half
 ```
 
 ## Security notes
@@ -174,8 +214,12 @@ node e2e/trade.mjs BLUEdw 2              # connect, buy 2 fUSD of BLUEdw, sell h
   `ops/src/amm.ts` buys on QoreChain's native AMM); the app refuses buys above what it holds.
 - The reserve sells at oracle prices with a 0.30% spread; Darwin's own baskets are spread-exempt
   for rebalances. A rebalance that would cost more than 1% of NAV reverts.
-- Audit: see [docs/AUDIT.md](docs/AUDIT.md) (two-stage QCAI audit).
-- Tests: unit, fuzz, invariant, on-chain E2E (20/20), an 8-user parallel battery (48/48 trades) and browser E2E (21/21); see [docs/TESTING.md](docs/TESTING.md).
+- Audit: see [docs/AUDIT.md](docs/AUDIT.md) (two-stage QCAI audit, and where each `pqcVerify` /
+  `pqcKeyStatus` call sits and which tests cover it).
+- Cryptographic inventory: [docs/cbom](docs/cbom) (QoreScan CBOM; QoreChain's endpoints already
+  negotiate the hybrid post-quantum key exchange X25519MLKEM768).
+- Tests: 81 unit, fuzz and invariant tests; on-chain E2E (23/23); an 8-user parallel battery
+  (48/48 trades); browser E2E (24/24); see [docs/TESTING.md](docs/TESTING.md).
 - Testnet only: the tokens have no value and the mnemonic used here must never touch mainnet.
 
 ## Credits
@@ -183,8 +227,15 @@ node e2e/trade.mjs BLUEdw 2              # connect, buy 2 fUSD of BLUEdw, sell h
 - The app's visual shell (hero, basket tiles, chart, treemap, styles) is forked from Darwin's own
   mainnet front (`darwinmarket/darwin-app-mainnet`, same team). Its Miden data layer was replaced:
   everything is read from QoreChain, and trades go through QoreX.
-- `@qorechain/sdk`, `@qorechain/evm`, `@qorechain/qorex-wallet-mock` (Apache-2.0, QoreChain
-  Association); OpenZeppelin Contracts (MIT); forge-std (MIT/Apache-2.0); viem (MIT); Next.js (MIT).
+- QoreChain kits (Apache-2.0, QoreChain Association): `@qorechain/sdk`, `@qorechain/evm`,
+  `@qorechain/qoresign`, `@qorechain/pqc` (built on `@noble/post-quantum`, MIT),
+  `@qorechain/react`, `@qorechain/wallet-adapter`, `@qorechain/qorex-wallet-mock`,
+  `@qorechain/qore-cli`, `@qorechain/mcp`, `@qorechain/qorescan`.
+- OpenZeppelin Contracts (MIT); forge-std (MIT/Apache-2.0); viem (MIT); Next.js and React (MIT);
+  TanStack Query (MIT); Playwright (Apache-2.0); `@cosmjs/stargate` (Apache-2.0).
+- Market data: CoinGecko and MEXC (QOR), Yahoo Finance and four spot APIs (BTC, ETH).
+- Logos: QOR from the QoreChain brand pack; QWAKK's mark is relayed from qwakk.fun at runtime and
+  not redistributed in this repository.
 - How AI was used: [AI_USAGE.md](AI_USAGE.md).
 
 MIT licence.
