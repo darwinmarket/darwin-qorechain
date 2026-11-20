@@ -49,7 +49,7 @@ export async function ensureWindow(): Promise<string> {
   const maxTxs = 1_000n;
   const msg = openEvmWindowMsg({
     sender: acc.cosmos,
-    blocks: 20_000n,
+    blocks: 20_000n, // ~8 hours at the testnet's ~1.4 s blocks
     maxTxs,
     maxValue: evmWindowCost({ gas: 3_000_000n, maxFeePerGas: 250_000_000_000n }) * maxTxs,
     allowedTargets: targets(),
@@ -128,6 +128,8 @@ function planMoves(values: readonly bigint[], targets: readonly number[]) {
 }
 
 export async function weeklyRebalance(minDriftBps = 100): Promise<string[]> {
+  // a window lasts ~8 hours at 1.4 s blocks: renew it before relaying rebalances
+  await ensureWindow();
   await freshRound();
   const out: string[] = [];
   for (const [key, b] of Object.entries(D.baskets) as [string, any][]) {
