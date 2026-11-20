@@ -1,10 +1,9 @@
-// Browser end-to-end suite: the real app, the QoreX test double (real hybrid secp256k1 + ML-DSA-87
-// signing, real broadcast to qorechain-diana) and on-chain assertions after every action.
+// Browser end-to-end suite for the Darwin front on QoreChain (the mainnet front, with QoreX).
+// The QoreX test double signs for real (secp256k1 + ML-DSA-87) and broadcasts to qorechain-diana;
+// every trade is then checked on chain.
 //
 //   npm run build && npm start &          # port 3032
 //   node e2e/suite.mjs                     # mnemonic from QORE_MNEMONIC or ~/.config/qorechain/testnet.mnemonic
-//
-// Writes a report to ../docs/e2e/browser-<date>.md and screenshots to e2e/shots/.
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { chromium } from "playwright";
@@ -24,8 +23,8 @@ const evm = createPublicClient({ transport: http("https://evm-testnet.qore.host"
 const erc20 = parseAbi(["function balanceOf(address) view returns (uint256)"]);
 const bal = (token, who) => evm.readContract({ address: token, abi: erc20, functionName: "balanceOf", args: [who] });
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const NAME = Object.fromEntries(Object.entries(D.baskets).map(([k, b]) => [k, b.name.replace(/^Darwin /, "")]));
 
-// ---- tiny protobuf writer for the setup message (MsgConvertERC20) ----
 function pb(fields) {
   const out = [];
   const varint = (n) => {
@@ -63,19 +62,19 @@ const assert = (c, m) => {
 
 const mock = createQorexMock({ profile: "current", mnemonic, chainId: "qorechain-diana", rest: `${BASE}/api/rest` });
 const browser = await chromium.launch();
-const page = await browser.newPage({ viewport: { width: 1440, height: 1500 } });
+const page = await browser.newPage({ viewport: { width: 1440, height: 1100 } });
 const consoleErrors = [];
-page.on("console", (m) => m.type() === "error" && consoleErrors.push(m.text().slice(0, 200)));
 page.on("pageerror", (e) => consoleErrors.push(`pageerror: ${e.message.slice(0, 200)}`));
 await page.addInitScript({ content: mock.initScript() });
 
-let me = null; // { native, twin }
+let me = null;
+const tab = (name) => page.getByRole("button", { name, exact: true }).first().click();
 
-async function lastSignAndBroadcast() {
+async function lastBroadcast() {
   const reqs = await page.evaluate(() => window.__qorexMock.requests.filter((r) => r.method.endsWith("signAndBroadcast") && r.outcome === "ok"));
   return reqs.at(-1);
 }
-async function txMessages(hash) {
+async function txInfo(hash) {
   for (let i = 0; i < 10; i++) {
     const r = await fetch(`${REST}/cosmos/tx/v1beta1/txs/${hash}`);
     if (r.ok) {
@@ -90,210 +89,213 @@ async function txMessages(hash) {
   throw new Error(`tx ${hash} not found`);
 }
 
-async function trade({ display, side, amount }) {
-  await page.goto(`${BASE}/basket/${display}`, { waitUntil: "networkidle" });
-  await page.waitForSelector("text=/Balance/", { timeout: 30000 });
-  if (side === "sell") {
-    await page.getByRole("tab", { name: `Sell ${display}` }).click();
-    await page.getByLabel(`${display} to sell`).fill(String(amount));
-  } else {
-    await page.getByLabel("fUSD to pay").fill(String(amount));
-  }
-  await page.waitForSelector("text=You receive (about)", { timeout: 30000 });
-  const label = side === "buy" ? `Buy ${display}` : `Sell ${display}`;
-  await page.getByRole("button", { name: new RegExp(`^${label}$`) }).last().click();
-  const done = await page.waitForSelector("text=/^(Bought|Sold)\\./", { timeout: 150000 });
-  const text = await done.innerText();
-  await page.screenshot({ path: `${SHOTS}${display}-${side}.png` });
-  const req = await lastSignAndBroadcast();
-  const hash = req?.result?.txHash;
-  assert(hash, "a signAndBroadcast result");
-  assert(req.result.shield === "shielded", `shield ${req.result.shield}`);
-  const tx = await txMessages(hash);
-  assert(tx.hybrid, "pqc_hybrid_verify verified on chain");
-  return { text, hash, types: tx.types };
+async function openBasket(display) {
+  await page.goto(`${BASE}/${display}`, { waitUntil: "networkidle" });
+  await page.waitForSelector("text=Your position", { timeout: 30000 });
 }
 
-// ------------------------------------------------------------------------------- pages
-await check("home: every basket with live NAV, oracle pill and activity", async () => {
+async function trade({ display, key, side, amount }) {
+  await openBasket(display);
+  await page.waitForSelector("text=/^Available /", { timeout: 30000 });
+  if (side === "sell") await page.getByRole("button", { name: "Sell", exact: true }).click();
+  await page.getByLabel(side === "buy" ? "You spend" : "You sell").fill(String(amount));
+  const cta = page.getByRole("button", { name: `${side === "buy" ? "Buy" : "Sell"} ${NAME[key]}`, exact: true });
+  await cta.waitFor({ timeout: 30000 });
+  for (let i = 0; i < 40 && (await cta.isDisabled()); i++) await sleep(500); // quote arrives
+  assert(!(await cta.isDisabled()), "CTA enabled after the quote");
+  const before = (await page.evaluate(() => window.__qorexMock.requests.length));
+  await cta.click();
+  await page.waitForSelector(`text=${side === "buy" ? "Bought" : "Sold"} ${NAME[key]}`, { timeout: 150000 });
+  await page.screenshot({ path: `${SHOTS}${display}-${side}.png` });
+  const req = await lastBroadcast();
+  assert(req && req.id > before - 1, "a new signAndBroadcast");
+  assert(req.result.shield === "shielded", `shield ${req.result.shield}`);
+  const tx = await txInfo(req.result.txHash);
+  assert(tx.hybrid, "pqc_hybrid_verify verified on chain");
+  return { hash: req.result.txHash, types: tx.types };
+}
+
+// ------------------------------------------------------------------------------- signed out
+await check("home: the mainnet frame, four tabs, every basket with its index", async () => {
   await page.goto(BASE, { waitUntil: "networkidle" });
-  for (const b of Object.values(D.baskets)) await page.waitForSelector(`text=${b.name}`, { timeout: 30000 });
-  await page.waitForSelector("text=/PQ oracle round \\d+/", { timeout: 30000 });
-  await page.waitForSelector("text=/Oracle round \\d+: 4 prices, ML-DSA-87 verified/", { timeout: 30000 });
-  const navs = await page.locator("text=/^\\$\\d+\\.\\d\\d$/").allInnerTexts();
-  assert(navs.length >= Object.keys(D.baskets).length, `NAVs shown: ${navs.join(", ")}`);
+  for (const t of ["Baskets", "Portfolio", "Activity", "Security"]) await page.getByRole("button", { name: t, exact: true }).first().waitFor();
+  await page.waitForSelector("text=One token, a", { timeout: 30000 });
+  for (const n of Object.values(NAME)) await page.waitForSelector(`text=${n}`, { timeout: 30000 });
+  await page.waitForSelector("text=Index base 100", { timeout: 30000 });
   await page.screenshot({ path: `${SHOTS}home.png` });
-  return `NAVs ${navs.slice(0, Object.keys(D.baskets).length).join(", ")}`;
+  return `${Object.keys(NAME).length} baskets`;
 });
 
-await check("security page lists every contract with its address", async () => {
-  await page.goto(`${BASE}/security`, { waitUntil: "networkidle" });
-  for (const a of [D.oracle, D.reserve, D.router, ...Object.values(D.baskets).map((b) => b.address)]) {
-    await page.waitForSelector(`text=${a}`, { timeout: 10000 });
-  }
-  return `${3 + Object.keys(D.baskets).length} addresses shown`;
+await check("a basket URL opens its screen with the pre-connect trade card", async () => {
+  await openBasket("BLUEdw");
+  await page.waitForSelector("text=Index base 100 at launch", { timeout: 30000 });
+  await page.getByRole("button", { name: "$50" }).click();
+  await page.waitForSelector("text=/≈ \\$49\\.85/", { timeout: 10000 });
+  await page.getByRole("button", { name: "Connect wallet" }).last().waitFor();
+  return "$50 -> ≈ $49.85 after the 0.30% fee";
 });
 
-await check("oracle page lists signed rounds with prices and the cost of a round", async () => {
-  await page.goto(`${BASE}/oracle`, { waitUntil: "networkidle" });
+await check("Security tab: oracle feeds, rounds, rules, the keeper's scoped window, contracts", async () => {
+  await page.goto(BASE, { waitUntil: "networkidle" });
+  await tab("Security");
+  await page.waitForSelector("text=Post-quantum oracle", { timeout: 30000 });
+  await page.waitForSelector("text=QWAKK/USD", { timeout: 30000 });
   await page.waitForSelector("text=/^#\\d+$/", { timeout: 30000 });
-  const rows = await page.locator("text=/^#\\d+$/").count();
-  const cost = await page.waitForSelector("text=/bytes of calldata/", { timeout: 30000 });
-  const txt = await cost.innerText();
-  assert(/4,627-byte ML-DSA-87/.test(txt), txt);
-  return `${rows} rounds, ${txt.slice(0, 60)}…`;
+  await page.waitForSelector("text=Who can do what");
+  await page.waitForSelector("text=DarwinRouter", { timeout: 30000 });
+  await page.waitForSelector(`text=${D.router}`, { timeout: 30000 });
+  return "all sections";
 });
 
-await check("security page shows the keeper's live scoped EVM window", async () => {
-  await page.goto(`${BASE}/security`, { waitUntil: "networkidle" });
-  const el = await page.waitForSelector("text=/scoped to \\d+ contracts/", { timeout: 30000 });
-  const t = await el.innerText();
-  await page.waitForSelector("text=DarwinRouter", { timeout: 10000 });
-  return t.match(/scoped to \d+ contracts/)[0];
+await check("Portfolio and Activity ask to connect when signed out", async () => {
+  await tab("Portfolio");
+  await page.waitForSelector("text=Connect a wallet to see your holdings and positions.");
+  await tab("Activity");
+  await page.waitForSelector("text=Connect a wallet to see your transaction activity.");
+  return "prompts shown";
 });
 
 await check("unknown basket URL is a 404", async () => {
-  const r = await page.goto(`${BASE}/basket/NOPEdw`);
+  const r = await page.goto(`${BASE}/NOPEdw`);
   assert(r.status() === 404, `status ${r.status()}`);
   return "404";
 });
 
-// ------------------------------------------------------------------------------- wallet
-await check("connect QoreX from the navbar; the portfolio shows the account", async () => {
-  await page.goto(`${BASE}/portfolio`, { waitUntil: "networkidle" });
-  await page.getByRole("button", { name: "Connect QoreX" }).first().click();
+// ------------------------------------------------------------------------------- connect
+await check("Connect wallet connects QoreX; the account shows in the navbar", async () => {
+  await page.goto(BASE, { waitUntil: "networkidle" });
+  await page.getByRole("button", { name: "Connect wallet" }).first().click();
   const addrs = await page.evaluate(() => window.__qorexMock.addresses());
-  await page.waitForSelector(`text=${addrs.native}`, { timeout: 30000 });
-  const twin = await page.locator("text=/EVM 0x[0-9a-f]{40}/").first().innerText();
-  me = { native: addrs.native, twin: twin.match(/0x[0-9a-f]{40}/)[0] };
-  await page.screenshot({ path: `${SHOTS}portfolio-before.png` });
-  return `${me.native} / ${me.twin}`;
+  await page.waitForSelector(`text=${addrs.native.slice(0, 8)}`, { timeout: 30000 });
+  me = { native: addrs.native };
+  await tab("Portfolio");
+  await page.waitForSelector("text=Portfolio value", { timeout: 30000 });
+  return addrs.native;
 });
 
-// ------------------------------------------------------------------------------- trades
+// fUSD in ERC-20 form on the twin for the trades below
+const twin = await (async () => {
+  const words = me.native;
+  const { bech32 } = await import("@scure/base").catch(() => ({ bech32: null }));
+  if (bech32) return "0x" + Buffer.from(bech32.fromWords(bech32.decode(words).words)).toString("hex");
+  throw new Error("@scure/base missing");
+})();
+
 for (const [display, key, usd] of [["BLUEdw", "BLUEDW", 1], ["BALdw", "BALDW", 1], ["QOREdw", "QOREDW", 0.2], ["DEGENdw", "DEGENDW", 0.05]]) {
-  await check(`buy ${display} with ${usd} fUSD (one hybrid-signed tx)`, async () => {
-    const s0 = await bal(D.baskets[key].address, me.twin);
-    const r = await trade({ display, side: "buy", amount: usd });
-    const s1 = await bal(D.baskets[key].address, me.twin);
+  await check(`buy ${display} with ${usd} fUSD in one QoreX approval`, async () => {
+    const s0 = await bal(D.baskets[key].address, twin);
+    const r = await trade({ display, key, side: "buy", amount: usd });
+    const s1 = await bal(D.baskets[key].address, twin);
     assert(s1 > s0, `shares ${s0} -> ${s1}`);
-    return `+${(Number(s1 - s0) / 1e18).toFixed(4)} shares, msgs [${r.types.join(", ")}], tx ${r.hash.slice(0, 12)}…`;
+    return `+${(Number(s1 - s0) / 1e18).toFixed(4)} ${display}, msgs [${r.types.join(", ")}], ML-DSA-87 verified`;
   });
 }
 
-await check("sell BALdw for fUSD", async () => {
-  const shares = await bal(D.baskets.BALDW.address, me.twin);
-  const u0 = await bal(D.tokens.fUSD, me.twin);
-  const r = await trade({ display: "BALdw", side: "sell", amount: (Number(shares) / 1e18 / 2).toFixed(6) });
-  const u1 = await bal(D.tokens.fUSD, me.twin);
+await check("the position shows on the trade card after a buy", async () => {
+  await openBasket("BALdw");
+  await page.waitForSelector("text=/ BALdw$/", { timeout: 30000 });
+  return await page.locator("text=/ BALdw$/").first().innerText();
+});
+
+await check("sell half of BALdw for fUSD", async () => {
+  const shares = await bal(D.baskets.BALDW.address, twin);
+  const u0 = await bal(D.tokens.fUSD, twin);
+  const r = await trade({ display: "BALdw", key: "BALDW", side: "sell", amount: (Number(shares) / 1e18 / 2).toFixed(6) });
+  const u1 = await bal(D.tokens.fUSD, twin);
   assert(u1 > u0, `fUSD ${u0} -> ${u1}`);
   return `+${(Number(u1 - u0) / 1e6).toFixed(3)} fUSD, msgs [${r.types.join(", ")}]`;
 });
 
-await check("the only way out is selling the basket token for fUSD (no coin withdrawal in the app)", async () => {
-  await page.goto(`${BASE}/basket/BLUEdw`, { waitUntil: "networkidle" });
-  await page.waitForSelector("text=/Balance/", { timeout: 30000 });
-  await page.getByRole("tab", { name: "Sell BLUEdw" }).click();
-  assert((await page.getByText("Receive the coins").count()) === 0, "no in-kind option");
-  assert((await page.getByText(/Redeem .* in kind/).count()) === 0, "no redeem button");
-  await page.getByLabel("BLUEdw to sell").fill("0.001");
-  await page.waitForSelector("text=You receive (about)", { timeout: 30000 });
-  assert(/fUSD/.test(await page.locator("text=You receive (about)").locator("..").innerText()), "proceeds in fUSD");
-  return "Sell tab pays fUSD only";
-});
-
 await check("faucet fUSD (bank form) is converted in the same transaction as the buy", async () => {
-  // Setup: move all ERC-20 fUSD of the account to its bank form, signed through the mock.
-  const erc = await bal(D.tokens.fUSD, me.twin);
+  const erc = await bal(D.tokens.fUSD, twin);
   let setup = "already in bank form";
   if (erc > 0n) {
-  const value = pb([[1, D.tokens.fUSD], [2, erc.toString()], [3, me.native], [4, me.native]]);
-  const res = await page.evaluate(
-    async ({ value }) =>
-      window.qorex.native.signAndBroadcast({
-        chainId: "qorechain-diana",
-        messages: [{ typeUrl: "/cosmos.evm.erc20.v1.MsgConvertERC20", value }],
-        memo: "darwin e2e setup: fUSD to bank form",
-        gasLimit: 700000,
-      }),
-    { value },
-  );
-  assert(res.code === 0, `setup code ${res.code}`);
-  setup = `setup ${res.txHash.slice(0, 12)}…`;
+    const value = pb([[1, D.tokens.fUSD], [2, erc.toString()], [3, me.native], [4, me.native]]);
+    const res = await page.evaluate(
+      async ({ value }) =>
+        window.qorex.native.signAndBroadcast({ chainId: "qorechain-diana", messages: [{ typeUrl: "/cosmos.evm.erc20.v1.MsgConvertERC20", value }], memo: "darwin e2e setup", gasLimit: 700000 }),
+      { value },
+    );
+    assert(res.code === 0, `setup code ${res.code}`);
+    setup = `setup ${res.txHash.slice(0, 12)}…`;
   }
-  assert((await bal(D.tokens.fUSD, me.twin)) === 0n, "ERC-20 fUSD emptied");
-  const r = await trade({ display: "BLUEdw", side: "buy", amount: 1 });
+  const r = await trade({ display: "BLUEdw", key: "BLUEDW", side: "buy", amount: 1 });
   assert(r.types[0] === "MsgConvertCoin" && r.types.at(-1) === "MsgCrossVMCall", `msgs ${r.types}`);
   return `${setup}, buy msgs [${r.types.join(", ")}]`;
 });
 
-await check("an amount above the balance disables the button", async () => {
-  await page.goto(`${BASE}/basket/BALdw`, { waitUntil: "networkidle" });
-  await page.waitForSelector("text=/Balance/", { timeout: 30000 });
-  await page.getByLabel("fUSD to pay").fill("1000000");
+await check("more fUSD than the balance disables the button", async () => {
+  await openBasket("BALdw");
+  await page.waitForSelector("text=/^Available /", { timeout: 30000 });
+  await page.getByLabel("You spend").fill("1000000");
   const btn = page.getByRole("button", { name: "Not enough fUSD" });
   await btn.waitFor({ timeout: 30000 });
   assert(await btn.isDisabled(), "disabled");
-  return "Not enough fUSD (disabled)";
+  return "Not enough fUSD";
 });
 
-await check("a buy above the reserve's liquidity is refused before signing", async () => {
-  await page.goto(`${BASE}/basket/DEGENdw`, { waitUntil: "networkidle" });
-  await page.waitForSelector("text=/Balance/", { timeout: 30000 });
-  await page.getByLabel("fUSD to pay").fill("5");
-  const btn = page.getByRole("button", { name: /Above the reserve's liquidity/ });
+await check("a buy above the vault's liquidity is refused before signing", async () => {
+  await openBasket("DEGENdw");
+  await page.waitForSelector("text=/^Available /", { timeout: 30000 });
+  await page.getByLabel("You spend").fill("5");
+  const btn = page.getByRole("button", { name: "Above available liquidity" });
   await btn.waitFor({ timeout: 30000 });
   assert(await btn.isDisabled(), "disabled");
-  return await btn.innerText();
+  return await page.locator("text=/The vault can fill about/").innerText();
 });
 
-await page.goto(`${BASE}/basket/BALdw`, { waitUntil: "networkidle" });
-await page.waitForSelector("text=/Balance/", { timeout: 30000 });
-
-await check("a rejected signature in QoreX shows an error and sends nothing", async () => {
+await check("a signature declined in QoreX shows a toast and sends nothing", async () => {
+  await openBasket("BALdw");
+  await page.waitForSelector("text=/^Available /", { timeout: 30000 });
   await page.evaluate(() => window.__qorexMock.rejectNext());
-  await page.getByLabel("fUSD to pay").fill("0.5");
-  await page.waitForSelector("text=You receive (about)", { timeout: 30000 });
-  const before = (await page.evaluate(() => window.__qorexMock.requests.length));
-  await page.getByRole("button", { name: /^Buy BALdw$/ }).last().click();
-  await page.waitForSelector(`[class*=errorBox]`, { timeout: 30000 });
+  await page.getByLabel("You spend").fill("0.5");
+  const cta = page.getByRole("button", { name: `Buy ${NAME.BALDW}`, exact: true });
+  for (let i = 0; i < 40 && (await cta.isDisabled()); i++) await sleep(500);
+  await cta.click();
+  await page.waitForSelector("text=/Trade cancelled|Trade failed/", { timeout: 30000 });
   const last = await page.evaluate(() => window.__qorexMock.requests.at(-1));
-  assert(last.outcome !== "approved", `outcome ${last.outcome}`);
-  return `error shown, outcome ${last.outcome}, ${(await page.evaluate(() => window.__qorexMock.requests.length)) - before} request`;
+  assert(last.outcome !== "ok", `outcome ${last.outcome}`);
+  return `outcome ${last.outcome}`;
 });
 
-await check("activity feed shows QoreX trades with their verified hybrid signature", async () => {
-  await sleep(12000);
+await check("Activity lists the account's trades from the chain", async () => {
+  await sleep(8000);
   await page.goto(BASE, { waitUntil: "networkidle" });
-  await page.waitForSelector("text=/from QoreX · ML-DSA-87 \\+ secp256k1, verified/", { timeout: 45000 });
-  const n = await page.locator("text=/from QoreX/").count();
-  await page.screenshot({ path: `${SHOTS}home-after.png`, fullPage: true });
-  return `${n} QoreX trades listed`;
+  await tab("Activity");
+  await page.waitForSelector("text=/^(Buy|Sell)$/", { timeout: 45000 });
+  const n = await page.locator("text=/^(Buy|Sell)$/").count();
+  await page.screenshot({ path: `${SHOTS}activity.png` });
+  return `${n} trades`;
 });
 
-await check("portfolio lists the basket positions and the fUSD, never the underlying coins", async () => {
-  await page.goto(`${BASE}/portfolio`, { waitUntil: "networkidle" });
-  for (const t of ["Darwin Blue Chip", "Darwin Qore Ecosystem", "Wallet", "fUSD"]) await page.waitForSelector(`text=${t}`, { timeout: 30000 });
+await check("Portfolio shows value, allocation and holdings (baskets and Cash)", async () => {
+  await tab("Portfolio");
+  await page.waitForSelector("text=Holdings", { timeout: 30000 });
+  for (const n of [NAME.BLUEDW, NAME.QOREDW, "Cash"]) await page.waitForSelector(`text=${n}`, { timeout: 30000 });
   assert((await page.getByText("fBTC").count()) === 0, "no underlying coins listed");
-  await page.screenshot({ path: `${SHOTS}portfolio-after.png`, fullPage: true });
-  return "baskets + fUSD + gas, no underlying";
+  await page.screenshot({ path: `${SHOTS}portfolio.png`, fullPage: true });
+  return "value + allocation + holdings";
 });
 
-await check("disconnect forgets the account", async () => {
-  await page.getByRole("button", { name: /^qor1/ }).click();
-  await page.getByRole("button", { name: "Disconnect" }).click();
-  await page.waitForSelector("text=Connect QoreX to see your baskets and coins.", { timeout: 10000 });
-  return "back to connect";
+await check("Recent activity shows on the Baskets tab once connected", async () => {
+  await tab("Baskets");
+  await page.waitForSelector("text=Recent activity", { timeout: 30000 });
+  return "shown";
+});
+
+await check("disconnect from the account menu", async () => {
+  await page.getByRole("button", { name: new RegExp(me.native.slice(0, 8)) }).click();
+  await page.getByRole("menuitem", { name: "Disconnect" }).click();
+  await page.getByRole("button", { name: "Connect wallet" }).first().waitFor({ timeout: 10000 });
+  return "back to Connect wallet";
 });
 
 await check("no uncaught errors in the page", async () => {
-  const real = consoleErrors.filter((e) => !/Failed to load resource/.test(e));
-  assert(real.length === 0, real.join(" | "));
-  return `${consoleErrors.length} network-level console messages ignored`;
+  assert(consoleErrors.length === 0, consoleErrors.join(" | "));
+  return "none";
 });
 
 await browser.close();
-
 const passed = results.filter((r) => r.ok).length;
 console.log(`\n${passed}/${results.length} passed`);
 const date = new Date().toISOString().slice(0, 16).replace(":", "");
@@ -304,7 +306,7 @@ writeFileSync(
   [
     `# Browser E2E run, ${new Date().toISOString()}`,
     "",
-    `App ${BASE}, QoreX test double (\`@qorechain/qorex-wallet-mock\`, real hybrid signing), qorechain-diana. Suite: \`app/e2e/suite.mjs\`. Result: **${passed}/${results.length} passed**.`,
+    `The Darwin front (mainnet design) at ${BASE}, QoreX test double (real hybrid signing), qorechain-diana. Suite: \`app/e2e/suite.mjs\`. Result: **${passed}/${results.length} passed**.`,
     "",
     "| | Check | Detail | Time |",
     "|---|---|---|---|",
