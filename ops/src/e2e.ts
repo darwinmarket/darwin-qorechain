@@ -116,6 +116,13 @@ async function main() {
         out.push(`approved ${k}`);
       }
     }
+    // the deployer trades a few fUSD below; it holds none of its own (the reserve does)
+    const fusd = await read<bigint>(d.tokens.fUSD, erc20, "balanceOf", [deployer]);
+    if (fusd < 20_000_000n) {
+      const need = 50_000_000n - fusd;
+      await adminCall(d.reserve, reserveAbi, "withdraw", "withdraw", encodeAbiParameters(parseAbiParameters("address, uint256, address"), [d.tokens.fUSD, need, deployer]), [d.tokens.fUSD, need, deployer]);
+      out.push(`reserve -> deployer ${Number(need) / 1e6} fUSD (ML-DSA-87 admin)`);
+    }
     if ((await read<bigint>(d.tokens.fUSD, erc20, "allowance", [deployer, d.router])) === 0n) {
       await write("deployer", d.tokens.fUSD, erc20, "approve", [d.router, 2n ** 255n]);
       out.push("approved fUSD");
