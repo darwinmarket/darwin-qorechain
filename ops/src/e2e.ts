@@ -13,7 +13,7 @@ import { execFileSync } from "node:child_process";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import {
-  BaseError, ContractFunctionRevertedError, encodeAbiParameters, parseAbiParameters, parseUnits,
+  BaseError, ContractFunctionRevertedError, encodeAbiParameters, parseAbiParameters, parseUnits, formatUnits,
   type Abi, type Address, type Hex,
 } from "viem";
 import { evmAccount } from "./accounts.js";
@@ -46,7 +46,10 @@ async function check(name: string, fn: () => Promise<string>) {
     results.push({ name, ok: true, detail, ms: Date.now() - t0 });
     console.log(`PASS  ${name}  ${detail}`);
   } catch (e: any) {
-    const detail = (e?.shortMessage ?? e?.message ?? String(e)).split("\n")[0].slice(0, 240);
+    // keep the revert's name or signature, which viem puts on the lines after the first
+    const lines = String(e?.shortMessage ?? e?.message ?? e).split("\n").map((l) => l.trim()).filter(Boolean);
+    const why = e?.cause?.data?.errorName ?? e?.cause?.signature ?? lines.slice(1, 3).join(" ");
+    const detail = `${lines[0]}${why ? ` ${why}` : ""}`.slice(0, 300);
     results.push({ name, ok: false, detail, ms: Date.now() - t0 });
     console.log(`FAIL  ${name}  ${detail}`);
   }
@@ -243,6 +246,8 @@ async function main() {
 
   // ------------------------------------------------------------------ guardian pause
   await check("guardian: pausing mints blocks buys but not redemptions; only the admin's PQ signature unpauses", async () => {
+    // the seeds are at 0xdEaD: hold a few shares first, to show redeeming works while paused
+    if ((await bal(blue, deployer)) < parseUnits("0.001", 18)) await buy("BLUEDW", 1);
     const p = await write("deployer", blue, basketAbi, "pauseMint");
     try {
       assert(await read<boolean>(blue, basketAbi, "mintPaused"), "paused");
@@ -267,7 +272,8 @@ async function main() {
     assert(s1 > s0, "shares up");
     const bought = s1 - s0;
     const u0 = await bal(d.tokens.fUSD, deployer);
-    const s = await sell("BALDW", (Number(bought) / 1e18).toString());
+    // exact decimal string: a float can round above the balance and make the sale revert
+    const s = await sell("BALDW", formatUnits(bought, 18));
     const u1 = await bal(d.tokens.fUSD, deployer);
     assert(u1 > u0, "fUSD back");
     for (const t of [d.tokens.fUSD, d.tokens.fBTC, d.tokens.fETH, bal_]) assert((await bal(t, d.router)) === 0n, `router holds ${t}`);
