@@ -16,7 +16,9 @@
     "fETH": "0x02292293c13880a26242690eb70a0e42B8E91c28",
     "fBTC": "0x4604e7E45b2ecdbfbDc157103f5B2b62cb16451A",
     "QWAKK": "0xa5b3c3Fb92E2E89555F9909b9004C65F3542eE23",
-    "WQOR": "0xa140f05ff3fec2d757ae758cddc064e2e386b749"
+    "WQOR": "0xa140f05ff3fec2d757ae758cddc064e2e386b749",
+    "fQOR": "0x3042be6c87cd1e1b170cfcc44620a84f16a3416d",
+    "fQWAKK": "0xc558289c8c24a9171a549bf329724ad718d61aca"
   },
   "oracle": "0xabe07a51e1974d36970b40d3c1c84da37364685f",
   "reserve": "0x3a87144e2193db059228f5b982ffb2bdf65bc264",
@@ -87,16 +89,16 @@
       }
     },
     "QOREDW": {
-      "address": "0x8061be1bcdd9c230c8376c381e14878890dc8dae",
-      "version": 5,
+      "address": "0x86514e17c50265c9ea90d2001bd879b6b724e575",
+      "version": 6,
       "stack": 2,
       "name": "Darwin Qore Ecosystem",
       "display": "QOREdw",
       "description": "QoreChain's ecosystem: 60% QOR, 25% ETH, 15% QWAKK.",
       "components": [
-        "WQOR",
+        "fQOR",
         "fETH",
-        "QWAKK"
+        "fQWAKK"
       ],
       "weights": [
         6000,
@@ -105,31 +107,31 @@
       ],
       "seed": {
         "amounts": [
-          "18226002430133657600",
-          "14434430157566",
-          "3115480733"
+          "1827596710325921513472",
+          "1426411434114055",
+          "310870261771"
         ],
-        "shares": "10000000000000000",
+        "shares": "1000000000000000000",
         "to": "0x000000000000000000000000000000000000dEaD",
         "prices": {
-          "fUSD": 1,
-          "fETH": 1731.97,
-          "fBTC": 61456.6625,
-          "WQOR": 0.003292,
-          "QWAKK": 0.000004814666269587106
+          "fQOR": 0.003283,
+          "fQWAKK": 0.0000048251640136121784,
+          "fETH": 1752.65,
+          "fBTC": 61841.615000000005,
+          "fUSD": 1
         }
       }
     },
     "DEGENDW": {
-      "address": "0x0b11e4be57144c2bc3d430aef61c9e93b342c779",
-      "version": 3,
+      "address": "0x112d76f9bd9e421228f4b326d13e2ea160e92b74",
+      "version": 4,
       "stack": 2,
       "name": "Darwin Degen",
       "display": "DEGENdw",
       "description": "QoreChain's degen pair: 70% QWAKK, 30% QOR. High risk, for fun.",
       "components": [
-        "WQOR",
-        "QWAKK"
+        "fQOR",
+        "fQWAKK"
       ],
       "weights": [
         3000,
@@ -137,17 +139,17 @@
       ],
       "seed": {
         "amounts": [
-          "9113001215066828800",
-          "14538910088"
+          "913798355162960756736",
+          "1450727888265"
         ],
-        "shares": "10000000000000000",
+        "shares": "1000000000000000000",
         "to": "0x000000000000000000000000000000000000dEaD",
         "prices": {
-          "fUSD": 1,
-          "fETH": 1731.97,
-          "fBTC": 61456.6625,
-          "WQOR": 0.003292,
-          "QWAKK": 0.000004814666269587106
+          "fQOR": 0.003283,
+          "fQWAKK": 0.0000048251640136121784,
+          "fETH": 1752.65,
+          "fBTC": 61841.615000000005,
+          "fUSD": 1
         }
       }
     }
@@ -381,6 +383,77 @@
       ],
       "retired": "2026-11-20T13:25:48.963Z",
       "reason": "v2 stack: fixed oracle, ML-DSA-87 algorithm check, one-shot seed"
+    },
+    {
+      "key": "QOREDW",
+      "address": "0x8061be1bcdd9c230c8376c381e14878890dc8dae",
+      "version": 5,
+      "stack": 2,
+      "name": "Darwin Qore Ecosystem",
+      "display": "QOREdw",
+      "description": "QoreChain's ecosystem: 60% QOR, 25% ETH, 15% QWAKK.",
+      "components": [
+        "WQOR",
+        "fETH",
+        "QWAKK"
+      ],
+      "weights": [
+        6000,
+        2500,
+        1500
+      ],
+      "seed": {
+        "amounts": [
+          "18226002430133657600",
+          "14434430157566",
+          "3115480733"
+        ],
+        "shares": "10000000000000000",
+        "to": "0x000000000000000000000000000000000000dEaD",
+        "prices": {
+          "fUSD": 1,
+          "fETH": 1731.97,
+          "fBTC": 61456.6625,
+          "WQOR": 0.003292,
+          "QWAKK": 0.000004814666269587106
+        }
+      },
+      "retired": "2026-11-20T14:02:06.288Z",
+      "reason": "real WQOR/QWAKK capped buys at tens of dollars; moved to fQOR/fQWAKK, which track the same prices"
+    },
+    {
+      "key": "DEGENDW",
+      "address": "0x0b11e4be57144c2bc3d430aef61c9e93b342c779",
+      "version": 3,
+      "stack": 2,
+      "name": "Darwin Degen",
+      "display": "DEGENdw",
+      "description": "QoreChain's degen pair: 70% QWAKK, 30% QOR. High risk, for fun.",
+      "components": [
+        "WQOR",
+        "QWAKK"
+      ],
+      "weights": [
+        3000,
+        7000
+      ],
+      "seed": {
+        "amounts": [
+          "9113001215066828800",
+          "14538910088"
+        ],
+        "shares": "10000000000000000",
+        "to": "0x000000000000000000000000000000000000dEaD",
+        "prices": {
+          "fUSD": 1,
+          "fETH": 1731.97,
+          "fBTC": 61456.6625,
+          "WQOR": 0.003292,
+          "QWAKK": 0.000004814666269587106
+        }
+      },
+      "retired": "2026-11-20T14:02:15.260Z",
+      "reason": "real WQOR/QWAKK capped buys at tens of dollars; moved to fQOR/fQWAKK, which track the same prices"
     }
   ],
   "stackHistory": [
