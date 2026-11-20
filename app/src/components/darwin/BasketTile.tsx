@@ -6,7 +6,7 @@ import { CompositionTreemap } from "./CompositionTreemap";
 import { LogoStack } from "./StockLogo";
 import { indexLevel, usd } from "@/lib/darwin/format";
 import { basketTicker } from "@/lib/baskets";
-import { useNavHistory } from "@/lib/darwin/navHistory";
+import { moveLabel, useNavHistory } from "@/lib/darwin/navHistory";
 import type { Basket } from "@/lib/darwin/types";
 import { BasketLink } from "./BasketLink";
 import { sinceLaunch } from "./sinceLaunch";
@@ -47,7 +47,7 @@ export const BasketTile = memo(function BasketTile({ b, onOpen }: { b: Basket; o
         <div className={styles.trend}>
           <Chart history={history} height={132} fill />
           <div className={styles.trendMeta}>
-            <span>30D</span>
+            <span>{moveLabel(history, "30D").toUpperCase()}</span>
             <Change value={history.change} />
           </div>
         </div>

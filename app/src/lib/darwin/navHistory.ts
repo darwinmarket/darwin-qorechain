@@ -86,6 +86,17 @@ export function useNavHistory(legs: Leg[] | undefined, range: Range = "30D"): Na
   }, [data, dataUpdatedAt, fromOracle, isLoading, legs, range]);
 }
 
+/**
+ * The label for a move over `range` ("30d"), or "since Nov 18" when the history starts later than
+ * the range does (a basket holding QWAKK, which only trades since its pool opened).
+ */
+export function moveLabel(history: NavHistory, range: Range): string {
+  const first = history.points[0]?.[0];
+  const last = history.points.at(-1)?.[0];
+  if (first != null && last != null && last - first < DAY * (RANGE_DAYS[range] - 1)) return `since ${calendarDay(first)}`;
+  return range.toLowerCase();
+}
+
 export function pathFor(values: number[], width: number, height: number, pad = 4) {
   if (values.length < 2) return { line: "", area: "" };
   const min = Math.min(...values);
