@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import { TxScreen } from "@/components/para/TxScreen";
+import { TxScreen } from "@/components/shell/TxScreen";
 
 export const metadata = { title: "Transaction" };
 

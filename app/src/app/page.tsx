@@ -1,4 +1,4 @@
-import { AppEntry } from "@/components/para/AppEntry";
+import { AppEntry } from "@/components/shell/AppEntry";
 
 export default function Page() {
   return <AppEntry />;
