@@ -139,9 +139,8 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  // Global capture for ASYNC crashes the React error boundary can't see — a Miden WASM panic
-  // ("RefCell already borrowed" / "unreachable" / "recursive use of an object") fires in a promise
-  // callback, so it never hits render; the page would just go white then the provider resets to the
+  // Global capture for ASYNC crashes the React error boundary can't see — an error thrown in a
+  // promise callback (a wallet or RPC failure) never hits render; the page would just go white then the provider resets to the
   // connect screen. Surface those as a sticky toast (with the exact message + a Reload) so the user
   // isn't staring at a blank page and we can see the real error.
   useEffect(() => {

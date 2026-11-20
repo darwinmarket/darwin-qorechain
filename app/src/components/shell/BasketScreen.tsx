@@ -3,8 +3,8 @@
 /**
  * A basket, full screen: chart and composition on the left, the trade card and the other
  * baskets in a rail on the right. It is a view inside the app, not a route — a real navigation
- * would remount the tree and reboot the Miden WASM client, losing anything in flight — so the
- * URL is kept in step with history.pushState (see ParaAppShell) and back behaves.
+ * would remount the tree and drop the wallet session and any trade in flight — so the URL is kept
+ * in step with history.pushState (see QoreApp) and back behaves.
  *
  * The trade panel is passed in as `children` and its instance must survive a close: it owns the
  * trade queue and the auto-claim timers. So closing hides this subtree with `display:none`

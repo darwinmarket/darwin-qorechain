@@ -3,10 +3,9 @@
 /**
  * What a trade is doing, shown where the button was.
  *
- * A trade is not one action. It is a chain: you authorise the spend, the network prices the basket
- * and mints the shares, then you take delivery. Each link the wallet has to ask you about is a
- * segment here — two on an ordinary Bread account, three on a Guardian one, which needs the private
- * payback imported under its own approval before it can be consumed.
+ * A trade is a chain: you approve it in QoreX, the chain checks your hybrid signature, then the
+ * router prices the basket and mints the shares. On QoreChain the wallet asks once, so there is one
+ * segment ("Approve in QoreX"); the component keeps the multi-step form it has on mainnet.
  *
  * The thing this exists to say is the thing a toast in the corner never said: AFTER THE FIRST
  * SIGNATURE THERE IS A WAIT, and the wallet will come back on its own. So the segment being worked

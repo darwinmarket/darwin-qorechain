@@ -11,7 +11,7 @@
  * was ready. It didn't hold, and the reasons it can't are worth writing down: the read was
  * destructive and happened inside a setState updater, which React re-runs in Strict Mode, so the
  * second run found the Map already emptied and committed the empty string; and it was gated on the
- * local Miden client being ready, which the Bread card no longer waits for at all.
+ * wallet being ready, which the trade card no longer waits for at all.
  *
  * So the draft is a plain value with one home, read non-destructively by whoever draws the card and
  * written by whoever edits it. sessionStorage rather than a module variable: it cannot be
