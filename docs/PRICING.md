@@ -39,7 +39,20 @@ about +200% and Degen (70% QWAKK) about +950%.
 
 ## Capacity
 
-The reserve sells components at oracle prices. At QOR's market price, a faucet claim of 100 QOR is
-worth about $0.33, so the QOR baskets can fill only cents until the reserve holds much more QOR
-and QWAKK (`ops/src/refill.ts qor|qwakk`). The trade card states the vault's capacity before
-signing, and the browser suite sizes its QOR-basket buys to it.
+The reserve sells components at oracle prices, so a basket can take buys up to what the reserve
+holds of each component. At QOR's market price a faucet claim (100 QOR) is worth about $0.33, so
+the QOR baskets are bounded by how much real QOR and QWAKK exists to buy on the testnet:
+
+- **QOR** was bought on the native AMM with the reserve's spare Fest tokens (`ops/src/source-qor.ts`):
+  450 fUSD on pool 2 and 0.02 fBTC on pool 4 gave 19,753 QOR, in 75 swaps, each within the AMM's 5%
+  price-impact cap (`max_swap_impact_bps`).
+- **QWAKK** was bought with 8,000 of that QOR on pool 6 (5.03M QWAKK), in four swaps under the same cap.
+  QWAKK's whole market holds about 69M QWAKK, roughly $330: a QWAKK basket cannot hold thousands
+  of dollars of real QWAKK.
+- Wrapping 11,700 QOR into WQOR needed an EVM window with a raised value cap (`WINDOW_MAX_QOR`), opened
+  by an ML-DSA-87 signed transaction and replaced by the keeper's scoped window right after.
+
+Result (2026-11-20): Qore Ecosystem fills about **$66**, Degen about **$36-40**; Blue Chip and
+Balanced fill tens of thousands. The trade card states the capacity before signing, its quick
+amounts stay within it, and the battery's users sell their QOR-basket shares at the end so tests
+do not keep the scarce inventory.
