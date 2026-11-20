@@ -263,6 +263,14 @@ export function BasketScreen({
               100 on {basket?.inception ? calendarDayYear(Date.parse(basket.inception)) : "inception"}.
               It is a simulation at constant weights, not realised performance, and it is not the price
               of one token — what a token is backed by is shown in the trade card.
+              {basket?.legs.some((l) => l.symbol.toUpperCase() === "QWAKK") && (
+                <>
+                  {" "}
+                  QWAKK has traded only since its QWAKK/QOR pool opened on QoreChain&apos;s AMM on Nov 18,
+                  2026, so the chart starts there: its price is replayed swap by swap from that pool,
+                  times QOR&apos;s market price.
+                </>
+              )}
             </p>
             <CompositionCard basket={basket} />
           </div>
