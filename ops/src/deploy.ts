@@ -25,8 +25,8 @@ export const FEST = {
 export const BASKETS = [
   {
     key: "BLUEDW", name: "Darwin Blue Chip", display: "BLUEdw",
-    description: "The two crypto majors, half and half: 50% BTC, 50% ETH.",
-    components: ["fBTC", "fETH"], weights: [5000, 5000], seedUsd: 200,
+    description: "Bitcoin-led crypto majors: 70% BTC, 30% ETH.",
+    components: ["fBTC", "fETH"], weights: [7000, 3000], seedUsd: 200, // 50/50 at seed, 70/30 since 2026-11-20
   },
   {
     key: "BALDW", name: "Darwin Balanced", display: "BALdw",
@@ -35,6 +35,7 @@ export const BASKETS = [
   },
   {
     key: "QOREDW", name: "Darwin Qore Ecosystem", display: "QOREdw",
+    // v1 (WQOR/fETH/fBTC 40/30/30) was replaced on 2026-11-20 by v2 with QWAKK: see migrate-qoredw.ts
     description: "A bet on QoreChain itself: 40% QOR, 30% ETH, 30% BTC.",
     components: ["WQOR", "fETH", "fBTC"], weights: [4000, 3000, 3000], seedUsd: 1,
   },
