@@ -27,7 +27,7 @@ post-quantum port, written during the fest.
 
 **How it was built**
 
-- Contracts (Solidity, Foundry, 81 unit/fuzz/invariant tests, 20 on-chain checks, an 8-user parallel battery and 20 browser E2E checks): PqcAuth / PqcAdmin on the 0x0A01 and 0x0A02 precompiles,
+- Contracts (Solidity, Foundry, 81 unit/fuzz/invariant tests, 20 on-chain checks, an 8-user parallel battery and 21 browser E2E checks): PqcAuth / PqcAdmin on the 0x0A01 and 0x0A02 precompiles,
   DarwinOracle, DarwinBasket, DarwinReserve (oracle-priced inventory, since the EVM cannot call the
   native AMM), DarwinRouter, WQOR.
 - Ops (TypeScript, @qorechain/sdk 0.14): coin-118 treasury and coin-60 deployer / reporter /

@@ -81,7 +81,8 @@ ops/         TypeScript, @qorechain/sdk 0.14, viem
   amm.ts, refill.ts     buy on the native AMM (QWAKK), refill the reserve
   crossvm.ts            trade from the native lane, as QoreX users do
   keeper.ts             one loop: scoped window, oracle heartbeat/deviation, drift rebalances
-app/         Next.js 15, React 18, viem: the web app, forked from Darwin's mainnet front
+app/         Next.js 15, React 18, viem: Darwin's mainnet front (same frame, navbar, home, basket
+             screen and trade card) on QoreChain, with QoreX; tabs Baskets, Portfolio, Activity, Security
 deployments/diana.json  every address, role and seed
 ```
 
@@ -173,7 +174,7 @@ node e2e/trade.mjs BLUEdw 2              # connect, buy 2 fUSD of BLUEdw, sell h
 - The reserve sells at oracle prices with a 0.30% spread; Darwin's own baskets are spread-exempt
   for rebalances. A rebalance that would cost more than 1% of NAV reverts.
 - Audit: see [docs/AUDIT.md](docs/AUDIT.md) (two-stage QCAI audit).
-- Tests: unit, fuzz, invariant, on-chain E2E (20/20), an 8-user parallel battery (48/48 trades) and browser E2E (20/20); see [docs/TESTING.md](docs/TESTING.md).
+- Tests: unit, fuzz, invariant, on-chain E2E (20/20), an 8-user parallel battery (48/48 trades) and browser E2E (21/21); see [docs/TESTING.md](docs/TESTING.md).
 - Testnet only: the tokens have no value and the mnemonic used here must never touch mainnet.
 
 ## Credits
