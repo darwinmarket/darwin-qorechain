@@ -14,7 +14,7 @@ contracts/   Solidity 0.8.28, Foundry, OpenZeppelin
   WQOR.sol              wrapped QOR
 ops/         TypeScript, QoreChain SDK, viem
   relayer.ts            executes QoreX users' signed intents through authz
-  keeper.ts             oracle rounds, the weekly rebalance, the scoped window
+  keeper.ts             local keeper; in production app/src/server does it on demand
   prices.ts             BTC/ETH spot median, QOR market price, QWAKK pool median
   oracle.ts, rebalance.ts, window.ts, deploy.ts, redeploy-v2.ts, ...
 app/         Next.js: Darwin's mainnet front on QoreChain

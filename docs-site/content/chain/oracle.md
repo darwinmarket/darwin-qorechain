@@ -25,8 +25,18 @@ The signed message binds the chain id, the oracle's address, the round number, t
 |---|---|
 | BTC, ETH | median of four spot APIs |
 | QOR | median of CoinGecko, MEXC's last price and MEXC's 5-minute average; two quotes required, else QOR and QWAKK sit out the round |
-| QWAKK | 30-minute median of its pool's price in QOR, times QOR |
+| QWAKK | median of pool 6's swaps over the last 30 minutes and its current price, in QOR, times QOR (read from the chain each time) |
 | USD | 1 |
+
+## When rounds are published
+
+On demand, so nothing is spent while nobody trades:
+
+- **Before a trade.** The relayer publishes a signed round if the last one is more than 20 minutes old (readers refuse prices older than 30).
+- **Daily.** A cron at 06:00 UTC publishes one round and renews the relayer account's scoped EVM window.
+- **Weekly.** The Monday 12:05 UTC rebalance publishes a fresh round first.
+
+Rounds are at least 60 seconds apart; two callers racing for the same round cannot both land one.
 
 ## Changes
 
