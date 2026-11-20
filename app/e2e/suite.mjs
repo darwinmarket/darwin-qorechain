@@ -67,13 +67,10 @@ const assert = (c, m) => {
   if (!c) throw new Error(`assertion failed: ${m}`);
 };
 
-// "planned" adds signArbitrary, which today's QoreX has: trades are intents it signs, executed by
-// Darwin's relayer. The account's EVM window and grants to the relayer (the one-time setup a user
-// does in QoreX and in the app) are put in place by ops/src/relay-setup.ts.
+// "planned" adds signArbitrary, which today's QoreX has. Trades are plain-text messages it signs;
+// Darwin's relayer submits them to the user's DarwinAccount, which checks the ML-DSA-87 signature on
+// chain. No EVM window and no grant: nothing is set up for the account before the suite runs.
 const mock = createQorexMock({ profile: "planned", mnemonic, chainId: "qorechain-diana", rest: `${BASE}/api/rest` });
-const setup = JSON.parse(
-  execFileSync("npx", ["--no-install", "tsx", "src/relay-setup.ts"], { cwd: new URL("../../ops/", import.meta.url).pathname, encoding: "utf8", timeout: 180_000 }).trim().split("\n").at(-1),
-);
 const browser = await chromium.launch();
 const page = await browser.newPage({ viewport: { width: 1440, height: 1100 } });
 const consoleErrors = [];
@@ -102,6 +99,36 @@ async function txInfo(hash) {
   throw new Error(`tx ${hash} not found`);
 }
 
+/** The user's DarwinAccount, as the app's server reads it. */
+async function acctInfo() {
+  const r = await fetch(`${BASE}/api/relay/account?account=${me.native}`);
+  if (!r.ok) throw new Error(`account info ${r.status}`);
+  return r.json();
+}
+
+/**
+ * The newest DarwinAccount trade for the user since `since` (ms), from the app's Activity API, then
+ * checked on chain: an EVM transaction from Darwin's relayer to the account factory, admitted by
+ * the relayer's own EVM window (never the user's), whose receipt carries the account's Executed.
+ */
+async function accountTx(since) {
+  for (let i = 0; i < 20; i++) {
+    const r = await fetch(`${BASE}/api/trades?account=${me.native}`);
+    const list = r.ok ? await r.json() : [];
+    const t = (Array.isArray(list) ? list : list.trades ?? []).find((x) => x.ts >= since && /^0x/.test(x.tx));
+    if (t) {
+      const q = encodeURIComponent(`ethereum_tx.ethereumTxHash='${t.tx}'`);
+      const c = (await (await fetch(`${REST}/cosmos/tx/v1beta1/txs?query=${q}`)).json()).tx_responses?.[0];
+      assert(c && c.code === 0, `${t.tx} committed`);
+      const recipient = c.events.find((e) => e.type === "ethereum_tx" && e.attributes.some((a) => a.key === "recipient"))?.attributes.find((a) => a.key === "recipient")?.value;
+      const window = c.events.find((e) => e.type === "pqc_evm_window_used")?.attributes.find((a) => a.key === "address")?.value;
+      return { hash: t.tx, recipient, window, status: t.status };
+    }
+    await sleep(2000);
+  }
+  throw new Error("no account trade found");
+}
+
 /** The newest trade Darwin's relayer executed for `account` since `since` (ms). */
 async function relayedTx(account, since) {
   const q = encodeURIComponent(`crossvm_request.sender='${account}'`);
@@ -126,8 +153,9 @@ async function relayedTx(account, since) {
 }
 
 async function openBasket(display) {
-  await page.goto(`${BASE}/${display}`, { waitUntil: "networkidle" });
-  await page.waitForSelector("text=Your position", { timeout: 30000 });
+  // the page keeps polling balances and prices: "networkidle" may never come
+  await page.goto(`${BASE}/${display}`, { waitUntil: "domcontentloaded", timeout: 60000 });
+  await page.waitForSelector("text=Your position", { timeout: 45000 });
 }
 
 async function trade({ display, key, side, amount }) {
@@ -143,13 +171,13 @@ async function trade({ display, key, side, amount }) {
   await cta.click();
   await page.waitForSelector(`text=${side === "buy" ? "Bought" : "Sold"} ${NAME[key]}`, { timeout: 150000 });
   await page.screenshot({ path: `${SHOTS}${display}-${side}.png` });
-  // the user signed an intent (signArbitrary); the relayer's MsgExec carries the trade as the user
+  // the user signed one message (signArbitrary); the account checked it on chain and traded
   const signed = await page.evaluate(() => window.__qorexMock.requests.filter((r) => r.method.endsWith("signArbitrary") && r.outcome === "ok").length);
-  assert(signed > 0, "the intent was signed in QoreX");
-  const tx = await relayedTx(me.native, t0);
-  assert(tx.hybrid, "the relayer's MsgExec carries a verified hybrid signature");
-  assert(tx.window === me.native, `admitted by the user's EVM window (${tx.window})`);
-  return { hash: tx.hash, types: tx.types };
+  assert(signed > 0, "the message was signed in QoreX");
+  const tx = await accountTx(t0);
+  assert(tx.recipient?.toLowerCase() === D.accountFactory.toLowerCase(), `sent to the account factory (${tx.recipient})`);
+  assert(tx.window && tx.window !== me.native, `admitted by the relayer's window, not the user's (${tx.window})`);
+  return { hash: tx.hash, types: ["DarwinAccountFactory.execute"] };
 }
 
 // ------------------------------------------------------------------------------- signed out
@@ -246,14 +274,9 @@ await check("the account menu shows the account's registered ML-DSA-87 key (@qor
   return text;
 });
 
-// fUSD in ERC-20 form on the twin for the trades below
+// the user's DarwinAccount: where the trades below settle
 // (null in a subset run without the connect check: the trade checks then need it in ONLY too)
-const twin = !me ? null : await (async () => {
-  const words = me.native;
-  const { bech32 } = await import("@scure/base").catch(() => ({ bech32: null }));
-  if (bech32) return "0x" + Buffer.from(bech32.fromWords(bech32.decode(words).words)).toString("hex");
-  throw new Error("@scure/base missing");
-})();
+const acct = !me ? null : (await acctInfo()).account;
 
 /** The wallet's fUSD, as the trade card showed it during the last vaultCapacity(). */
 let lastAvailable = Infinity;
@@ -278,11 +301,11 @@ for (const [display, key, target] of [["BLUEdw", "BLUEDW", 1], ["BALdw", "BALDW"
     const cap = await vaultCapacity(display);
     const usd = Math.min(target, Math.floor(cap * 0.5 * 1e4) / 1e4, Math.floor(lastAvailable * 0.4 * 100) / 100);
     if (usd < 0.002) throw new Skip(`the vault can fill only $${cap} of ${display}: refill the reserve (ops/src/refill.ts)`);
-    const s0 = await bal(D.baskets[key].address, twin);
+    const s0 = await bal(D.baskets[key].address, acct);
     const r = await trade({ display, key, side: "buy", amount: usd });
-    const s1 = await bal(D.baskets[key].address, twin);
+    const s1 = await bal(D.baskets[key].address, acct);
     assert(s1 > s0, `shares ${s0} -> ${s1}`);
-    return `${usd} fUSD (vault capacity ${cap === Infinity ? "above the balance" : `$${cap}`}) -> +${(Number(s1 - s0) / 1e18).toFixed(4)} ${display}, intent signed in QoreX, relayed [${r.types.join(", ")}], hybrid-verified`;
+    return `${usd} fUSD (vault capacity ${cap === Infinity ? "above the balance" : `$${cap}`}) -> +${(Number(s1 - s0) / 1e18).toFixed(4)} ${display} on the Darwin account, one message signed in QoreX, ML-DSA-87 checked on chain, no window, tx ${r.hash}`;
   });
 }
 
@@ -293,18 +316,18 @@ await check("the position shows on the trade card after a buy", async () => {
 });
 
 await check("sell half of BALdw for fUSD", async () => {
-  const shares = await bal(D.baskets.BALDW.address, twin);
-  const u0 = await bal(D.tokens.fUSD, twin);
-  const r = await trade({ display: "BALdw", key: "BALDW", side: "sell", amount: (Number(shares) / 1e18 / 2).toFixed(6) });
-  const u1 = await bal(D.tokens.fUSD, twin);
+  const shares = await bal(D.baskets.BALDW.address, acct);
+  const u0 = await bal(D.tokens.fUSD, acct);
+  const r = await trade({ display: "BALdw", key: "BALDW", side: "sell", amount: (Math.floor(Number(shares) / 1e18 / 2 * 1e6) / 1e6).toFixed(6) });
+  const u1 = await bal(D.tokens.fUSD, acct);
   assert(u1 > u0, `fUSD ${u0} -> ${u1}`);
-  return `+${(Number(u1 - u0) / 1e6).toFixed(3)} fUSD, msgs [${r.types.join(", ")}], tx ${r.hash}`;
+  return `+${(Number(u1 - u0) / 1e6).toFixed(3)} fUSD on the Darwin account, tx ${r.hash}`;
 });
 
-await check("a trade's page re-verifies its hybrid signature in the browser (QoreSign)", async () => {
-  const last = results.filter((x) => x.ok && /tx [0-9A-F]{64}$/.test(x.detail)).at(-1);
+await check("a trade's page re-verifies the user's ML-DSA-87 signature in the browser", async () => {
+  const last = results.filter((x) => x.ok && /tx 0x[0-9a-f]{64}$/.test(x.detail)).at(-1);
   assert(last, "a trade hash from an earlier check");
-  const hash = last.detail.match(/tx ([0-9A-F]{64})$/)[1];
+  const hash = last.detail.match(/tx (0x[0-9a-f]{64})$/)[1];
   await page.goto(`${BASE}/tx/${hash}`, { waitUntil: "networkidle" });
   await page.waitForSelector("[data-browser-check]", { timeout: 60000 });
   const text = await page.locator("[data-browser-check]").innerText();
@@ -312,22 +335,29 @@ await check("a trade's page re-verifies its hybrid signature in the browser (Qor
   return `${hash.slice(0, 12)}…: ${text}`;
 });
 
-await check("faucet fUSD (bank form) is converted in the same transaction as the buy", async () => {
-  const erc = await bal(D.tokens.fUSD, twin);
-  let setup = "already in bank form";
-  if (erc > 0n) {
-    const value = pb([[1, D.tokens.fUSD], [2, erc.toString()], [3, me.native], [4, me.native]]);
-    const res = await page.evaluate(
-      async ({ value }) =>
-        window.qorex.native.signAndBroadcast({ chainId: "qorechain-diana", messages: [{ typeUrl: "/cosmos.evm.erc20.v1.MsgConvertERC20", value }], memo: "darwin e2e setup", gasLimit: 700000 }),
-      { value },
-    );
-    assert(res.code === 0, `setup code ${res.code}`);
-    setup = `setup ${res.txHash.slice(0, 12)}…`;
-  }
-  const r = await trade({ display: "BLUEdw", key: "BLUEDW", side: "buy", amount: 1 });
-  assert(r.types[0] === "MsgConvertCoin" && r.types.at(-1) === "MsgCrossVMCall", `msgs ${r.types}`);
-  return `${setup}, buy msgs [${r.types.join(", ")}]`;
+await check("a buy above the account's fUSD deposits the rest from QoreX first (one MsgSend), then one signature", async () => {
+  const before = BigInt((await acctInfo()).fusd);
+  const amount = Math.ceil(Number(before) / 1e6 + 1);
+  const sends0 = await page.evaluate(() => window.__qorexMock.requests.filter((r) => r.method.endsWith("signAndBroadcast") && r.outcome === "ok").length);
+  const r = await trade({ display: "BLUEdw", key: "BLUEDW", side: "buy", amount });
+  const sends = await page.evaluate(() => window.__qorexMock.requests.filter((r) => r.method.endsWith("signAndBroadcast") && r.outcome === "ok"));
+  assert(sends.length === sends0 + 1, `one QoreX transaction (${sends.length - sends0})`);
+  const msgs = (sends.at(-1).params?.[0]?.messages ?? sends.at(-1).request?.messages ?? []).map((m) => m.typeUrl);
+  assert(!msgs.length || msgs.every((t) => t === "/cosmos.bank.v1beta1.MsgSend"), `the deposit is a MsgSend (${msgs})`);
+  return `account had ${(Number(before) / 1e6).toFixed(2)} fUSD, bought ${amount}: deposit (MsgSend) + one signed message, tx ${r.hash}`;
+});
+
+await check("Portfolio withdraws the account's fUSD back to QoreX with one signed message", async () => {
+  const info = await acctInfo();
+  if (BigInt(info.fusd) === 0n) throw new Skip("no fUSD on the Darwin account");
+  await tab("Portfolio");
+  const link = page.getByRole("button", { name: /^Withdraw .* fUSD to QoreX$/ });
+  await link.waitFor({ timeout: 30000 });
+  await link.click();
+  await page.waitForSelector("text=/^Withdrew /", { timeout: 120000 });
+  const after = await acctInfo();
+  assert(BigInt(after.fusd) === 0n, `account fUSD ${after.fusd}`);
+  return `${(Number(info.fusd) / 1e6).toFixed(2)} fUSD back in the QoreX wallet`;
 });
 
 await check("more fUSD than the balance disables the button", async () => {

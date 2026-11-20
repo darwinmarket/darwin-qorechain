@@ -6,6 +6,7 @@ import type { Address } from "viem";
 import { erc20Abi } from "./abis";
 import { client, D, REST, TOKEN_INFO, TOKENS } from "./chain";
 import { connectQorex, qorex, waitForQorex, type Account } from "./qorex";
+import { readAccount, type AccountInfo } from "./accountClient";
 
 export type Balances = {
   qor: bigint; // bank uqor
@@ -14,7 +15,14 @@ export type Balances = {
   shares: Record<string, bigint>;
   /** ERC-20 coins held on the EVM twin (what an in-kind redemption pays). */
   coins: Record<string, bigint>;
+  /** The user's DarwinAccount (controlled by its ML-DSA-87 key): where windowless trades settle. */
+  acct: AccountInfo | null;
 };
+
+/** Shares of a basket the user holds, on the EVM twin and on the DarwinAccount. */
+export const sharesOf = (b: Balances | undefined, symbol: string) => (b ? (b.shares[symbol] ?? 0n) + (b.acct?.shares[symbol] ?? 0n) : 0n);
+/** fUSD the user holds anywhere: the faucet's bank form, the twin's ERC-20 form, the DarwinAccount. */
+export const cashOf = (b: Balances | undefined) => (b ? b.fusdBank + b.fusdErc20 + (b.acct?.fusd ?? 0n) : 0n);
 
 type WalletState = {
   account: Account | null;
@@ -37,6 +45,7 @@ async function readBalances(acc: Account): Promise<Balances> {
   const coin = (denom: string) => BigInt(bank.balances?.find((b) => b.denom === denom)?.amount ?? "0");
   const keys = Object.keys(D.baskets);
   const coinKeys: string[] = [];
+  const acctP = readAccount(acc.address).catch(() => null);
   const [fusdErc20, ...rest] = await Promise.all([
     client.readContract({ address: TOKENS.fUSD, abi: erc20Abi, functionName: "balanceOf", args: [acc.evm] }),
     ...keys.map((k) => client.readContract({ address: D.baskets[k].address as Address, abi: erc20Abi, functionName: "balanceOf", args: [acc.evm] })),
@@ -50,6 +59,7 @@ async function readBalances(acc: Account): Promise<Balances> {
     fusdErc20: fusdErc20 as bigint,
     shares: Object.fromEntries(keys.map((k, i) => [k, shares[i] as bigint])),
     coins: Object.fromEntries(coinKeys.map((k, i) => [k, coins[i] as bigint])),
+    acct: await acctP,
   };
 }
 

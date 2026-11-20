@@ -9,6 +9,7 @@ import { useQuery } from "@tanstack/react-query";
 import { bytesToHex, decodeEventLog, decodeFunctionData, parseAbiItem, type Hex } from "viem";
 import { basketAbi, oracleAbi, routerAbi } from "./abis";
 import { client, D, REST } from "./chain";
+import { FACTORY, factoryAbi } from "./account";
 
 export type DarwinAction =
   | { kind: "round"; round: number; prices: Record<string, number> }
@@ -32,6 +33,8 @@ export type TxView = {
   evmWindow?: { address: string; usedTxs: string };
   /** Set when Darwin's relayer executed this trade for a QoreX user (authz MsgExec). */
   relayedFor?: string;
+  /** Set when this is a DarwinAccount execution: the owner's ML-DSA-87 signed message, checked on chain. */
+  viaAccount?: { owner: string; account: string; nonce: number; summary: string };
   actions: DarwinAction[];
   log?: string;
 };
@@ -52,6 +55,7 @@ const EVENTS = [
   parseAbiItem("event Bought(address indexed trader, address indexed basket, uint256 usdIn, uint256 fee, uint256 shares, address to)"),
   parseAbiItem("event Sold(address indexed trader, address indexed basket, uint256 shares, uint256 usdOut, uint256 fee, address to)"),
   parseAbiItem("event Rebalanced(uint256 indexed nonce, uint256 trades, uint256 navBefore, uint256 navAfter, address relayer)"),
+  parseAbiItem("event Executed(uint256 indexed nonce, bytes32 indexed callsHash, address indexed submitter, uint256 calls)"),
 ];
 
 async function cosmosTx(hash: string) {
@@ -74,6 +78,7 @@ async function readTx(input: string): Promise<TxView> {
   const evmHash = events.map((e) => (e.type === "ethereum_tx" ? attr(e, "ethereumTxHash") : undefined)).find(Boolean) as string | undefined;
   const win = events.find((e) => e.type === "pqc_evm_window_used");
   const actions: DarwinAction[] = [];
+  let viaAccount: TxView["viaAccount"];
 
   // Native cross-VM calls: decode the router calldata, including the calls Darwin's relayer
   // executed for a QoreX user inside an authz MsgExec.
@@ -95,11 +100,13 @@ async function readTx(input: string): Promise<TxView> {
     const receipt = await client.getTransactionReceipt({ hash: evmHash as Hex }).catch(() => null);
     const prices: Record<string, number> = {};
     let round: number | null = null;
+    let executed: { account: string; nonce: number } | null = null;
     for (const log of receipt?.logs ?? []) {
       try {
         const ev = decodeEventLog({ abi: EVENTS, data: log.data, topics: log.topics as any });
         const a = ev.args as any;
         if (ev.eventName === "RoundSubmitted") round = Number(a.round);
+        if (ev.eventName === "Executed") executed = { account: log.address, nonce: Number(a.nonce) };
         if (ev.eventName === "PriceUpdated") prices[FEED[Number(a.feedId)]] = Number(a.price) / 1e18;
         if (ev.eventName === "Bought") actions.push({ kind: "buy", basket: basketName(a.basket), usdIn: Number(a.usdIn) / 1e6, shares: Number(a.shares) / 1e18 });
         if (ev.eventName === "Sold") actions.push({ kind: "sell", basket: basketName(a.basket), shares: Number(a.shares) / 1e18, usdOut: Number(a.usdOut) / 1e6 });
@@ -110,6 +117,17 @@ async function readTx(input: string): Promise<TxView> {
       }
     }
     if (round != null) actions.unshift({ kind: "round", round, prices });
+    if (executed && FACTORY) {
+      const etx = await client.getTransaction({ hash: evmHash as Hex }).catch(() => null);
+      if (etx?.to?.toLowerCase() === FACTORY.toLowerCase()) {
+        const call = decodeFunctionData({ abi: factoryAbi, data: etx.input });
+        if (call.functionName === "execute") {
+          const { addressFromBytes } = await import("@qorechain/qoresign");
+          const { hexToBytes } = await import("viem");
+          viaAccount = { owner: addressFromBytes(hexToBytes(call.args[0] as Hex)).bech32, account: (executed as any).account, nonce: (executed as any).nonce, summary: call.args[2] as string };
+        }
+      }
+    }
   }
   if (!actions.length) actions.push({ kind: "other", label: tx.body.messages.map((m: any) => m["@type"].split(".").at(-1)).join(", ") });
 
@@ -125,6 +143,7 @@ async function readTx(input: string): Promise<TxView> {
     hybridVerified: events.some((e) => e.type === "pqc_hybrid_verify" && attr(e, "status") === "verified"),
     evmWindow: win ? { address: attr(win, "address"), usedTxs: attr(win, "used_txs") } : undefined,
     relayedFor,
+    viaAccount,
     actions,
     log: t.code === 0 ? undefined : t.raw_log,
   };

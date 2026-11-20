@@ -4,9 +4,14 @@
  * The trade panel on QoreChain, drawn with the mainnet front's TradeCard: deposit fUSD, receive the
  * basket token; sell the basket token, receive fUSD.
  *
- * QoreX does not sign cross-VM calls, so a trade is an intent the user signs in QoreX (secp256k1 +
- * ML-DSA-87) and Darwin's relayer executes as the user through an authz grant (lib/qore/relay.ts).
- * Before the first trade: an EVM access window opened in QoreX, then the grant, signed here.
+ * QoreX does not sign cross-VM calls, so a trade is a plain-text message the user signs in QoreX
+ * (secp256k1 + ML-DSA-87). Darwin's relayer submits it to the user's DarwinAccount, which checks the
+ * ML-DSA-87 signature on chain with pqcVerify before calling the router (lib/qore/accountClient.ts).
+ * No EVM window, no grant, no gas for the trade. fUSD still in the QoreX wallet is deposited onto
+ * the account first, with one MsgSend QoreX displays.
+ *
+ * Shares bought before DarwinAccounts sit on the user's EVM twin; selling those still takes the
+ * original path: an EVM window opened in QoreX and a grant to the relayer (lib/qore/relay.ts).
  */
 import { useEffect, useMemo, useState } from "react";
 import { formatUnits, parseUnits, type Address } from "viem";
@@ -15,6 +20,7 @@ import { useBaskets } from "@/lib/darwin/store";
 import { txUrl } from "@/lib/qore/chain";
 import { isQorexRejection } from "@/lib/qore/qorex";
 import { authorizeRelayer, relayTrade, useRelayStatus } from "@/lib/qore/relay";
+import { depositFusd, readAccount, signAndExecute, tradeCalls } from "@/lib/qore/accountClient";
 import { quoteBuy, quoteSell } from "@/lib/qore/trade";
 import { useWallet } from "@/lib/qore/wallet";
 import { TradeCard } from "./TradeCard";
@@ -57,24 +63,43 @@ export function QoreTradePanel({ symbol, name }: { symbol: string; name: string 
   const [quote, setQuote] = useState<{ out: bigint; fee: bigint } | null>(null);
   const [progress, setProgress] = useState<{ step: number; tone: TradeTone; label: string } | null>(null);
   const debounced = useDebounced(amount);
-  const relay = useRelayStatus(account?.address);
-  // what is still missing before a trade can be relayed
-  const setup: "window" | "grant" | "offline" | null = !account
+  const acct = balances?.acct ?? null;
+  const acctShares = acct?.shares[symbol] ?? 0n;
+  const twinShares = balances?.shares[symbol] ?? 0n;
+  // shares bought before DarwinAccounts: sold through the original, windowed path
+  const legacySell = side === "sell" && acctShares === 0n && twinShares > 0n;
+  const relay = useRelayStatus(legacySell ? account?.address : null);
+  // what is still missing before a trade can go through
+  const setup: "window" | "grant" | "offline" | null = !account || !balances
     ? null
-    : relay.error
+    : !acct
       ? "offline"
-      : !relay.data
+      : !legacySell
         ? null
-        : !relay.data.window.live
-          ? "window"
-          : !relay.data.grants.crossvm || !relay.data.grants.convert
-            ? "grant"
-            : null;
+        : relay.error
+          ? "offline"
+          : !relay.data
+            ? null
+            : !relay.data.window.live
+              ? "window"
+              : !relay.data.grants.crossvm || !relay.data.grants.convert
+                ? "grant"
+                : null;
 
-  const fusd = balances ? balances.fusdBank + balances.fusdErc20 : 0n;
-  const shares = balances?.shares[symbol] ?? 0n;
+  // fUSD a buy can use: the account's, plus the wallet's bank fUSD (deposited first)
+  const fusd = balances ? balances.fusdBank + (acct?.fusd ?? 0n) : 0n;
+  const shares = legacySell ? twinShares : acctShares > 0n ? acctShares : twinShares;
+  const heldShares = acctShares + twinShares;
   const sharePrice = basket?.sharePriceUsd ?? 0;
-  const positionUsd = (Number(shares) / 1e18) * sharePrice;
+  const positionUsd = (Number(heldShares) / 1e18) * sharePrice;
+  const needsDeposit = side === "buy" && acct != null && parsedNeedsDeposit();
+  function parsedNeedsDeposit() {
+    try {
+      return Boolean(amount) && Number(amount) > 0 && parseUnits(amount, 6) > (acct?.fusd ?? 0n);
+    } catch {
+      return false;
+    }
+  }
 
   const parsed = useMemo(() => {
     try {
@@ -136,17 +161,40 @@ export function QoreTradePanel({ symbol, name }: { symbol: string; name: string 
   async function submit() {
     if (setup === "grant") return authorize();
     if (!account || !parsed || !basket || !quote) return;
-    setProgress({ step: 0, tone: "working", label: "Sign your trade in QoreX…" });
+    const min = (quote.out * 99n) / 100n;
+    const withDeposit = needsDeposit;
+    const signStep = withDeposit ? 1 : 0;
     try {
-      const res = await relayTrade(
-        { account: account.address, action: side, basket: basket.address, amount: parsed, min: (quote.out * 99n) / 100n },
-        () => setProgress({ step: 1, tone: "working", label: "Darwin's relayer is executing it…" }),
-      );
-      setProgress({ step: 1, tone: "done", label: side === "buy" ? `Bought ${ticker}` : `Sold ${ticker}` });
+      let res: { txHash: string };
+      if (legacySell) {
+        setProgress({ step: 0, tone: "working", label: "Sign your trade in QoreX…" });
+        res = await relayTrade({ account: account.address, action: side, basket: basket.address, amount: parsed, min }, () =>
+          setProgress({ step: 1, tone: "working", label: "Darwin's relayer is executing it…" }),
+        );
+      } else {
+        let info = acct!;
+        if (withDeposit) {
+          setProgress({ step: 0, tone: "working", label: "Approve the fUSD deposit in QoreX…" });
+          await depositFusd(account.address, info.relayer.cosmos, parsed - info.fusd);
+          info = await readAccount(account.address);
+        }
+        setProgress({ step: signStep, tone: "working", label: "Sign your trade in QoreX…" });
+        const verb = side === "buy" ? `Buy ${fmt(Number(parsed) / 1e6)} fUSD of ${ticker}` : `Sell ${fmt(Number(parsed) / 1e18, 6)} ${ticker}`;
+        res = await signAndExecute(
+          account.address,
+          info,
+          tradeCalls(info, side, basket.address as Address, parsed, min),
+          `Darwin: ${verb}, for at least ${side === "buy" ? `${fmt(Number(min) / 1e18, 6)} ${ticker}` : `${fmt(Number(min) / 1e6)} fUSD`}`,
+          () => setProgress({ step: signStep + 1, tone: "working", label: "Your account checks the signature on chain…" }),
+        );
+      }
+      setProgress({ step: legacySell ? 1 : signStep + 1, tone: "done", label: side === "buy" ? `Bought ${ticker}` : `Sold ${ticker}` });
       toast.push({
         type: "success",
         title: side === "buy" ? `Bought ${name}` : `Sold ${name}`,
-        message: "Your intent, signed with secp256k1 and ML-DSA-87, was verified on chain keys and executed for you.",
+        message: legacySell
+          ? "Your intent, signed with secp256k1 and ML-DSA-87, was verified on chain keys and executed for you."
+          : "Your Darwin account verified your ML-DSA-87 signature on chain (pqcVerify), then traded.",
         action: { label: "View transaction", onClick: () => window.open(txUrl(res.txHash), "_blank", "noreferrer") },
         duration: 9000,
       });
@@ -197,9 +245,9 @@ export function QoreTradePanel({ symbol, name }: { symbol: string; name: string 
         setSide(s);
         setAmount("");
       }}
-      sellDisabled={shares === 0n}
-      sellTitle={shares === 0n ? `You hold no ${ticker} yet` : undefined}
-      position={shares > 0n ? { value: `$${fmt(positionUsd)}`, sub: `${fmt(Number(shares) / 1e18, 4)} ${ticker}` } : null}
+      sellDisabled={heldShares === 0n}
+      sellTitle={heldShares === 0n ? `You hold no ${ticker} yet` : undefined}
+      position={heldShares > 0n ? { value: `$${fmt(positionUsd)}`, sub: `${fmt(Number(heldShares) / 1e18, 4)} ${ticker}` } : null}
       spendLabel={side === "buy" ? "You spend" : "You sell"}
       amount={amount}
       onAmount={setAmount}
@@ -213,7 +261,11 @@ export function QoreTradePanel({ symbol, name }: { symbol: string; name: string 
       receiveUnit={side === "buy" ? `of ${name}` : "fUSD"}
       fine={`Includes the ${(SKIM_FEE_BPS / 100).toFixed(2)}% fee`}
       warn={
-        setup === "window"
+        setup === "offline" && !legacySell
+          ? "Darwin's relayer is not reachable right now."
+          : legacySell && setup === "window"
+          ? "These shares were bought before Darwin accounts, so selling them takes the original setup: open QoreX → EVM access window, and open one (it lasts about 7 hours). New trades need none of this."
+          : setup === "window"
           ? "Setup: open QoreX → EVM access window, and open one (it lasts about 7 hours; the relayer's authorization, 24). QoreX does not sign EVM calls itself, so Darwin's relayer executes the trades you sign, and the chain admits them only while your window is open."
           : setup === "grant"
             ? "Next: let Darwin's relayer execute the trades you sign, for 24 hours. QoreX shows the authorization before you approve it."
@@ -233,7 +285,16 @@ export function QoreTradePanel({ symbol, name }: { symbol: string; name: string 
             ? progress != null
             : setup !== null || !parsed || !quote || over || overCapacity || paused || progress != null,
       }}
-      progress={progress ? <TradeProgress steps={setup === "grant" ? ["Authorize in QoreX"] : ["Sign in QoreX", "Darwin executes"]} step={progress.step} tone={progress.tone} label={progress.label} /> : undefined}
+      progress={
+        progress ? (
+          <TradeProgress
+            steps={setup === "grant" ? ["Authorize in QoreX"] : needsDeposit ? ["Deposit in QoreX", "Sign in QoreX", "Verified on chain"] : legacySell ? ["Sign in QoreX", "Darwin executes"] : ["Sign in QoreX", "Verified on chain"]}
+            step={progress.step}
+            tone={progress.tone}
+            label={progress.label}
+          />
+        ) : undefined
+      }
     />
   );
 }
