@@ -31,6 +31,8 @@ contract DarwinReserve is PqcAdmin, ReentrancyGuard {
     mapping(address => bool) public spreadExempt;
     address[] internal tokenList;
 
+    error BadOracle();
+
     event Swap(
         address indexed trader,
         address indexed tokenIn,
@@ -175,6 +177,14 @@ contract DarwinReserve is PqcAdmin, ReentrancyGuard {
         _authorizeAdmin("setSpread", abi.encode(spreadBps_), deadline, signature);
         spreadBps = spreadBps_;
         emit SpreadChanged(spreadBps_);
+    }
+
+    /// @notice Point the reserve at another oracle (ML-DSA-87 admin signature).
+    function setOracle(DarwinOracle next, uint256 deadline, bytes calldata signature) external {
+        if (address(next) == address(0)) revert BadOracle();
+        _authorizeAdmin("setOracle", abi.encode(address(next)), deadline, signature);
+        oracle = next;
+        emit OracleChanged(address(next));
     }
 
     function setSpreadExempt(address trader, bool exempt, uint256 deadline, bytes calldata signature) external {
