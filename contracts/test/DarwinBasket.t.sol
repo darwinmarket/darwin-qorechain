@@ -4,6 +4,7 @@ pragma solidity ^0.8.24;
 import {DarwinTest} from "./utils/DarwinTest.sol";
 import {DarwinBasket} from "../src/DarwinBasket.sol";
 import {PqcAuth} from "../src/pqc/PqcAuth.sol";
+import {DarwinOracle} from "../src/DarwinOracle.sol";
 
 contract DarwinBasketTest is DarwinTest {
     DarwinBasket blue;
@@ -71,8 +72,48 @@ contract DarwinBasketTest is DarwinTest {
         vm.expectRevert(DarwinBasket.MintIsPaused.selector);
         blue.mint(1e18, alice);
         uint256 d = block.timestamp + 1 hours;
+        // the guardian's classical key cannot unpause, rebalance or change weights
+        // (signatures are built first: expectRevert applies to the next external call)
+        bytes memory unpause = _sign(guardian, blue.adminMessage("setMintPaused", abi.encode(false), blue.adminNonce(), d));
+        DarwinBasket.Trade[] memory t = new DarwinBasket.Trade[](1);
+        t[0] = DarwinBasket.Trade(address(fBTC), address(fETH), 1_000, 0);
+        bytes memory trades = _sign(guardian, blue.rebalanceMessage(t, blue.curatorNonce(), d));
+        vm.startPrank(guardian);
+        vm.expectRevert(abi.encodeWithSelector(PqcAuth.BadPqcSignature.selector, admin));
+        blue.setMintPaused(false, d, unpause);
+        vm.expectRevert(abi.encodeWithSelector(PqcAuth.BadPqcSignature.selector, curator));
+        blue.rebalance(t, d, trades);
+        vm.stopPrank();
         blue.setMintPaused(false, d, _adminSig(address(blue), "setMintPaused", abi.encode(false), d));
         assertFalse(blue.mintPaused());
+    }
+
+    function test_aBasketIsSeededOnceEvenIfEmptiedLater() public {
+        // redeem every share, then try to seed again with the seeder's (classical) key
+        uint256 supply = blue.totalSupply();
+        vm.prank(blue.seeder());
+        blue.transfer(alice, blue.balanceOf(blue.seeder()));
+        uint256 all = blue.balanceOf(alice);
+        assertEq(all, supply, "alice holds every share");
+        vm.prank(alice);
+        blue.redeem(all, alice);
+        assertEq(blue.totalSupply(), 0);
+        uint256[] memory amounts = new uint256[](2);
+        vm.prank(blue.seeder());
+        vm.expectRevert(DarwinBasket.AlreadySeeded.selector);
+        blue.seed(amounts, 1e18, alice);
+    }
+
+    function test_setOracleNeedsTheAdminsPqcSignature() public {
+        address next = makeAddr("nextOracle");
+        uint256 d = block.timestamp + 1 hours;
+        bytes memory forged = _sign(curator, blue.adminMessage("setOracle", abi.encode(next), blue.adminNonce(), d));
+        vm.expectRevert(abi.encodeWithSelector(PqcAuth.BadPqcSignature.selector, admin));
+        blue.setOracle(DarwinOracle(next), d, forged);
+        blue.setOracle(DarwinOracle(next), d, _adminSig(address(blue), "setOracle", abi.encode(next), d));
+        assertEq(address(blue.oracle()), next);
+        reserve.setOracle(DarwinOracle(next), d, _adminSig(address(reserve), "setOracle", abi.encode(next), d));
+        assertEq(address(reserve.oracle()), next);
     }
 
     function test_navFollowsTheOracle() public {
