@@ -25,14 +25,14 @@
       "address": "0x033e85e85853bcf9b580c5613f373eb739bd9c2a",
       "name": "Darwin Blue Chip",
       "display": "BLUEdw",
-      "description": "The two crypto majors, half and half: 50% BTC, 50% ETH.",
+      "description": "Bitcoin-led crypto majors: 70% BTC, 30% ETH.",
       "components": [
         "fBTC",
         "fETH"
       ],
       "weights": [
-        5000,
-        5000
+        7000,
+        3000
       ],
       "seed": {
         "amounts": [
@@ -46,7 +46,13 @@
           "fBTC": 62376.7,
           "WQOR": 0.03486644162686922
         }
-      }
+      },
+      "history": [
+        {
+          "date": "2026-11-20",
+          "change": "target weights 50/50 -> 70/30 (curator-signed), rebalanced"
+        }
+      ]
     },
     "BALDW": {
       "address": "0x5e8290cfe9ad6487c7336780b0069ecb9b9b92cd",
@@ -79,34 +85,23 @@
       }
     },
     "QOREDW": {
-      "address": "0x16b1463475aa75d80519bc2743d137b507cb2fe0",
+      "address": "0x7c051cda46971306b05252c7354c226eb37c3e96",
+      "version": 2,
       "name": "Darwin Qore Ecosystem",
       "display": "QOREdw",
-      "description": "A bet on QoreChain itself: 40% QOR, 30% ETH, 30% BTC.",
+      "description": "QoreChain's ecosystem: 40% QOR, 20% BTC, 20% ETH, 20% QWAKK.",
       "components": [
         "WQOR",
+        "fBTC",
         "fETH",
-        "fBTC"
+        "QWAKK"
       ],
       "weights": [
         4000,
-        3000,
-        3000
-      ],
-      "seed": {
-        "amounts": [
-          "11472349380550121472",
-          "169471418645245",
-          "480"
-        ],
-        "shares": "100000000000000000",
-        "prices": {
-          "fUSD": 1,
-          "fETH": 1770.21,
-          "fBTC": 62376.7,
-          "WQOR": 0.03486644162686922
-        }
-      }
+        2000,
+        2000,
+        2000
+      ]
     },
     "DEGENDW": {
       "address": "0x48775d391021698298f6fcdb1826ba3a59db8d91",
@@ -144,6 +139,42 @@
       "address": "0x6b4d9220db397d4490ce4acc6ff63e4386a39de3",
       "retired": "2026-11-19T22:03:53.948Z",
       "reason": "linear quote could undershoot rounding on 8-decimal legs"
+    }
+  ],
+  "basketHistory": [
+    {
+      "key": "QOREDW",
+      "version": 1,
+      "address": "0x16b1463475aa75d80519bc2743d137b507cb2fe0",
+      "name": "Darwin Qore Ecosystem",
+      "display": "QOREdw",
+      "description": "A bet on QoreChain itself: 40% QOR, 30% ETH, 30% BTC.",
+      "components": [
+        "WQOR",
+        "fETH",
+        "fBTC"
+      ],
+      "weights": [
+        4000,
+        3000,
+        3000
+      ],
+      "seed": {
+        "amounts": [
+          "11472349380550121472",
+          "169471418645245",
+          "480"
+        ],
+        "shares": "100000000000000000",
+        "prices": {
+          "fUSD": 1,
+          "fETH": 1770.21,
+          "fBTC": 62376.7,
+          "WQOR": 0.03486644162686922
+        }
+      },
+      "retired": "2026-11-20T10:38:02.227Z",
+      "reason": "v2 adds QWAKK; components are fixed per contract"
     }
   ]
 }

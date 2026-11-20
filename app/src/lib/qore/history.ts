@@ -26,7 +26,12 @@ const ROUTERS = [ROUTER, ...((D as any).routerHistory ?? []).map((r: { address: 
   a.toLowerCase(),
 );
 const b64 = (s: string) => bytesToHex(Uint8Array.from(atob(s), (c) => c.charCodeAt(0)));
-const basketOf = (addr: string) => Object.entries(D.baskets).find(([, b]) => b.address.toLowerCase() === addr.toLowerCase());
+/** Current baskets, plus retired versions (QOREDW v1) so their trades stay in the history. */
+const ALL_BASKETS: [string, { address: string; name: string; display: string }][] = [
+  ...Object.entries(D.baskets),
+  ...(((D as any).basketHistory ?? []) as any[]).map((b) => [b.key, b] as [string, any]),
+];
+const basketOf = (addr: string) => ALL_BASKETS.find(([, b]) => b.address.toLowerCase() === addr.toLowerCase());
 
 async function readHistory(address: string): Promise<TradeEntry[]> {
   const q = encodeURIComponent(`message.sender='${address}'`);
