@@ -237,7 +237,7 @@ async function vaultCapacity(display) {
 
 // The QOR baskets are bounded by the reserve's QOR and QWAKK at their market prices (a testnet QOR
 // is worth $0.003): the buy is sized to half of what the vault can fill, capped at the target.
-for (const [display, key, target] of [["BLUEdw", "BLUEDW", 1], ["BALdw", "BALDW", 1], ["QOREdw", "QOREDW", 0.05], ["DEGENdw", "DEGENDW", 0.02]]) {
+for (const [display, key, target] of [["BLUEdw", "BLUEDW", 1], ["BALdw", "BALDW", 1], ["QOREdw", "QOREDW", 5], ["DEGENdw", "DEGENDW", 3]]) {
   await check(`buy ${display} (up to ${target} fUSD) in one QoreX approval`, async () => {
     const cap = await vaultCapacity(display);
     const usd = Math.min(target, Math.floor(cap * 0.5 * 1e4) / 1e4);
