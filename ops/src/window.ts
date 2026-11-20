@@ -27,7 +27,9 @@ export async function open(role: Role, blocks = 17_280n, maxTxs = 1_000n, target
   const acc = await evmAccount(role);
   // Each admitted tx may consume value + gasLimit x maxFeePerGas: budget 3M gas at 250 gwei.
   const perTx = evmWindowCost({ gas: 3_000_000n, maxFeePerGas: 250_000_000_000n });
-  const maxValue = perTx * maxTxs;
+  // WINDOW_MAX_QOR raises the value cap for a one-off transfer of QOR into the EVM (wrapping it for
+  // the reserve); by default the cap only covers gas.
+  const maxValue = process.env.WINDOW_MAX_QOR ? BigInt(process.env.WINDOW_MAX_QOR) * 10n ** 18n : perTx * maxTxs;
   const msg = openEvmWindowMsg({
     sender: acc.cosmos,
     blocks,
