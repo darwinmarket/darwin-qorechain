@@ -80,3 +80,19 @@ The same signatures can be checked without trusting the chain: the app's transac
 re-verifies an oracle round's ML-DSA-87 signature in the browser with `@qorechain/pqc` (and a
 user trade's hybrid signature with QoreSign). See also the cryptographic inventory in
 [cbom/](cbom/).
+
+## The trade relayer (QoreX users)
+
+QoreX signs only messages it can display, and it refuses `MsgCrossVMCall` and the ERC-20
+conversions, so QoreX users trade through `ops/src/relayer.ts` (see the README's "How a trade
+works"). Its risks and how they are bounded:
+
+| Risk | How it is handled | Test |
+|---|---|---|
+| A forged intent | the relayer acts only on an intent whose secp256k1 (ADR-36) and ML-DSA-87 signatures verify against the key the user registered on chain (QoreSign `verifyMessageWithChain`, `requirePq`) | on-chain suite: a tampered intent is refused (`the classical signature does not verify`) |
+| A replayed intent | a single-use nonce per account, kept until the intent expires; an intent expires within 10 minutes | on-chain suite: the same intent twice is refused (`already executed`) |
+| An intent for another chain, contract or account | `chainId` must be qorechain-diana, the basket one of Darwin's, the account the signer | `parseIntent` |
+| The relayer acting beyond intents | bounded by the user's authz grant (two message types, 24 hours, revocable) and the user's EVM window (transaction count, value, expiry); every action is a public `MsgExec` naming the user as sender | stated to the user in the app before the grant; README |
+| The relayer's own key | a dedicated coin-60 account with its own ML-DSA-87 key (registered with proof of possession); its transactions are hybrid-signed like every other | browser and on-chain suites check `pqc_hybrid_verify` on each relayed trade |
+| Slippage on a relayed trade | the intent carries the user's minimum (shares or fUSD), enforced by the router | router tests |
+
