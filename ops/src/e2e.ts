@@ -9,6 +9,7 @@
  *
  * Writes a report with every transaction hash to docs/e2e/<date>.md.
  */
+import { execFileSync } from "node:child_process";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import {
@@ -307,6 +308,30 @@ async function main() {
     const e2 = await bal(d.tokens.fUSD, twin);
     assert(e2 === e0, `ERC-20 balance restored ${e0} -> ${e2}`);
     return `to bank ${r1.transactionHash}, back ${r2.transactionHash}`;
+  });
+
+  // ------------------------------------------------------------------ second opinion
+  // QoreChain's own `qore` CLI (the MCP server's tools) re-reads the chain: an independent check
+  // of the native trade above and of every role's key.
+  const qoreCli = (...args: string[]) =>
+    JSON.parse(execFileSync("npx", ["--no-install", "qore", ...args, "--network", "testnet", "--json"], { cwd: ROOT + "/ops", encoding: "utf8", timeout: 60_000 }));
+
+  await check("qore CLI: the native trade is tier pqc, its ML-DSA-87 layer verified (v2)", async () => {
+    const hash = results.find((r) => r.ok && r.name.startsWith("native lane: hybrid-signed"))?.detail.match(/buy ([0-9A-F]{64})/)?.[1];
+    assert(hash, "a native trade hash from the check above");
+    const t = qoreCli("pq", "status", hash!).transaction_status;
+    assert(t.tier === "pqc" && t.has_exactly_one_pqc_layer && t.verification.verified, JSON.stringify(t.verification));
+    return `${hash!.slice(0, 12)}…: tier ${t.tier}, ${t.pqc_layer_count} layer, verified ${t.verification.sign_bytes_version}, signer ${t.signer}`;
+  });
+
+  await check("qore CLI: every role's key is ML-DSA-87, hybrid, with proof of possession", async () => {
+    const out: string[] = [];
+    for (const role of ["deployer", "reporter", "curator"] as const) {
+      const a = qoreCli("pq", "status", (await evmAccount(role)).evm).address_status;
+      assert(a.registered && a.algorithm === "ML-DSA-87" && a.possession_proven, `${role}: ${JSON.stringify(a)}`);
+      out.push(`${role} ${a.key_type}${a.evm_window.live ? `, window ${a.evm_window.remaining_txs} txs left` : ""}`);
+    }
+    return out.join("; ");
   });
 
   // ------------------------------------------------------------------ curator
