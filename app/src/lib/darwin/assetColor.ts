@@ -108,6 +108,12 @@ const CRYPTO: Record<string, [string, string]> = {
   AAVE: ["#B6509E", "#D593C6"],
   UNI: ["#FF007A", "#FF73B1"],
   USDC: ["#2775CA", "#7FACE1"],
+  USD: ["#2775CA", "#7FACE1"],
+  // QoreChain's brand teal (its logo runs from violet to teal); kept clear of ETH's periwinkle
+  QOR: ["#0FB39A", "#7FE3D3"],
+  WQOR: ["#0FB39A", "#7FE3D3"],
+  // QWAKK's yellow, from its mark
+  QWAKK: ["#F2B705", "#F8D86E"],
 };
 
 const OVERRIDES: Record<string, [string, string]> = {
