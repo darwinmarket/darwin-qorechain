@@ -112,7 +112,8 @@ abstract contract DarwinTest is Test {
     }
 
     function _pushPrices(uint128 usd, uint128 eth, uint128 btc, uint128 qor) internal {
-        if (oracle.lastTimestamp() >= block.timestamp) vm.warp(oracle.lastTimestamp() + 1);
+        // rounds are at least MIN_ROUND_INTERVAL apart
+        if (oracle.lastTimestamp() + oracle.MIN_ROUND_INTERVAL() > block.timestamp) vm.warp(oracle.lastTimestamp() + oracle.MIN_ROUND_INTERVAL());
         (uint64 ts, uint16[] memory ids, uint128[] memory prices, bytes memory sig) = _round(usd, eth, btc, qor);
         oracle.submit(ts, ids, prices, sig);
     }
