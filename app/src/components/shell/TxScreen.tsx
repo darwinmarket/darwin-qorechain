@@ -113,6 +113,35 @@ function BrowserCheckRow({ tx }: { tx: TxView }) {
   );
 }
 
+/** The chain's own REST API (testnet), for the raw transaction: no network toggle involved. */
+const REST_PUBLIC = "https://api-testnet.qore.host";
+
+/** A transaction hash as a link to the QoreChain explorer, highlighted. */
+function HashLink({ hash, small = false }: { hash: string; small?: boolean }) {
+  return (
+    <a
+      href={`${EXPLORER}/tx/${hash}`}
+      target="_blank"
+      rel="noreferrer"
+      title="Open on the QoreChain explorer"
+      style={{
+        fontFamily: MONO,
+        fontSize: small ? 12 : 13,
+        wordBreak: "break-all",
+        color: "var(--ink)",
+        background: "color-mix(in srgb, var(--orange) 14%, transparent)",
+        borderRadius: 6,
+        padding: "2px 6px",
+        textDecoration: "underline",
+        textDecorationColor: "color-mix(in srgb, var(--orange) 60%, transparent)",
+        textUnderlineOffset: 3,
+      }}
+    >
+      {hash} ↗
+    </a>
+  );
+}
+
 export function TxScreen({ hash }: { hash: string }) {
   const { data: tx, error, isLoading } = useTx(hash);
   const home = () => (window.location.href = "/");
@@ -132,7 +161,15 @@ export function TxScreen({ hash }: { hash: string }) {
           ← Back
         </button>
         <SectionHeading as="h1">Transaction</SectionHeading>
-        <p style={{ ...sub, fontFamily: MONO, marginTop: 8, wordBreak: "break-all" }}>{hash}</p>
+        <p style={{ marginTop: 8, display: "flex", flexWrap: "wrap", alignItems: "center", gap: "6px 12px" }}>
+          <HashLink hash={tx?.cosmosHash ?? hash} />
+          <a href={`${REST_PUBLIC}/cosmos/tx/v1beta1/txs/${tx?.cosmosHash ?? hash}`} target="_blank" rel="noreferrer" style={{ ...sub, color: "var(--ink-3)" }}>
+            raw chain data ↗
+          </a>
+        </p>
+        <p style={{ ...sub, marginTop: 6 }}>
+          Opens on the QoreChain explorer. The first time, set it to <b>Testnet</b> (top right): it remembers.
+        </p>
 
         {isLoading && <p style={{ marginTop: 24, color: "var(--ink-3)" }}>Reading qorechain-diana…</p>}
         {error && <p style={{ marginTop: 24, color: "var(--orange)" }}>{(error as Error).message}</p>}
@@ -215,11 +252,11 @@ export function TxScreen({ hash }: { hash: string }) {
                 <Row label="Gas used">{tx.gasUsed.toLocaleString()}</Row>
                 <Row label="Messages">{tx.messages.join(", ")}</Row>
                 <Row label="Cosmos hash">
-                  <span style={{ fontFamily: MONO, fontSize: 12 }}>{tx.cosmosHash}</span>
+                  <HashLink hash={tx.cosmosHash} small />
                 </Row>
                 {tx.evmHash && (
                   <Row label="EVM hash">
-                    <span style={{ fontFamily: MONO, fontSize: 12 }}>{tx.evmHash}</span>
+                    <HashLink hash={tx.evmHash} small />
                   </Row>
                 )}
                 {tx.log && <Row label="Error">{tx.log}</Row>}
