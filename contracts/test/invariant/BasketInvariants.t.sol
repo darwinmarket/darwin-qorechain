@@ -5,6 +5,7 @@ import {DarwinTest} from "../utils/DarwinTest.sol";
 import {MockERC20} from "../utils/MockERC20.sol";
 import {DarwinBasket} from "../../src/DarwinBasket.sol";
 import {DarwinRouter} from "../../src/DarwinRouter.sol";
+import {DarwinReserve} from "../../src/DarwinReserve.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {Test} from "forge-std/Test.sol";
 
@@ -20,6 +21,7 @@ contract BasketHandler is Test {
     uint256 public ghostRedeems;
     uint256 public ghostBuys;
     uint256 public ghostSells;
+    uint256 public ghostUnexpectedSellFailures;
 
     constructor(DarwinBasket basket_, DarwinRouter router_, MockERC20 fUSD_, MockERC20[] memory comps_) {
         basket = basket_;
@@ -79,7 +81,14 @@ contract BasketHandler is Test {
         IERC20(address(basket)).approve(address(router), shares);
         try router.sell(basket, shares, 0, a) {
             ghostSells++;
-        } catch {}
+        } catch (bytes memory err) {
+            bytes4 sel = bytes4(err);
+            // counted, not swallowed: only an empty reserve or a dust sale may refuse a sell
+            if (
+                sel != DarwinReserve.InsufficientInventory.selector && sel != DarwinRouter.TooSmall.selector
+                    && sel != DarwinRouter.ZeroAmount.selector && sel != DarwinReserve.ZeroAmount.selector
+            ) ghostUnexpectedSellFailures++;
+        }
         vm.stopPrank();
     }
 
@@ -118,6 +127,11 @@ contract BasketInvariantsTest is DarwinTest {
     function invariant_navPerShareNeverDrops() public view {
         if (bal.totalSupply() == 0) return;
         assertGe(bal.navPerShare() + 1, navAtStart);
+    }
+
+    /// A sell through the router was only ever refused for an empty reserve or dust.
+    function invariant_sellsFailOnlyForKnownReasons() public view {
+        assertEq(handler.ghostUnexpectedSellFailures(), 0);
     }
 
     /// The router never keeps anything between transactions.
