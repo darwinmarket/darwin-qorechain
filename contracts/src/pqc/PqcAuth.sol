@@ -15,10 +15,16 @@ library PqcAuth {
     error PqcKeyNotRegistered(address account);
     error PqcKeyNotProven(address account);
     error BadPqcSignature(address account);
+    error NotMlDsa87(address account, uint8 algorithmId);
+
+    /// @notice QoreChain's algorithm id for ML-DSA-87 (FIPS 204).
+    uint8 internal constant ML_DSA_87 = 1;
 
     function requireSigned(address account, bytes memory message, bytes calldata signature) internal view {
-        (bool registered,, bytes memory pubkey, bool proven) = PQC_KEYS.pqcKeyStatus(account);
+        (bool registered, uint8 algorithmId, bytes memory pubkey, bool proven) = PQC_KEYS.pqcKeyStatus(account);
         if (!registered || pubkey.length == 0) revert PqcKeyNotRegistered(account);
+        // enforced, not assumed: a key registered under another algorithm is refused
+        if (algorithmId != ML_DSA_87) revert NotMlDsa87(account, algorithmId);
         if (!proven) revert PqcKeyNotProven(account);
         if (!PQC_VERIFY.pqcVerify(pubkey, signature, message)) revert BadPqcSignature(account);
     }
