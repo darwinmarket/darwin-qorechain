@@ -53,6 +53,8 @@ contract DarwinBasket is ERC20, PqcAdmin, ReentrancyGuard {
     uint16 public maxRebalanceLossBps;
     /// @notice The account allowed to make the first mint (fixes the initial proportions).
     address public immutable seeder;
+    /// @notice Set by the one and only seed.
+    bool public seeded;
 
     address[] internal componentList;
     mapping(address => uint16) public targetWeightBps;
@@ -67,6 +69,7 @@ contract DarwinBasket is ERC20, PqcAdmin, ReentrancyGuard {
     event GuardianChanged(address indexed guardian);
     event MintPaused(bool paused, address by);
     event ReserveChanged(address indexed reserve);
+    event OracleChanged(address indexed oracle);
     event MaxRebalanceLossChanged(uint16 bps);
 
     error BadComponents();
@@ -128,7 +131,9 @@ contract DarwinBasket is ERC20, PqcAdmin, ReentrancyGuard {
     /// @notice The first mint: fixes the vault's initial proportions. Only the seeder, once.
     function seed(uint256[] calldata amounts, uint256 shares, address to) external nonReentrant {
         if (msg.sender != seeder) revert NotSeeder();
-        if (totalSupply() != 0) revert AlreadySeeded();
+        // one-shot: even if every share is later redeemed, the classical seeder key cannot seed again
+        if (seeded || totalSupply() != 0) revert AlreadySeeded();
+        seeded = true;
         if (shares == 0) revert ZeroShares();
         uint256 n = componentList.length;
         if (amounts.length != n) revert LengthMismatch();
@@ -349,6 +354,14 @@ contract DarwinBasket is ERC20, PqcAdmin, ReentrancyGuard {
         _authorizeAdmin("setReserve", abi.encode(address(next)), deadline, signature);
         reserve = next;
         emit ReserveChanged(address(next));
+    }
+
+    /// @notice Point the basket at another oracle (ML-DSA-87 admin signature), e.g. a fixed one.
+    function setOracle(DarwinOracle next, uint256 deadline, bytes calldata signature) external {
+        if (address(next) == address(0)) revert BadParams();
+        _authorizeAdmin("setOracle", abi.encode(address(next)), deadline, signature);
+        oracle = next;
+        emit OracleChanged(address(next));
     }
 
     function setMaxRebalanceLoss(uint16 bps, uint256 deadline, bytes calldata signature) external {
