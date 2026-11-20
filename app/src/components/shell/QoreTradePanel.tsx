@@ -214,7 +214,7 @@ export function QoreTradePanel({ symbol, name }: { symbol: string; name: string 
       fine={`Includes the ${(SKIM_FEE_BPS / 100).toFixed(2)}% fee`}
       warn={
         setup === "window"
-          ? "One-time setup: open QoreX → EVM access window, and open one. QoreX does not sign EVM calls itself, so Darwin's relayer executes the trades you sign, and the chain admits them only while your window is open."
+          ? "Setup: open QoreX → EVM access window, and open one (it lasts about 7 hours; the relayer's authorization, 24). QoreX does not sign EVM calls itself, so Darwin's relayer executes the trades you sign, and the chain admits them only while your window is open."
           : setup === "grant"
             ? "Next: let Darwin's relayer execute the trades you sign, for 24 hours. QoreX shows the authorization before you approve it."
             : setup === "offline"
