@@ -19,7 +19,9 @@ export async function submitRound(oracle?: Address) {
   const known = (await publicClient.readContract({ address, abi, functionName: "feedIds" })) as number[];
   const byId = Object.fromEntries(Object.entries(FEED).map(([name, id]) => [id, name])) as Record<number, keyof typeof FEED>;
   // ascending: the oracle takes each feed at most once a round, in increasing id order
-  const ids = known.filter((id) => byId[id]).sort((a, b) => a - b);
+  const ids = known.filter((id) => byId[id] && Number.isFinite(p[byId[id]])).sort((a, b) => a - b);
+  const missing = known.filter((id) => byId[id] && !ids.includes(id)).map((id) => byId[id]);
+  if (missing.length) console.log(`oracle: partial round, no price for ${missing.join(", ")}`);
   const prices = ids.map((id) => toWad(p[byId[id]]));
   const [round, last] = await Promise.all([
     publicClient.readContract({ address, abi, functionName: "round" }) as Promise<bigint>,
