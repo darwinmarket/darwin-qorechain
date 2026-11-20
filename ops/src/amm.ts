@@ -8,7 +8,7 @@
  *   tsx src/amm.ts to-evm <denom>                          bank coin -> ERC-20 on the deployer
  */
 import { evmAccount } from "./accounts.js";
-import { treasuryClient } from "./nativeClient.js";
+import { sendFromRole, treasuryClient } from "./nativeClient.js";
 import { CONVERT_COIN_TYPE_URL } from "./erc20Msgs.js";
 import { REST } from "./net.js";
 
@@ -67,4 +67,37 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   else if (cmd === "buy") await buy(a, Number(b));
   else if (cmd === "to-evm") await toEvm(a);
   else console.error("usage: amm.ts quote <pool> <uqor> | buy <pool> <QOR> | to-evm <denom>");
+}
+
+/**
+ * Swap `amount` of `denomIn` on `poolId` from the deployer, hybrid-signed, in chunks of about 2.2%
+ * of the pool's input reserve (the module refuses a swap that moves the price more than 5%), up to
+ * 8 per transaction, each with a 2% slippage bound. Returns the output received.
+ */
+export async function swapChunked(poolId: string, denomIn: string, amount: bigint): Promise<bigint> {
+  const dep = await evmAccount("deployer");
+  let left = amount;
+  let got = 0n;
+  while (left > 0n) {
+    const p = await pool(poolId);
+    const aIn = p.token_a === denomIn;
+    let rIn = BigInt(aIn ? p.reserve_a : p.reserve_b);
+    let rOut = BigInt(aIn ? p.reserve_b : p.reserve_a);
+    const denomOut = aIn ? p.token_b : p.token_a;
+    const before = await bankBalance(dep.cosmos, denomOut);
+    const msgs = [];
+    for (let k = 0; k < 8 && left > 0n; k++) {
+      const cap = (rIn * 22n) / 1000n;
+      const x = left < cap ? left : cap;
+      const out = ((x * 9970n) / 10_000n * rOut) / (rIn + (x * 9970n) / 10_000n);
+      msgs.push({ typeUrl: "/qorechain.amm.v1.MsgSwapExactIn", value: { sender: dep.cosmos, poolId, tokenIn: { denom: denomIn, amount: x.toString() }, denomOut, minOut: ((out * 98n) / 100n).toString() } });
+      rIn += x; rOut -= out; left -= x;
+    }
+    const t = await sendFromRole("deployer", msgs, "hybrid", String(400_000 * msgs.length + 200_000));
+    await new Promise((r) => setTimeout(r, 5000));
+    const delta = (await bankBalance(dep.cosmos, denomOut)) - before;
+    got += delta;
+    console.log(`pool ${poolId}: ${msgs.length} swaps of ${denomIn.slice(0, 16)}, +${delta} ${denomOut.slice(0, 16)} (${t})`);
+  }
+  return got;
 }
