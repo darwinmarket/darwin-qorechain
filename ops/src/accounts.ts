@@ -27,8 +27,9 @@ export function mnemonic(): string {
   return readFileSync(file, "utf8").trim();
 }
 
-export type Role = "deployer" | "reporter" | "curator";
-export const ROLE_INDEX: Record<Role, number> = { deployer: 0, reporter: 1, curator: 2 };
+export type Role = "deployer" | "reporter" | "curator" | "relayer";
+// relayer: executes QoreX users' signed trade intents through their authz grants (relayer.ts)
+export const ROLE_INDEX: Record<Role, number> = { deployer: 0, reporter: 1, curator: 2, relayer: 3 };
 
 export async function evmAccount(role: Role): Promise<UnifiedAccount> {
   return deriveUnifiedAccount(mnemonic(), ROLE_INDEX[role]);
