@@ -15,17 +15,27 @@ fest.
 |---|---|---|---|
 | Darwin Blue Chip | BLUEdw (`BLUEDW`) | 70% BTC, 30% ETH | `0xc35a0eb298693a011d26132eb7f4b8aca8112f92` |
 | Darwin Balanced | BALdw (`BALDW`) | 35% BTC, 35% ETH, 30% USD | `0xfe862c4947626bc9c86bcee12d82153f8286df9a` |
-| Darwin Qore Ecosystem | QOREdw (`QOREDW`) | 60% QOR, 25% ETH, 15% QWAKK | `0x8061be1bcdd9c230c8376c381e14878890dc8dae` |
-| Darwin Degen | DEGENdw (`DEGENDW`) | 70% QWAKK, 30% QOR | `0x0b11e4be57144c2bc3d430aef61c9e93b342c779` |
+| Darwin Qore Ecosystem | QOREdw (`QOREDW`) | 60% QOR, 25% ETH, 15% QWAKK | `0x86514e17c50265c9ea90d2001bd879b6b724e575` |
+| Darwin Degen | DEGENdw (`DEGENDW`) | 70% QWAKK, 30% QOR | `0x112d76f9bd9e421228f4b326d13e2ea160e92b74` |
 
 These are the **v2 stack** (2026-11-20), deployed on the contracts fixed by our review (see
 [Known limitations](#known-limitations)); every seed was minted to `0x…dEaD`. Earlier versions are
 listed in `deployments/diana.json` (`stackHistory`, `basketHistory`, `routerHistory`): their
 minting is paused and their holders can always redeem in kind.
 
-BTC, ETH and USD are held as the Fest test tokens fBTC, fETH and fUSD; QOR as WQOR; QOR is priced at
-its market price (CoinGecko and MEXC); QWAKK is QoreChain's community memecoin, bought on the
-native AMM and priced from its only market, the QWAKK/QOR pool, times QOR's price.
+BTC, ETH and USD are held as the Fest test tokens fBTC, fETH and fUSD. QOR and QWAKK are held as
+**fQOR and fQWAKK**, Darwin's stand-ins in the same spirit (`0x3042be6c…16d`, `0xc558289c…aca`),
+minted only by the admin's ML-DSA-87 signature and priced by the real feeds: QOR at its market
+price (CoinGecko and MEXC), QWAKK, QoreChain's community memecoin, from its only market, the
+QWAKK/QOR pool of the native AMM, times QOR's price.
+
+**We first held the real ones.** The reserve bought ~19,750 QOR and 5M QWAKK on QoreChain's native
+AMM (hybrid-signed swaps, under the AMM's 5% price-impact cap): that capped Qore Ecosystem at ~$66
+a buy and Degen at ~$36, because a faucet claim is worth $0.33 at QOR's market price and QWAKK's
+whole market about $330. So the QOR baskets moved to the stand-ins, the real QOR and QWAKK went back
+to the public pools, and the native wiring stays (the AMM tools in `ops/`, QWAKK's price from pool
+6). Capacity today: Blue Chip ~$22,000, Balanced ~$32,000, Qore Ecosystem ~$45,000 (bounded by its
+25% fETH, a faucet token), Degen ~$385,000. Details: [docs/PRICING.md](docs/PRICING.md#capacity-and-why-the-qor-baskets-hold-fqor-and-fqwakk).
 
 ## Why it matters
 
@@ -250,7 +260,7 @@ tested, and live on the v2 stack the same day:
 | The seed shares sat on the deployer, whose secp256k1 key relays through the keeper's EVM window: a stolen key could sell them | **fixed and live (v2)**: every seed minted to `0x…dEaD`, checked by the on-chain suite |
 | QWAKK's only market is a thin pool, whose spot could be pumped | **fixed**: the oracle uses the pool's 30-minute median; QOR needs two of three quotes, else QOR and QWAKK sit out the round |
 | The reserve trades at the oracle price with a 0.30% spread, which arbitrage can farm around updates | accepted on testnet; a staleness-dependent spread is the mainnet answer |
-| The QOR baskets are bounded by the real QOR and QWAKK on the testnet (QWAKK's whole market is about $330) | the reserve bought ~19,750 QOR and 5M QWAKK on the native AMM: Qore Ecosystem fills ~$66, Degen ~$36-40 ([PRICING](docs/PRICING.md#capacity)) |
+| The QOR baskets were bounded by the real QOR and QWAKK on the testnet (QWAKK's whole market is about $330): ~$66 and ~$36 a buy | **moved to fQOR/fQWAKK** (same feeds, ML-DSA-87 minting); the real assets went back to the public pools ([PRICING](docs/PRICING.md#capacity-and-why-the-qor-baskets-hold-fqor-and-fqwakk)) |
 
 ## Credits
 
