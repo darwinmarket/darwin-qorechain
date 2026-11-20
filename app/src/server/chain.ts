@@ -41,9 +41,10 @@ export async function sendNative(role: Role, messages: EncodeObject[], gas: numb
       return await sendNativeOnce(role, messages, gas, memo, forced);
     } catch (e) {
       const m = /account sequence mismatch, expected (\d+)/.exec(String((e as Error)?.message ?? e));
-      if (!m || attempt >= 4) throw e;
+      if (!m || attempt >= 6) throw e;
       forced = BigInt(m[1]);
-      await new Promise((r) => setTimeout(r, 400 + Math.random() * 800));
+      // at least a block (~1.4 s): the REST sequence lags one, and the racing call must land
+      await new Promise((r) => setTimeout(r, 1500 + Math.random() * 2000));
     }
   }
 }
