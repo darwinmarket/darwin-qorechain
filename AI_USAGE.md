@@ -1,41 +1,67 @@
 # How AI was used
 
-Darwin on QoreChain was built by the Darwin team with an AI coding assistant (Claude Code) in the
-terminal, during the fest.
+Darwin on QoreChain was built during the fest by the Darwin team with an AI coding agent (Claude
+Code) working in the terminal: reading the chain, writing the code, running it against
+qorechain-diana, and committing step by step. This file says what the agent did, what the humans
+did, and, as honestly, where the agent was wrong and how it was caught.
 
-## Workflow
+## The loop
 
-1. **Research.** The assistant read the QoreChain docs and the official repos (SDK, QoreX
-   integrations, Build Before Q-Day workshops) and scanned the testnet: every token, AMM pool and
-   active contract, to find what a basket could hold and price.
-2. **Design.** The team chose the track (Post-Quantum dApp) and the baskets (BLUEdw, BALdw,
-   QOREdw); the assistant proposed the contract architecture: an ML-DSA-87 signed oracle, curator
-   signed rebalances, admin powers behind `PqcAdmin`, in-kind redemption that never stops.
-3. **Build.** The assistant wrote the contracts, the Foundry tests, the TypeScript ops tooling and
-   the app's QoreChain data and wallet layers, committing step by step.
-4. **Verify on chain.** Every path was run on qorechain-diana before it was called done: key
-   registration, scoped windows, deployment, oracle rounds, rebalances, router trades, and a
-   browser end-to-end test with real hybrid signing.
+Every change went through the same loop, and "done" meant the last step passed:
 
-## What was generated
+1. **Read the chain first.** Before designing anything the agent scanned the testnet: every token,
+   AMM pool and active contract; the precompiles' exact ABI (`pqcVerify` takes a 2,592-byte key and
+   a 4,627-byte signature); which lanes QoreX can sign (native yes, EVM not yet).
+2. **Write it**, with tests next to it (Foundry for the contracts, `node --test` for the ops logic).
+3. **Run it on the testnet** with real keys and real ML-DSA-87 signatures, not mocks: deploy,
+   sign, relay, read back.
+4. **Check it from the outside**: the on-chain suite (`ops/src/e2e.ts`), the browser suite with the
+   QoreX test double (`app/e2e/suite.mjs`), screenshots of the real UI, and a second opinion from
+   QoreChain's own `qore` CLI.
+5. **Commit small**, with a message that says why.
 
-- `contracts/`: all contracts and tests.
-- `ops/`: all scripts.
-- `app/src/lib/qore`, `app/src/components/app`, the on-chain store and the pages.
+## What the agent generated
+
+- `contracts/`: all seven contracts and the 83 unit, fuzz and invariant tests.
+- `ops/`: key derivation and registration, hybrid native signing, EVM windows, deployment and
+  migrations, the oracle, the curator's planner, the keeper, the AMM and refill tools, the on-chain
+  E2E suite and the multi-user battery.
+- `app/`: the QoreChain data layer (`lib/qore`, `lib/darwin`), the trade panel, portfolio, activity,
+  the Security tab, the transaction page and its in-browser ML-DSA-87 verification, the API routes
+  (REST proxy, price history replayed from the chain), and the browser suite.
+- `docs/`: the audit map, testing, pricing, the CBOM reading guide, the submission text.
 
 ## What the humans did
 
-- Darwin itself: the product, the mainnet protocol and the front whose visual shell this app forks.
-- The decisions: track, baskets and their weights, naming (BLUEDW / BLUEdw), what to ship.
-- Testnet funds and keys, the QCAI audit runs on the dashboard, the demo video, the submission.
+- **Darwin itself**: the product, the mainnet protocol, and the front this app forks.
+- **Every product decision**, often overruling the agent:
+  - users only ever hold fUSD and the basket token, and exit by selling it; the agent's in-kind
+    withdrawal screen was dropped (the contract keeps it as an invisible backstop);
+  - the reserve is run by the team, not by an auto-refill bot;
+  - rebalances happen **only on Mondays at 12:00 UTC**: the team removed the agent's
+    "emergency rebalance on 5% drift" guard;
+  - the four baskets and their weights (Blue Chip 70/30, Degen 70% QWAKK), the naming (BLUEDW on
+    chain, BLUEdw on screen), the four tabs, and that the front must be the mainnet front, exactly;
+  - "is that really QWAKK's price? check it thoroughly", which led to the repricing below.
+- **The testnet funds and keys** (faucet claims need the dashboard sign-in), the QCAI audit runs,
+  the video and the submission.
 
-## Findings the assistant made along the way
+## Where the agent was wrong, and how it was caught
 
-- QoreX cannot sign EVM transactions yet, but signs native ones hybrid: Darwin sends trades as
-  `MsgCrossVMCall` from the native lane, which works on the testnet and puts the user's
-  ML-DSA-87 signature on every trade.
-- The EVM lane needs an `eth_secp256k1` (coin 60) key: the deployer, reporter and curator are
-  coin-60 accounts derived from the same mnemonic as the coin-118 treasury.
-- EVM logs of cross-VM calls are not indexed by `eth_getLogs`; the app reads those trades from the
-  native tx search (`crossvm_request.target_contract`) and decodes their calldata.
-- The public REST endpoint sends no CORS headers; the app reads it through a narrow proxy.
+| What went wrong | Caught by | Fix |
+|---|---|---|
+| A small buy of an 8-decimal leg (fBTC) reverted: the router's linear quote undershot after rounding | the multi-user battery | router v2 checks the exact cost of the quoted shares; regression fuzz test `RouterRoundingTest` |
+| QOR priced from two testnet AMM pools that disagree, ~10x above its market | the team asking whether QWAKK's price was real; the agent compared CoinGecko, MEXC and the pools | QOR at market (CoinGecko + MEXC), breaker widened and restored with ML-DSA-87 admin signatures, QOR baskets reseeded at index 100 |
+| QWAKK's chart history drawn back to August from today's ratio: two baskets looked identical | the team ("is it normal they're so correlated?"); the agent then read all 58 swaps of the pool | history replayed swap by swap from the pool's opening on Nov 18; a test asserts nothing is drawn before |
+| The curator E2E check reset Blue Chip to 50/50 after it had moved to 70/30 | reading the E2E output line by line | the check restores the basket's own targets in a `finally`; a new check pins every basket to its published weights |
+| A failed guardian check left a basket paused | the next suite run | the check always unpauses; every suite first verifies no basket is paused |
+| Keeper demo trades sold the seed shares | on-chain balances | demo trades moved to the treasury, then disabled |
+| Hero copy kept Miden's "held privately in your wallet", untrue on QoreChain | reviewing the cover image before submission | copy now states what is true here |
+
+## Tools and context
+
+- Claude Code in the terminal, with shell, git, Foundry, Node and Playwright.
+- The QoreChain docs, the fest's kit READMEs (installed and read from npm), and the testnet itself.
+- `.mcp.json` registers QoreChain's MCP server, so an agent working on this repo reads blocks,
+  transactions, PQ status and contract state directly.
+- Commits are authored by the team; the agent proposes, the team decides what ships.
