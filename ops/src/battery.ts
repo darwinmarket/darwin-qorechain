@@ -24,6 +24,9 @@ import { CONVERT_COIN_TYPE_URL, CONVERT_ERC20_TYPE_URL, ERC20_REGISTRY_TYPES } f
 import { sendFromRole } from "./nativeClient.js";
 import { CHAIN_ID, publicClient, REST, RPC } from "./net.js";
 
+/** `battery.ts exit [users] [firstIndex]`: the users of an earlier run sell their QOR-basket shares. */
+const EXIT_ONLY = process.argv[2] === "exit";
+if (EXIT_ONLY) process.argv.splice(2, 1, process.argv[3] ?? "8", "0", process.argv[4] ?? "20");
 const USERS = Number(process.argv[2] ?? 8);
 const ROUNDS = Number(process.argv[3] ?? 3);
 const FIRST = Number(process.argv[4] ?? 20);
@@ -227,6 +230,24 @@ async function redeem(u: User, key: string) {
   if (!expected.some((x) => x > 0n)) failures.push(`user ${u.i} redeem ${key}: nothing paid`);
 }
 
+/**
+ * Exit, as Darwin's users do: sell every share of the QOR baskets back to the router for fUSD. The
+ * reserve's QOR and QWAKK are scarce at QOR's market price, so a battery must not keep them.
+ */
+async function exitQorBaskets(u: User) {
+  for (const key of ["QOREDW", "DEGENDW"]) {
+    const basket = d.baskets[key].address as Address;
+    const held = await bal(basket, u.twin);
+    if (held === 0n) continue;
+    const msgs = [];
+    const allowance = (await publicClient.readContract({ address: basket, abi: erc20, functionName: "allowance", args: [u.twin, d.router] })) as bigint;
+    if (allowance < held) msgs.push(crossVmCallMsg(u.address, basket, encodeFunctionData({ abi: erc20, functionName: "approve", args: [d.router, maxUint256] })));
+    const [usdOut] = (await publicClient.readContract({ address: d.router, abi: routerAbi, functionName: "quoteSell", args: [basket, held] })) as [bigint, bigint];
+    msgs.push(crossVmCallMsg(u.address, d.router, encodeFunctionData({ abi: routerAbi, functionName: "sell", args: [basket, held, (usdOut * 995n) / 1000n, u.twin] })));
+    await send(u, msgs, `exit ${key}: sell all ${(Number(held) / 1e18).toFixed(4)} shares`, 1_600_000 + 400_000 * (msgs.length - 1));
+  }
+}
+
 async function runUser(u: User) {
   try {
     await register(u);
@@ -270,10 +291,25 @@ async function invariants(users: User[]) {
 const t0 = Date.now();
 const users = await Promise.all(Array.from({ length: USERS }, (_, i) => makeUser(i)));
 users.forEach((u) => log(`user ${u.i}: ${u.address} (EVM ${u.twin})`));
-await fund(users);
-log("users trade in parallel");
-await Promise.all(users.map(runUser));
-const state = await invariants(users);
+let state: string[];
+if (EXIT_ONLY) {
+  const dep0 = await evmAccount("deployer");
+  log(`exit: 0.6 QOR of gas to each of ${users.length} users, then they sell their QOR-basket shares`);
+  await sendFromRole("deployer", users.map((u) => ({
+    typeUrl: "/cosmos.bank.v1beta1.MsgSend",
+    value: { fromAddress: dep0.cosmos, toAddress: u.address, amount: [{ denom: "uqor", amount: "600000" }] },
+  })), "hybrid", "1500000");
+  await sleep(5000);
+  await Promise.all(users.map(exitQorBaskets));
+  state = await invariants(users);
+} else {
+  await fund(users);
+  log("users trade in parallel");
+  await Promise.all(users.map(runUser));
+  state = await invariants(users);
+  log("users exit the QOR baskets (the reserve's QOR and QWAKK are scarce)");
+  await Promise.all(users.map(exitQorBaskets));
+}
 
 // Give the users' leftover gas back to the deployer, so batteries do not drain it.
 const dep = await evmAccount("deployer");
