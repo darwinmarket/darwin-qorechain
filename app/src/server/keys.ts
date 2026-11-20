@@ -9,15 +9,20 @@
  *   deployer 0  admin, relays oracle rounds and rebalances (scoped EVM window)
  *   reporter 1  signs price rounds, never sends a transaction
  *   curator  2  signs rebalances, never sends a transaction
- *   relayer  3  executes QoreX users' signed intents through their authz grants
+ *   relayer  3  submits QoreX users' signed messages to their DarwinAccounts (and executes the
+ *               original signed intents through authz grants)
+ *   relayer2..4 (4, 5, 6) the rest of the relayer pool: users are spread over 3..6 by address,
+ *               so parallel serverless calls do not collide on one account's sequence
  */
 import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { deriveUnifiedAccount, type UnifiedAccount } from "@qorechain/sdk";
 
-export type Role = "deployer" | "reporter" | "curator" | "relayer";
-const ROLE_INDEX: Record<Role, number> = { deployer: 0, reporter: 1, curator: 2, relayer: 3 };
+export type Role = "deployer" | "reporter" | "curator" | "relayer" | "relayer2" | "relayer3" | "relayer4";
+const ROLE_INDEX: Record<Role, number> = { deployer: 0, reporter: 1, curator: 2, relayer: 3, relayer2: 4, relayer3: 5, relayer4: 6 };
+/** The relayer pool of DarwinAccounts (server/accounts.ts). */
+export const RELAYERS: Role[] = ["relayer", "relayer2", "relayer3", "relayer4"];
 
 function mnemonic(): string {
   const env = process.env.QORE_MNEMONIC?.trim();

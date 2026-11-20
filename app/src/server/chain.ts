@@ -33,8 +33,25 @@ async function sequence(address: string) {
 
 /** Sign (hybrid) and broadcast native messages from a role account; returns the tx hash. */
 export async function sendNative(role: Role, messages: EncodeObject[], gas: number, memo = ""): Promise<string> {
+  // Parallel serverless calls can sign with the same account at the same moment, and the REST
+  // sequence lags a block: on "account sequence mismatch, expected N", sign again with N.
+  let forced: bigint | undefined;
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await sendNativeOnce(role, messages, gas, memo, forced);
+    } catch (e) {
+      const m = /account sequence mismatch, expected (\d+)/.exec(String((e as Error)?.message ?? e));
+      if (!m || attempt >= 4) throw e;
+      forced = BigInt(m[1]);
+      await new Promise((r) => setTimeout(r, 400 + Math.random() * 800));
+    }
+  }
+}
+
+async function sendNativeOnce(role: Role, messages: EncodeObject[], gas: number, memo: string, forced?: bigint): Promise<string> {
   const acc = await account(role);
-  const { accountNumber, sequence: seq } = await sequence(acc.cosmos);
+  const { accountNumber, sequence: fetched } = await sequence(acc.cosmos);
+  const seq = forced != null && forced > fetched ? forced : fetched;
   // messages encoded by hand (lib/qore/proto.ts: { typeUrl, value: bytes }) pass through as they are
   const registry = qorechainRegistry();
   for (const m of messages)

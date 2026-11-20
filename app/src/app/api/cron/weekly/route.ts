@@ -3,7 +3,7 @@ import { weeklyRebalance } from "@/server/keeper";
 
 /** Mondays 12:05 UTC (Vercel cron): curator-signed rebalances of the baskets that drifted. */
 export const runtime = "nodejs";
-export const maxDuration = 60;
+export const maxDuration = 300;
 
 export async function GET(req: NextRequest) {
   if (process.env.CRON_SECRET && req.headers.get("authorization") !== `Bearer ${process.env.CRON_SECRET}`)

@@ -7,7 +7,7 @@ import { deposit, execute, info } from "@/server/accounts";
  * account, and the execution of a trade intent the user signed in QoreX. Keys stay server-side.
  */
 export const runtime = "nodejs";
-export const maxDuration = 60;
+export const maxDuration = 300;
 
 const fail = (e: unknown, code = 400) => NextResponse.json({ error: String((e as Error)?.message ?? e).slice(0, 400) }, { status: code });
 

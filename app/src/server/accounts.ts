@@ -1,8 +1,9 @@
 /**
- * Server-only: Darwin's relayer for DarwinAccounts (contracts/src/account), the windowless path.
+ * Server-only: Darwin's relayers for DarwinAccounts (contracts/src/account), the windowless path.
  *
- *   info(owner)        the user's account address, whether it exists, its nonce and balances;
- *   deposit(owner, tx) the user sent fUSD (bank form) to the relayer with a MsgSend QoreX signed;
+ *   info(owner)        the user's account address, whether it exists, its nonce and balances, and
+ *                      the relayer that serves this user;
+ *   deposit(owner, tx) the user sent fUSD (bank form) to its relayer with a MsgSend QoreX signed;
  *                      the relayer converts exactly that amount to its ERC-20 form, straight onto
  *                      the user's account (MsgConvertCoin with the account as receiver);
  *   execute(req)       a message the user signed in QoreX: both halves checked here against the
@@ -11,22 +12,32 @@
  *                      (the account's fUSD handed to the relayer) is returned to the user's QoreX
  *                      wallet in its bank form (MsgConvertERC20 with the user as receiver).
  *
+ * A pool of relayers: serverless calls run in parallel instances, and two instances signing with one
+ * account collide on its sequence (found by the multi-user battery). Each user is served by one
+ * relayer of the pool, fixed by its address, so users spread over the pool; a collision that still
+ * happens is retried with the sequence the chain expects (server/chain.ts).
+ *
  * Single use: the account's nonce for trades; for deposits and withdrawals, the relayer's own memos
  * (`darwin deposit <tx>`, `darwin withdraw <tx>`), read back from the chain, so it survives restarts.
- * The relayer's EVM window is scoped to the factory, the only contract it calls (the conversions
- * need no target of their own, but 2M gas: below it the chain reports "failed to retrieve balance").
+ * settleDeposits() and settleWithdrawals() finish any deposit or withdrawal a cut call left
+ * halfway. Each relayer's EVM window is scoped to the factory, the only contract it calls (the
+ * conversions need no target of their own, but 2M gas: below it the chain reports "failed to
+ * retrieve balance").
  */
 import { fetchEvmWindow, verifyMessageWithChain } from "@qorechain/qoresign/network";
-import { parseAddress, type MessageSignature } from "@qorechain/qoresign";
+import { addressFromBytes, parseAddress, type MessageSignature } from "@qorechain/qoresign";
 import { openEvmWindowMsg } from "@qorechain/sdk";
 import { evmWindowCost } from "@qorechain/evm";
-import { createWalletClient, decodeFunctionData, getAddress, http, parseTransaction, type Address, type Hex } from "viem";
+import {
+  BaseError, createWalletClient, decodeErrorResult, decodeFunctionData, getAddress, hexToBytes, http, keccak256, parseAbi, parseTransaction,
+  type Address, type Hex,
+} from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { accountAbi, accountErc20Abi, accountRouterAbi, factoryAbi, FACTORY, textFor, type Call } from "@/lib/qore/account";
 import { erc20Abi } from "@/lib/qore/abis";
 import { diana, EVM_RPC, ROUTER, TOKEN_INFO, TOKENS } from "@/lib/qore/chain";
-import { convertCoin, convertErc20 } from "@/lib/qore/proto";
-import { account } from "./keys";
+import { bankSend, convertCoin, convertErc20 } from "@/lib/qore/proto";
+import { account, RELAYERS, type Role } from "./keys";
 import { CHAIN_ID, client, D, json, REST, sendNative } from "./chain";
 import { freshRound } from "./keeper";
 
@@ -34,8 +45,73 @@ const ADDR = /^qor1[02-9ac-hj-np-z]{38}$/;
 const FUSD_DENOM = TOKEN_INFO.fUSD.denom!;
 const BASKETS = Object.entries(D.baskets as Record<string, { address: string }>).map(([k, b]) => [k, b.address.toLowerCase()] as const);
 const ALLOWED = new Set([ROUTER, TOKENS.fUSD, ...BASKETS.map(([, a]) => a)].map((a) => a.toLowerCase()));
+/** Memo of the app's deposits: settleDeposits() credits only these, never another transfer. */
+export const DEPOSIT_MEMO = "Darwin: deposit";
+/**
+ * Deposits credited from this time on carry a 1 uqor marker to the depositor, which makes the credit
+ * findable by an indexed search (relayer -> depositor). Older deposits are reconciled by
+ * ops/src/reconcile-deposits.ts, never by settleDeposits().
+ */
+export const MARKED_SINCE = Date.parse("2026-11-21T00:30:00Z");
+
+const ERRORS = parseAbi([
+  "error CallFailed(uint256 index, bytes reason)",
+  "error Slippage(uint256 amount, uint256 limit)",
+  "error TooSmall()",
+  "error ZeroAmount()",
+  "error ZeroShares()",
+  "error MintIsPaused()",
+  "error InsufficientInventory(address token, uint256 needed, uint256 available)",
+  "error PriceStale(uint16 feedId, uint64 updatedAt)",
+  "error NoFeed(address token)",
+  "error NotListed(address token)",
+  "error TargetNotAllowed(address target)",
+  "error Expired(uint256 deadline)",
+  "error NoCalls()",
+  "error BadPqcSignature(address account)",
+  "error PqcKeyNotRegistered(address account)",
+  "error PqcKeyNotProven(address account)",
+  "error NotMlDsa87(address account, uint8 algorithmId)",
+  "error OwnerNotQuantumSafe(address owner)",
+  "error ERC20InsufficientBalance(address sender, uint256 balance, uint256 needed)",
+  "error ERC20InsufficientAllowance(address spender, uint256 allowance, uint256 needed)",
+  "error SafeERC20FailedOperation(address token)",
+]);
+
+/** A revert as words: CallFailed is unwrapped to the call that failed and its own reason. */
+function revertReason(e: unknown): string | null {
+  const raw = (e instanceof BaseError ? (e.walk((x: any) => typeof x?.data === "string") as any)?.data : undefined) ?? (e as any)?.data;
+  if (typeof raw !== "string" || !raw.startsWith("0x")) return null;
+  const name = (data: Hex): string => {
+    try {
+      const r = decodeErrorResult({ abi: ERRORS, data });
+      if (r.errorName === "CallFailed") return `call ${r.args[0]} failed: ${name(r.args[1] as Hex)}`;
+      return `${r.errorName}(${(r.args ?? []).map(String).join(", ")})`;
+    } catch {
+      return data === "0x" ? "reverted without a reason" : `revert ${data.slice(0, 10)}`;
+    }
+  };
+  return name(raw as Hex);
+}
+const humane = (reason: string) =>
+  /InsufficientInventory/.test(reason)
+    ? `the vault cannot fill this right now (${reason})`
+    : /ERC20InsufficientBalance/.test(reason)
+      ? `not enough balance on your Darwin account (${reason})`
+      : /Slippage/.test(reason)
+        ? `the price moved past your limit (${reason})`
+        : /PriceStale/.test(reason)
+          ? `the oracle price is stale; try again in a minute (${reason})`
+          : reason;
 
 const twinOf = (qor1: string) => parseAddress(qor1).hex as Address;
+
+/** The relayer of the pool that serves `owner`: fixed by its address, so a user's calls stay in order. */
+export function relayerFor(owner: string): Role {
+  const h = keccak256(hexToBytes(twinOf(owner)));
+  return RELAYERS[parseInt(h.slice(2, 6), 16) % RELAYERS.length];
+}
+const pool = () => Promise.all(RELAYERS.map(async (role) => ({ role, ...(await account(role)) })));
 
 export async function accountOf(owner: string): Promise<Address> {
   return (await client.readContract({ address: FACTORY, abi: factoryAbi, functionName: "accountOf", args: [twinOf(owner)] })) as Address;
@@ -50,7 +126,7 @@ async function nonceOf(acc: Address): Promise<bigint> {
 export async function info(owner: string) {
   if (!ADDR.test(owner)) throw new Error("bad account");
   const acc = await accountOf(owner);
-  const rel = await account("relayer");
+  const rel = await account(relayerFor(owner));
   const [code, nonce, fusd, ...shares] = await Promise.all([
     client.getCode({ address: acc }),
     nonceOf(acc),
@@ -74,83 +150,157 @@ export async function info(owner: string) {
 }
 
 // ---- single use of deposits and withdrawals, from the relayer's own memos --------------------
+/**
+ * Has `role` already sent the transaction tagged `tag` to `owner`? Searched by an indexed event
+ * (the owner as a transfer recipient), every page, keeping the relayer's own: a credit or a return always
+ * transfers something to the owner (the 1 uqor marker, or the returned fUSD). Reading only the
+ * relayer's latest transactions missed older credits under load and credited them twice (found
+ * by the multi-user battery).
+ */
 const done = new Set<string>();
-async function relayerMemo(tag: string): Promise<boolean> {
+async function relayerMemo(role: Role, tag: string, owner: string): Promise<boolean> {
   if (done.has(tag)) return true;
-  const rel = await account("relayer");
-  const q = encodeURIComponent(`message.sender='${rel.cosmos}'`);
-  const r = await json(`${REST}/cosmos/tx/v1beta1/txs?query=${q}&order_by=ORDER_BY_DESC&pagination.limit=100`).catch(() => ({ tx_responses: [] }));
-  return (r.tx_responses ?? []).some((t: any) => t.code === 0 && String(t.tx?.body?.memo ?? "") === tag);
+  const rel = await account(role);
+  // this node's search returns nothing for AND queries: search by recipient, filter the sender here
+  const query = `transfer.recipient='${owner}'`;
+  for (let page = 1; page <= 20; page++) {
+    const qs = new URLSearchParams({ query, order_by: "ORDER_BY_DESC", "pagination.limit": "100", page: String(page) });
+    const r = await json(`${REST}/cosmos/tx/v1beta1/txs?${qs}`); // a failed search must not read as "not done"
+    const txs = (r.tx_responses ?? []) as any[];
+    const fromRelayer = (t: any) => t.events?.some((e: any) => e.type === "tx" && e.attributes.some((x: any) => x.key === "fee_payer" && x.value === rel.cosmos));
+    if (txs.some((t) => t.code === 0 && String(t.tx?.body?.memo ?? "") === tag && fromRelayer(t))) {
+      done.add(tag);
+      return true;
+    }
+    if (txs.length < 100) return false;
+  }
+  throw new Error("too many transactions to search");
 }
 
-let queue: Promise<unknown> = Promise.resolve();
-const serial = <T>(fn: () => Promise<T>) => (queue = queue.then(fn, fn)) as Promise<T>;
+/** One queue per relayer in this instance: its transactions go out in order. */
+const queues = new Map<Role, Promise<unknown>>();
+function serial<T>(role: Role, fn: () => Promise<T>): Promise<T> {
+  const next = (queues.get(role) ?? Promise.resolve()).then(fn, fn);
+  queues.set(role, next.catch(() => undefined));
+  return next as Promise<T>;
+}
 
-/** The user's MsgSend of fUSD to the relayer becomes the same amount of ERC-20 fUSD on the user's account. */
-export async function deposit(owner: string, txHash: string) {
-  if (!ADDR.test(owner)) throw new Error("bad account");
-  if (!/^[0-9A-Fa-f]{64}$/.test(txHash)) throw new Error("bad tx hash");
-  const hash = txHash.toUpperCase();
-  const rel = await account("relayer");
-  let tx: any = null;
+/** The fUSD a deposit transaction sent to one of Darwin's relayers, and which one. */
+async function depositOf(hash: string, txJson?: any) {
+  let tx: any = txJson ?? null;
   for (let i = 0; i < 10 && !tx; i++) {
     tx = await json(`${REST}/cosmos/tx/v1beta1/txs/${hash}`).catch(() => null);
     if (!tx) await new Promise((r) => setTimeout(r, 1500));
   }
   if (!tx?.tx_response) throw new Error("deposit transaction not found");
   if (tx.tx_response.code !== 0) throw new Error("the deposit transaction failed on chain");
-  let amount = 0n;
+  const relayers = await pool();
+  const out: { from: string; role: Role; amount: bigint }[] = [];
   for (const m of tx.tx.body.messages as any[]) {
-    if (m["@type"] !== "/cosmos.bank.v1beta1.MsgSend" || m.from_address !== owner || m.to_address !== rel.cosmos) continue;
-    for (const c of m.amount ?? []) if (c.denom === FUSD_DENOM) amount += BigInt(c.amount);
+    if (m["@type"] !== "/cosmos.bank.v1beta1.MsgSend") continue;
+    const rel = relayers.find((r) => r.cosmos === m.to_address);
+    if (!rel) continue;
+    const amount = (m.amount ?? []).filter((c: any) => c.denom === FUSD_DENOM).reduce((s: bigint, c: any) => s + BigInt(c.amount), 0n);
+    if (amount > 0n) out.push({ from: m.from_address, role: rel.role, amount });
   }
-  if (amount === 0n) throw new Error("no fUSD sent from this account to Darwin's relayer in that transaction");
+  return { sends: out, memo: String(tx.tx.body.memo ?? "") };
+}
+
+async function credit(owner: string, role: Role, amount: bigint, hash: string) {
   const acc = await accountOf(owner);
   const tag = `darwin deposit ${hash}`;
-  return serial(async () => {
-    if (await relayerMemo(tag)) return { account: acc, amount: String(amount), already: true };
-    await ensureRelayerWindow();
-    const out = await sendNative("relayer", [convertCoin(rel.cosmos, acc, FUSD_DENOM, amount) as any], 2_000_000, tag);
+  return serial(role, async () => {
+    if (await relayerMemo(role, tag, owner)) return { account: acc, amount: String(amount), already: true as const };
+    const rel = await account(role);
+    // the 1 uqor marker to the depositor makes this credit findable by relayerMemo()
+    const out = await sendNative(role, [convertCoin(rel.cosmos, acc, FUSD_DENOM, amount) as any, bankSend(rel.cosmos, owner, "uqor", 1n) as any], 2_000_000, tag);
     done.add(tag);
     return { account: acc, amount: String(amount), txHash: out };
   });
 }
 
-// ---- the relayer's EVM side ------------------------------------------------------------------
-async function ensureRelayerWindow() {
-  const rel = await account("relayer");
+/** The user's MsgSend of fUSD to its relayer becomes the same amount of ERC-20 fUSD on its account. */
+export async function deposit(owner: string, txHash: string) {
+  if (!ADDR.test(owner)) throw new Error("bad account");
+  if (!/^[0-9A-Fa-f]{64}$/.test(txHash)) throw new Error("bad tx hash");
+  const hash = txHash.toUpperCase();
+  const { sends } = await depositOf(hash);
+  const mine = sends.filter((s) => s.from === owner);
+  if (!mine.length) throw new Error("no fUSD sent from this account to Darwin's relayers in that transaction");
+  const role = mine[0].role;
+  const amount = mine.filter((s) => s.role === role).reduce((a, s) => a + s.amount, 0n);
+  return credit(owner, role, amount, hash);
+}
+
+/**
+ * Credit deposits whose claim never reached the server, or was cut: the app's MsgSends of fUSD to
+ * each relayer in the last 48 hours (memo "Darwin: deposit…") without their `darwin deposit <tx>`
+ * memo are converted onto the sender's account now. Runs before each deposit and in the daily cron.
+ */
+export async function settleDeposits(): Promise<string[]> {
+  const out: string[] = [];
+  for (const rel of await pool()) {
+    const qs = new URLSearchParams({ query: `transfer.recipient='${rel.cosmos}'`, order_by: "ORDER_BY_DESC", "pagination.limit": "50" });
+    const r = await json(`${REST}/cosmos/tx/v1beta1/txs?${qs}`).catch(() => ({ tx_responses: [] }));
+    const txs = (r.tx_responses ?? []) as any[];
+    for (const t of txs) {
+      if (t.code !== 0 || Date.now() - Date.parse(t.timestamp) > 48 * 3600_000) continue;
+      if (Date.parse(t.timestamp) < MARKED_SINCE) continue; // before the marker: reconciled offline
+      if (!String(t.tx?.body?.memo ?? "").startsWith(DEPOSIT_MEMO)) continue;
+      const { sends } = await depositOf(t.txhash, { tx: t.tx, tx_response: t }).catch(() => ({ sends: [] as any[] }));
+      for (const s of sends.filter((x: any) => x.role === rel.role)) {
+        if (!ADDR.test(s.from)) continue;
+        try {
+          const c = await credit(s.from, rel.role, s.amount, t.txhash);
+          if (!("already" in c)) out.push(`credited ${s.amount} to ${s.from} (${c.txHash})`);
+        } catch (e) {
+          out.push(`deposit ${t.txhash} not credited: ${String((e as Error)?.message ?? e).slice(0, 120)}`);
+        }
+      }
+    }
+  }
+  return out;
+}
+
+// ---- the relayers' EVM side -------------------------------------------------------------------
+const windowOk = new Map<Role, number>();
+async function ensureRelayerWindow(role: Role) {
+  if ((windowOk.get(role) ?? 0) > Date.now()) return;
+  const rel = await account(role);
   const w: any = await fetchEvmWindow({ rest: REST, address: rel.cosmos }).catch(() => null);
   const scoped = (w?.allowedTargets ?? []).map((a: string) => a.toLowerCase());
-  const need = [FACTORY.toLowerCase()];
-  if (w?.live && Number(w.remainingBlocks) > 600 && Number(w.remainingTxs) > 20 && need.every((a) => scoped.includes(a))) return;
+  if (w?.live && Number(w.remainingBlocks) > 600 && Number(w.remainingTxs) > 20 && scoped.includes(FACTORY.toLowerCase())) {
+    windowOk.set(role, Date.now() + 120_000);
+    return;
+  }
   const maxTxs = 1_000n;
   const msg = openEvmWindowMsg({
     sender: rel.cosmos,
     blocks: 17_280n,
     maxTxs,
     maxValue: evmWindowCost({ gas: 8_000_000n, maxFeePerGas: 250_000_000_000n }) * maxTxs,
-    allowedTargets: need,
+    allowedTargets: [FACTORY.toLowerCase()],
   } as any);
-  await sendNative("relayer", [msg as any], 500_000);
+  await sendNative(role, [msg as any], 500_000);
   await new Promise((r) => setTimeout(r, 6000));
+  windowOk.set(role, Date.now() + 120_000);
 }
 
 /**
  * Finish withdrawals left halfway: a withdrawal is two transactions (the account hands fUSD to the
  * relayer, then the relayer returns it to the owner's wallet), and a serverless call can be cut
- * between them. The relayer's recent factory transactions are read back; every successful
- * withdrawal without its `darwin withdraw <hash>` memo is completed now. Runs before each
- * withdrawal and in the daily cron, so a user's fUSD never stays with the relayer. A second return
- * of the same withdrawal cannot happen silently: the relayer's twin holds only in-flight
- * withdrawals, so a duplicate conversion would fail for lack of balance.
+ * between them. The factory's recent transactions are read back; every successful withdrawal to a
+ * relayer of the pool without its `darwin withdraw <hash>` memo is completed now. Runs before each
+ * withdrawal and in the daily cron. A second return of the same withdrawal cannot happen silently:
+ * a relayer's EVM side holds only in-flight withdrawals, so a duplicate conversion would fail.
  */
 export async function settleWithdrawals(): Promise<string[]> {
-  const rel = await account("relayer");
-  const qs = new URLSearchParams({ query: `ethereum_tx.recipient='${getAddress(FACTORY)}'`, order_by: "ORDER_BY_DESC", "pagination.limit": "30" });
+  const relayers = await pool();
+  const qs = new URLSearchParams({ query: `ethereum_tx.recipient='${getAddress(FACTORY)}'`, order_by: "ORDER_BY_DESC", "pagination.limit": "50" });
   const r = await json(`${REST}/cosmos/tx/v1beta1/txs?${qs}`).catch(() => ({ tx_responses: [] }));
   const out: string[] = [];
   for (const t of r.tx_responses ?? []) {
-    if (Date.now() - Date.parse(t.timestamp) > 48 * 3600_000) continue; // the daily cron settles anything older first
+    if (Date.now() - Date.parse(t.timestamp) > 48 * 3600_000) continue;
     if (t.code !== 0 || t.events?.some((e: any) => e.type === "ethereum_tx" && e.attributes.some((a: any) => a.key === "ethereumTxFailed"))) continue;
     const raw = t.tx?.body?.messages?.[0]?.raw;
     const hash = t.events?.find((e: any) => e.type === "ethereum_tx")?.attributes?.find((a: any) => a.key === "ethereumTxHash")?.value;
@@ -161,14 +311,19 @@ export async function settleWithdrawals(): Promise<string[]> {
       const calls = exec.args[1] as readonly Call[];
       if (calls.length !== 1 || calls[0].target.toLowerCase() !== TOKENS.fUSD.toLowerCase()) continue;
       const call = decodeFunctionData({ abi: accountErc20Abi, data: calls[0].data });
-      if (call.functionName !== "transfer" || String(call.args[0]).toLowerCase() !== rel.evm.toLowerCase()) continue;
+      if (call.functionName !== "transfer") continue;
+      const rel = relayers.find((x) => x.evm.toLowerCase() === String(call.args[0]).toLowerCase());
+      if (!rel) continue;
       const tag = `darwin withdraw ${hash}`;
-      if (await relayerMemo(tag)) continue;
-      const { addressFromBytes } = await import("@qorechain/qoresign");
-      const owner = addressFromBytes(Buffer.from(String(exec.args[0]).slice(2), "hex")).bech32;
-      const back = await sendNative("relayer", [convertErc20(rel.cosmos, owner, TOKENS.fUSD, call.args[1] as bigint) as any], 2_000_000, tag);
-      done.add(tag);
-      out.push(`returned ${call.args[1]} to ${owner} (${back})`);
+      const owner = addressFromBytes(hexToBytes(exec.args[0] as Hex)).bech32;
+      if (await relayerMemo(rel.role, tag, owner)) continue;
+      const back = await serial(rel.role, async () => {
+        if (await relayerMemo(rel.role, tag, owner)) return null;
+        const b = await sendNative(rel.role, [convertErc20(rel.cosmos, owner, TOKENS.fUSD, call.args[1] as bigint) as any], 2_000_000, tag);
+        done.add(tag);
+        return b;
+      });
+      if (back) out.push(`returned ${call.args[1]} to ${owner} (${back})`);
     } catch {
       /* not a withdrawal */
     }
@@ -196,6 +351,8 @@ function classify(calls: Call[], acc: Address, relayerEvm: Address): { kind: "bu
   throw new Error("Darwin relays trades and fUSD withdrawals only");
 }
 
+const nonceRace = (e: unknown) => /nonce too low|invalid nonce|nonce.*already|sequence mismatch|incorrect account sequence|replacement transaction underpriced/i.test(String((e as Error)?.message ?? e));
+
 export async function execute(req: ExecuteRequest) {
   const { owner, calls, summary } = req ?? ({} as ExecuteRequest);
   if (!ADDR.test(owner)) throw new Error("bad account");
@@ -208,7 +365,8 @@ export async function execute(req: ExecuteRequest) {
   if (deadline <= now || deadline > now + 900n) throw new Error("the message expired, or expires more than 15 minutes ahead");
   if (!req.signature?.pq?.signature) throw new Error("the message carries no ML-DSA-87 signature");
 
-  const rel = await account("relayer");
+  const role = relayerFor(owner);
+  const rel = await account(role);
   const acc = await accountOf(owner);
   const what = classify(calls, acc, rel.evm as Address);
   const nonce = await nonceOf(acc);
@@ -216,25 +374,45 @@ export async function execute(req: ExecuteRequest) {
   // both halves, against the owner's keys on chain, before the relayer spends anything
   await verifyMessageWithChain({ rest: REST, chainId: CHAIN_ID, signer: owner, data: text, signature: req.signature, requirePq: true });
 
-  return serial(async () => {
+  // the price round and the window are shared: prepare them outside the relayer's queue
+  if (what.kind !== "withdraw") await freshRound();
+  await ensureRelayerWindow(role);
+  if (what.kind === "withdraw") await settleWithdrawals().catch(() => []);
+
+  return serial(role, async () => {
     if ((await nonceOf(acc)) !== nonce) throw new Error("this message was already executed");
-    if (what.kind === "withdraw") await settleWithdrawals().catch(() => []);
-    if (what.kind !== "withdraw") await freshRound();
-    await ensureRelayerWindow();
     const w = createWalletClient({ account: privateKeyToAccount(rel.privateKey as unknown as Hex), chain: diana, transport: http(EVM_RPC, { retryCount: 3, retryDelay: 2000 }) });
     const pqSignature = ("0x" + Buffer.from(req.signature.pq!.signature, "base64").toString("hex")) as Hex;
     const args = [twinOf(owner), calls, summary, deadline, pqSignature] as const;
-    const gas = await client.estimateContractGas({ address: FACTORY, abi: factoryAbi, functionName: "execute", args, account: w.account! } as any);
-    const hash = await w.writeContract({ address: FACTORY, abi: factoryAbi, functionName: "execute", args, account: w.account!, chain: diana, gas: (gas * 125n) / 100n } as any);
+    let gas: bigint;
+    try {
+      gas = await client.estimateContractGas({ address: FACTORY, abi: factoryAbi, functionName: "execute", args, account: w.account! } as any);
+    } catch (e) {
+      const reason = revertReason(e);
+      throw new Error(reason ? `refused before sending: ${humane(reason)}` : String((e as Error)?.message ?? e).split("\n")[0]);
+    }
+    let hash: Hex | undefined;
+    for (let attempt = 0; !hash; attempt++) {
+      try {
+        hash = await w.writeContract({ address: FACTORY, abi: factoryAbi, functionName: "execute", args, account: w.account!, chain: diana, gas: (gas * 125n) / 100n } as any);
+      } catch (e) {
+        // another instance used this relayer's sequence at the same moment: take the next one
+        if (attempt < 4 && nonceRace(e)) {
+          await new Promise((r) => setTimeout(r, 1500 + Math.random() * 1500));
+          if ((await nonceOf(acc)) !== nonce) throw new Error("this message was already executed");
+          continue;
+        }
+        throw e;
+      }
+    }
     const receipt = await client.waitForTransactionReceipt({ hash, timeout: 120_000 });
     if (receipt.status !== "success") throw new Error(`reverted on chain in ${hash}`);
     let returned: string | undefined;
     if (what.kind === "withdraw") {
       const tag = `darwin withdraw ${hash}`;
-      returned = await sendNative("relayer", [convertErc20(rel.cosmos, owner, TOKENS.fUSD, what.amount!) as any], 2_000_000, tag);
+      returned = await sendNative(role, [convertErc20(rel.cosmos, owner, TOKENS.fUSD, what.amount!) as any], 2_000_000, tag);
       done.add(tag);
     }
     return { txHash: hash, account: acc, kind: what.kind, returned, gasUsed: String(receipt.gasUsed) };
   });
 }
-
