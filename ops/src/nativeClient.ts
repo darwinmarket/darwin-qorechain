@@ -40,6 +40,7 @@ export async function sendFromRole(
   messages: EncodeObject[],
   mode: "hybrid" | "classical" = "hybrid",
   gas = "800000",
+  memo = "",
 ): Promise<string> {
   const acc = await evmAccount(role);
   const { accountNumber, sequence } = await accountSequence(acc.cosmos);
@@ -52,6 +53,7 @@ export async function sendFromRole(
       sequence,
       fee: { amount: [{ denom: "uqor", amount: String(Math.ceil(Number(gas) * 0.125)) }], gas },
       messages,
+      memo,
     } as Parameters<EthNativeSigner["signAndBroadcast"]>[1]);
     const r = res as { transactionHash: string; code?: number; rawLog?: string };
     if (r.code) throw new Error(`tx ${r.transactionHash} failed: code ${r.code} ${r.rawLog ?? ""}`);
