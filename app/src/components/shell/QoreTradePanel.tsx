@@ -2,16 +2,20 @@
 
 /**
  * The trade panel on QoreChain, drawn with the mainnet front's TradeCard: deposit fUSD, receive the
- * basket token; sell the basket token, receive fUSD. One QoreX approval per trade, signed with
- * secp256k1 and ML-DSA-87, carried to the EVM by a native cross-VM call.
+ * basket token; sell the basket token, receive fUSD.
+ *
+ * QoreX does not sign cross-VM calls, so a trade is an intent the user signs in QoreX (secp256k1 +
+ * ML-DSA-87) and Darwin's relayer executes as the user through an authz grant (lib/qore/relay.ts).
+ * Before the first trade: an EVM access window opened in QoreX, then the grant, signed here.
  */
 import { useEffect, useMemo, useState } from "react";
 import { formatUnits, parseUnits, type Address } from "viem";
 import { SKIM_FEE_BPS, basketTicker } from "@/lib/baskets";
 import { useBaskets } from "@/lib/darwin/store";
 import { txUrl } from "@/lib/qore/chain";
-import { isQorexRejection, signAndBroadcast } from "@/lib/qore/qorex";
-import { buildBuy, buildSell, quoteBuy, quoteSell } from "@/lib/qore/trade";
+import { isQorexRejection } from "@/lib/qore/qorex";
+import { authorizeRelayer, relayTrade, useRelayStatus } from "@/lib/qore/relay";
+import { quoteBuy, quoteSell } from "@/lib/qore/trade";
 import { useWallet } from "@/lib/qore/wallet";
 import { TradeCard } from "./TradeCard";
 import { TradeProgress, type TradeTone } from "./TradeProgress";
@@ -53,6 +57,19 @@ export function QoreTradePanel({ symbol, name }: { symbol: string; name: string 
   const [quote, setQuote] = useState<{ out: bigint; fee: bigint } | null>(null);
   const [progress, setProgress] = useState<{ step: number; tone: TradeTone; label: string } | null>(null);
   const debounced = useDebounced(amount);
+  const relay = useRelayStatus(account?.address);
+  // what is still missing before a trade can be relayed
+  const setup: "window" | "grant" | "offline" | null = !account
+    ? null
+    : relay.error
+      ? "offline"
+      : !relay.data
+        ? null
+        : !relay.data.window.live
+          ? "window"
+          : !relay.data.grants.crossvm || !relay.data.grants.convert
+            ? "grant"
+            : null;
 
   const fusd = balances ? balances.fusdBank + balances.fusdErc20 : 0n;
   const shares = balances?.shares[symbol] ?? 0n;
@@ -99,31 +116,43 @@ export function QoreTradePanel({ symbol, name }: { symbol: string; name: string 
         ? Number(quote.out) / 1e6
         : 0;
 
-  async function submit() {
-    if (!account || !parsed || !balances || !basket) return;
-    const steps = ["Approve in QoreX"];
-    setProgress({ step: 0, tone: "working", label: "Approve in QoreX…" });
+  async function authorize() {
+    if (!account || !relay.data) return;
+    setProgress({ step: 0, tone: "working", label: "Approve the authorization in QoreX…" });
     try {
-      const built =
-        side === "buy"
-          ? await buildBuy(account, basket.address as Address, parsed, balances.fusdErc20, balances.fusdBank)
-          : await buildSell(account, basket.address as Address, parsed);
-      const res = await signAndBroadcast(built.msgs, side === "buy" ? `Darwin: buy ${ticker}` : `Darwin: sell ${ticker}`, built.gas);
-      setProgress({ step: 0, tone: "done", label: side === "buy" ? `Bought ${ticker}` : `Sold ${ticker}` });
+      await authorizeRelayer(account.address, relay.data.relayer, 24);
+      setProgress({ step: 0, tone: "done", label: "Darwin's relayer is authorized for 24 hours" });
+      await relay.refetch();
+      setTimeout(() => setProgress(null), 2200);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      const declined = isQorexRejection(e) || /denied|declin|cancel/i.test(msg);
+      setProgress({ step: 0, tone: "error", label: declined ? "Declined in QoreX" : "Authorization failed" });
+      if (!declined) toast.push({ type: "error", title: "Authorization failed", message: msg.slice(0, 180) });
+      setTimeout(() => setProgress(null), 2500);
+    }
+  }
+
+  async function submit() {
+    if (setup === "grant") return authorize();
+    if (!account || !parsed || !basket || !quote) return;
+    setProgress({ step: 0, tone: "working", label: "Sign your trade in QoreX…" });
+    try {
+      const res = await relayTrade(
+        { account: account.address, action: side, basket: basket.address, amount: parsed, min: (quote.out * 99n) / 100n },
+        () => setProgress({ step: 1, tone: "working", label: "Darwin's relayer is executing it…" }),
+      );
+      setProgress({ step: 1, tone: "done", label: side === "buy" ? `Bought ${ticker}` : `Sold ${ticker}` });
       toast.push({
         type: "success",
         title: side === "buy" ? `Bought ${name}` : `Sold ${name}`,
-        message:
-          res.shield === "shielded"
-            ? "Signed with secp256k1 and ML-DSA-87, verified by QoreChain."
-            : `Settled on QoreChain (${res.shield}).`,
+        message: "Your intent, signed with secp256k1 and ML-DSA-87, was verified on chain keys and executed for you.",
         action: { label: "View transaction", onClick: () => window.open(txUrl(res.txHash), "_blank", "noreferrer") },
         duration: 9000,
       });
       setAmount("");
       setTimeout(refresh, 2500);
       setTimeout(() => setProgress(null), 2200);
-      void steps;
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       const declined = isQorexRejection(e) || /denied|declin|cancel/i.test(msg);
@@ -142,7 +171,13 @@ export function QoreTradePanel({ symbol, name }: { symbol: string; name: string 
           onClick: () => setAmount(formatUnits((shares * BigInt(p)) / 100n, 18)),
         }));
 
-  const ctaLabel = paused
+  const ctaLabel = setup === "grant"
+    ? "Authorize Darwin's relayer (24 h)"
+    : setup === "window"
+      ? "Open an EVM window in QoreX"
+      : setup === "offline"
+        ? "Relayer offline"
+        : paused
     ? "Buying is paused"
     : over
       ? side === "buy"
@@ -178,14 +213,27 @@ export function QoreTradePanel({ symbol, name }: { symbol: string; name: string 
       receiveUnit={side === "buy" ? `of ${name}` : "fUSD"}
       fine={`Includes the ${(SKIM_FEE_BPS / 100).toFixed(2)}% fee`}
       warn={
-        overCapacity && !over
+        setup === "window"
+          ? "One-time setup: open QoreX → EVM access window, and open one. QoreX does not sign EVM calls itself, so Darwin's relayer executes the trades you sign, and the chain admits them only while your window is open."
+          : setup === "grant"
+            ? "Next: let Darwin's relayer execute the trades you sign, for 24 hours. QoreX shows the authorization before you approve it."
+            : setup === "offline"
+              ? "Darwin's trade relayer is not reachable right now."
+              : overCapacity && !over
           ? `The vault can fill about $${fmt(basket?.capacityUsd ?? 0, (basket?.capacityUsd ?? 0) < 1 ? 4 : 2)} right now.`
           : paused
             ? "New buys are paused. Selling stays open."
             : null
       }
-      cta={{ label: ctaLabel, onClick: () => void submit(), disabled: !parsed || !quote || over || overCapacity || paused || progress != null }}
-      progress={progress ? <TradeProgress steps={["Approve in QoreX"]} step={progress.step} tone={progress.tone} label={progress.label} /> : undefined}
+      cta={{
+        label: ctaLabel,
+        onClick: () => void submit(),
+        disabled:
+          setup === "grant"
+            ? progress != null
+            : setup !== null || !parsed || !quote || over || overCapacity || paused || progress != null,
+      }}
+      progress={progress ? <TradeProgress steps={setup === "grant" ? ["Authorize in QoreX"] : ["Sign in QoreX", "Darwin executes"]} step={progress.step} tone={progress.tone} label={progress.label} /> : undefined}
     />
   );
 }
