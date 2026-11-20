@@ -6,7 +6,8 @@
  */
 import type { CSSProperties, ReactNode } from "react";
 import { EXPLORER } from "@/lib/qore/chain";
-import { useTx, type DarwinAction } from "@/lib/qore/tx";
+import { useTx, type DarwinAction, type TxView } from "@/lib/qore/tx";
+import { useBrowserCheck } from "@/lib/qore/verify";
 import { AgamaFrame } from "./AgamaFrame";
 import { AgamaNavbar } from "./AgamaNavbar";
 import { SectionHeading } from "./SectionHeading";
@@ -71,6 +72,45 @@ function Action({ a }: { a: DarwinAction }) {
       </>
     );
   return <div style={{ fontWeight: 600 }}>{a.label}</div>;
+}
+
+const ok = (good: boolean | undefined) => ({ color: good ? "var(--green)" : "var(--orange)", fontWeight: 600 });
+
+/** The same signatures, checked again in this browser (QoreSign, @qorechain/pqc). */
+function BrowserCheckRow({ tx }: { tx: TxView }) {
+  const { data, error, isLoading } = useBrowserCheck(tx);
+  if (data?.kind === "none") return null;
+  return (
+    <Row label="Checked in this browser">
+      {isLoading && <span style={sub}>Verifying ML-DSA-87 locally…</span>}
+      {error && <span style={{ color: "var(--orange)" }}>{(error as Error).message}</span>}
+      {data?.kind === "native" && (
+        <>
+          <span data-browser-check={String(data.pqVerified && data.classicalVerified !== false)} style={ok(data.pqVerified && data.classicalVerified !== false)}>
+            {data.pqVerified ? "ML-DSA-87 layer verified" : `ML-DSA-87 layer not verified${data.reason ? ` (${data.reason})` : ""}`}
+            {data.classicalVerified != null && ` · secp256k1 ${data.classicalVerified ? "verified" : "not verified"}`}
+          </span>
+          <div style={sub}>
+            QoreSign (@qorechain/qoresign) re-read the committed transaction and checked both signatures against the keys{" "}
+            {data.signer} registered on chain (sign-bytes {data.signBytes}, security tier {data.tier}).
+          </div>
+        </>
+      )}
+      {data?.kind === "round" && (
+        <>
+          <span data-browser-check={String(data.verified && data.tamperedRejected)} style={ok(data.verified && data.tamperedRejected)}>
+            {data.verified ? `Round #${data.round} signature verified` : "Signature does not verify"}
+            {data.tamperedRejected ? " · rejected for round #" + (data.round + 1n) : " · tamper check failed"}
+          </span>
+          <div style={sub}>
+            The message DarwinOracle checks was rebuilt here from the calldata, and the reporter&apos;s {data.sigBytes}-byte ML-DSA-87
+            signature verified over it with @qorechain/pqc, against the {data.keyBytes}-byte key {data.reporter} registered on chain
+            {data.proven ? " with proof of possession" : ""}. The same signature fails for the next round number.
+          </div>
+        </>
+      )}
+    </Row>
+  );
 }
 
 export function TxScreen({ hash }: { hash: string }) {
@@ -149,6 +189,7 @@ export function TxScreen({ hash }: { hash: string }) {
                   </Row>
                 )}
                 {!tx.hybridVerified && !tx.evmWindow && <Row label="Signature" first>{tx.messages.join(", ")}</Row>}
+                <BrowserCheckRow tx={tx} />
               </div>
             </section>
 
