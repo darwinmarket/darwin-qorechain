@@ -1,0 +1,273 @@
+'use client';
+
+import { withBase } from '@/lib/base';
+import Link from 'next/link';
+import { usePathname } from 'next/navigation';
+import { useEffect, useState } from 'react';
+import clsx from 'clsx';
+import { navigation, NavSection, NavChild, NavChildGroup } from '@/lib/navigation';
+import type { SearchEntry } from '@/lib/content';
+import { SearchDialog } from './SearchDialog';
+import {
+  HomeIcon,
+  CubeIcon,
+  CodeIcon,
+  HelpIcon,
+  ShieldIcon,
+  LayersIcon,
+  LockIcon,
+  SearchIcon,
+  ChevronDownIcon,
+  ChevronRightIcon,
+  XIcon,
+  GithubIcon,
+  ExternalLinkIcon,
+  MenuIcon,
+  ChevronLeftIcon,
+} from './icons/SectionIcons';
+
+const iconMap = {
+  home: HomeIcon,
+  cube: CubeIcon,
+  code: CodeIcon,
+  help: HelpIcon,
+  shield: ShieldIcon,
+  layers: LayersIcon,
+  lock: LockIcon,
+};
+
+function LogoBlock() {
+  return (
+    <Link href="/overview" className="inline-flex items-center">
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={withBase('/darwin-logo-full.svg')}
+        alt="Darwin"
+        className="h-[26px] w-auto select-none"
+        draggable={false}
+      />
+    </Link>
+  );
+}
+
+function SearchButton({ onClick }: { onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="w-full flex items-center gap-3 h-[46px] px-3 rounded-lg text-base leading-none text-[#a69f8c] transition-colors hover:text-[#f5f2e8] cursor-text"
+      style={{
+        background: 'rgba(245, 242, 232, 0.03)',
+        border: '1px solid rgba(245, 242, 232, 0.06)',
+      }}
+      aria-label="Search documentation"
+    >
+      <SearchIcon />
+      <span style={{ opacity: 0.5 }}>Search...</span>
+      <kbd
+        className="ml-auto text-xs leading-none px-[5px] py-1 rounded"
+        style={{
+          background: 'rgba(245, 242, 232, 0.06)',
+          color: '#a69f8c',
+          border: '1px solid rgba(245, 242, 232, 0.08)',
+          fontFamily:
+            '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
+        }}
+      >
+        ⌘K
+      </kbd>
+    </button>
+  );
+}
+
+function NavLinkItem({ title, href, active }: { title: string; href: string; active: boolean }) {
+  return (
+    <Link
+      href={href}
+      className={clsx(
+        'block px-2 py-[6px] text-base transition-colors duration-200',
+        active ? 'text-[#e2c57e]' : 'text-[#a69f8c] hover:text-[#f5f2e8]',
+      )}
+    >
+      {title}
+    </Link>
+  );
+}
+
+function SubGroup({ group, pathname }: { group: NavChildGroup; pathname: string }) {
+  const containsActive = group.items.some((it) => it.href === pathname);
+  const [open, setOpen] = useState(containsActive);
+
+  const ChevronIcon = open ? ChevronDownIcon : ChevronRightIcon;
+
+  return (
+    <div>
+      <button
+        type="button"
+        onClick={() => setOpen(!open)}
+        className="w-full flex items-center gap-1.5 px-2 py-[6px] text-base text-[#a69f8c] hover:text-[#f5f2e8] transition-colors duration-200 text-left"
+        aria-expanded={open}
+      >
+        <ChevronIcon className="w-3 h-3 flex-shrink-0 opacity-70" />
+        <span>{group.title}</span>
+      </button>
+      {open && (
+        <div className="pl-4">
+          {group.items.map((item) => (
+            <NavLinkItem
+              key={item.href}
+              title={item.title}
+              href={item.href}
+              active={item.href === pathname}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function NavChildElement({ child, pathname }: { child: NavChild; pathname: string }) {
+  if ('href' in child) {
+    return <NavLinkItem title={child.title} href={child.href} active={child.href === pathname} />;
+  }
+  return <SubGroup group={child} pathname={pathname} />;
+}
+
+function Section({ section, pathname }: { section: NavSection; pathname: string }) {
+  const Icon = iconMap[section.icon] || HomeIcon;
+  return (
+    <div className="mb-6 last:mb-2">
+      <div className="flex items-center gap-2.5 px-2 mb-2">
+        <span className="text-[#a69f8c]">
+          <Icon />
+        </span>
+        <h4 className="text-base font-medium select-none text-[#f5f2e8]">{section.title}</h4>
+      </div>
+      <div className="pl-[34px]">
+        {section.items.map((it, i) => (
+          <NavChildElement key={i} child={it} pathname={pathname} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function SidebarFooter() {
+  return (
+    <div className="px-6 py-4" style={{ borderTop: '1px solid rgba(245, 242, 232, 0.06)' }}>
+      <div className="flex items-center gap-3">
+        <a
+          href="https://x.com/darwin_market"
+          target="_blank"
+          rel="noreferrer"
+          className="text-[#a69f8c] hover:text-[#f5f2e8] transition-colors"
+          aria-label="X (Twitter)"
+        >
+          <XIcon />
+        </a>
+        <a
+          href="https://github.com/darwinmarket/darwin-qorechain"
+          target="_blank"
+          rel="noreferrer"
+          className="text-[#a69f8c] hover:text-[#f5f2e8] transition-colors"
+          aria-label="GitHub"
+        >
+          <GithubIcon />
+        </a>
+        <a
+          href="https://darwin.market/qorechain"
+          target="_blank"
+          rel="noreferrer"
+          className="ml-auto inline-flex items-center gap-1 text-base text-[#a69f8c] hover:text-[#f5f2e8] transition-colors"
+        >
+          Darwin on QoreChain
+          <ExternalLinkIcon className="w-3 h-3" />
+        </a>
+      </div>
+    </div>
+  );
+}
+
+export function Sidebar({ searchIndex }: { searchIndex: SearchEntry[] }) {
+  const pathname = usePathname();
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
+
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if ((e.key === 'k' || e.key === 'K') && (e.metaKey || e.ctrlKey)) {
+        e.preventDefault();
+        setSearchOpen((v) => !v);
+      }
+    }
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
+  return (
+    <>
+      {/* Mobile toggle button, hidden while the sidebar is open */}
+      {!mobileOpen && (
+        <button
+          type="button"
+          onClick={() => setMobileOpen(true)}
+          className="lg:hidden fixed top-5 left-5 z-50 flex items-center gap-2 h-10 px-4 backdrop-blur-md text-[#a69f8c] hover:text-[#f5f2e8] transition-all rounded-full"
+          style={{
+            background: 'rgba(42, 40, 31, 0.85)',
+            border: '1px solid rgba(245, 242, 232, 0.06)',
+          }}
+        >
+          <MenuIcon />
+          <span className="text-base">Docs</span>
+        </button>
+      )}
+
+      {/* Mobile overlay */}
+      {mobileOpen && (
+        <div
+          className="lg:hidden fixed inset-0 z-30"
+          style={{ background: 'rgba(0,0,0,0.5)' }}
+          onClick={() => setMobileOpen(false)}
+        />
+      )}
+
+      <aside
+        className={clsx(
+          'fixed inset-y-0 left-0 z-40',
+          'w-[85vw] max-w-[296px] sm:w-[296px] flex flex-col h-screen',
+          'transform transition-transform duration-300 ease-[cubic-bezier(0.215,0.61,0.355,1)]',
+          'lg:sticky lg:top-0',
+          mobileOpen ? 'translate-x-0' : '-translate-x-full',
+          'lg:translate-x-0',
+        )}
+        style={{
+          background: '#201e17',
+          borderRight: '1px solid rgba(245, 242, 232, 0.08)',
+        }}
+      >
+        <div
+          className="px-6 pt-[18px] pb-4"
+          style={{ borderBottom: '1px solid rgba(245, 242, 232, 0.06)' }}
+        >
+          <div className="mb-2.5 ml-[10px]">
+            <LogoBlock />
+          </div>
+          <SearchButton onClick={() => setSearchOpen(true)} />
+        </div>
+        <nav className="flex-1 px-4 py-4 overflow-y-auto custom-scrollbar">
+          {navigation.map((section, i) => (
+            <Section key={i} section={section} pathname={pathname} />
+          ))}
+        </nav>
+        <SidebarFooter />
+      </aside>
+
+      <SearchDialog
+        open={searchOpen}
+        onClose={() => setSearchOpen(false)}
+        index={searchIndex}
+      />
+    </>
+  );
+}
