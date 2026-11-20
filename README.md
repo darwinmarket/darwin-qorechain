@@ -195,7 +195,7 @@ End-to-end in a browser, with real hybrid signing by the QoreX test double:
 
 ```bash
 cd app && npm run build && npm start &   # port 3032
-npm run e2e                              # the full browser suite (24 checks)
+npm run e2e                              # the full browser suite (25 checks)
 ONLY="buy BLUEdw|declined" npm run e2e   # a subset: each trade costs testnet QOR in fees
 node e2e/trade.mjs BLUEdw 2              # one trade: connect, buy 2 fUSD of BLUEdw, sell half
 ```
@@ -219,7 +219,7 @@ node e2e/trade.mjs BLUEdw 2              # one trade: connect, buy 2 fUSD of BLU
 - Cryptographic inventory: [docs/cbom](docs/cbom) (QoreScan CBOM; QoreChain's endpoints already
   negotiate the hybrid post-quantum key exchange X25519MLKEM768).
 - Tests: 83 unit, fuzz and invariant tests; on-chain E2E (23/23); an 8-user parallel battery
-  (48/48 trades); browser E2E (24/24); see [docs/TESTING.md](docs/TESTING.md).
+  (48/48 trades); browser E2E (25 checks: 24/25 on the last full run, the one failure the test wallet running out of testnet QOR for gas, green on rerun); see [docs/TESTING.md](docs/TESTING.md).
 - Testnet only: the tokens have no value and the mnemonic used here must never touch mainnet.
 
 ## Credits
