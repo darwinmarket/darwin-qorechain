@@ -20,6 +20,12 @@ library PqcAuth {
     /// @notice QoreChain's algorithm id for ML-DSA-87 (FIPS 204).
     uint8 internal constant ML_DSA_87 = 1;
 
+    /// @notice True when `account` has a registered, proven ML-DSA-87 key.
+    function isQuantumSafe(address account) internal view returns (bool) {
+        (bool registered, uint8 algorithmId, bytes memory pubkey, bool proven) = PQC_KEYS.pqcKeyStatus(account);
+        return registered && pubkey.length != 0 && algorithmId == ML_DSA_87 && proven;
+    }
+
     function requireSigned(address account, bytes memory message, bytes calldata signature) internal view {
         (bool registered, uint8 algorithmId, bytes memory pubkey, bool proven) = PQC_KEYS.pqcKeyStatus(account);
         if (!registered || pubkey.length == 0) revert PqcKeyNotRegistered(account);
