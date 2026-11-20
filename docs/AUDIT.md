@@ -53,7 +53,27 @@ price, so its solvency is bounded by that inventory (`InsufficientInventory`); t
 ## Post-quantum design
 
 On the EVM the ML-DSA-87 check is done by the chain through the `pqcVerify` precompile, so the
-QCAI "quantum readiness" rating shows "Not scored" for Solidity. The design is in the
-[README](../README.md#why-it-matters): prices, rebalances and admin actions need ML-DSA-87
-signatures verified on chain; user trades are hybrid-signed by QoreX on the native lane and reach
-the EVM through `MsgCrossVMCall`; the keeper's EVM window is scoped to Darwin's contracts.
+QCAI "quantum readiness" rating shows "Not scored" for Solidity (expected, per the fest FAQ). This
+section is the explanation the FAQ asks for: every place Darwin calls `pqcVerify` or
+`pqcKeyStatus`, what it protects, and the tests that cover it.
+
+There is one call site for both precompiles, `PqcAuth.requireSigned` (`src/pqc/PqcAuth.sol:19-24`):
+it reads the signer's key with `pqcKeyStatus` (`0x…0A02`), refuses an unregistered key or one
+without proof of possession, then checks the ML-DSA-87 signature with `pqcVerify` (`0x…0A01`).
+Every privileged path goes through it:
+
+| Call | Signer | Protects | Unit tests | On-chain check (`ops/src/e2e.ts`) |
+|---|---|---|---|---|
+| `DarwinOracle.submit` (`DarwinOracle.sol:99`) | reporter | every price the baskets are valued at | `test_refusesARoundSignedByAnotherKey`, `test_aSignatureIsBoundToItsPrices`, `test_aRoundCannotBeReplayed`, `test_reporterWithoutProvenKeyIsRefused` | curator-signed round refused; tampered prices refused; past round refused; replay refused; valid round stored |
+| `DarwinBasket.rebalance` (`DarwinBasket.sol:272`) | curator | the exact trades the vault makes | `test_rebalanceSignatureIsBoundToItsTrades`, `test_rebalanceRefusesAForgedSignature` | reporter-signed rebalance refused; curator rebalance and restore |
+| `DarwinBasket.setTargetWeights` (`DarwinBasket.sol:310`) | curator | the basket's composition | `BasketAdmin.t.sol` | weights shifted and restored, then pinned to the published ones |
+| `PqcAdmin._authorizeAdmin` (`PqcAdmin.sol:46`), used by 15 admin functions: oracle `addFeed`, `setTokenFeed`, `setReporter`, `setParams`; reserve `listToken`, `setSpread`, `setSpreadExempt`, `withdraw`; basket `setMintPaused`, `setCurator`, `setGuardian`, `setReserve`, `setMaxRebalanceLoss`; `setAdmin` | admin | every power over the protocol and its funds | `test_adminActionsNeedTheAdminsPqcSignature`, `test_adminSignatureWorksOnce`, `test_adminSignatureExpires`, `test_withdrawNeedsTheAdminsPqcSignature` | curator-signed withdrawal refused; expired signature refused; spread change signed and restored |
+
+What a leaked secp256k1 key can still do: the deployer's key relays transactions and holds the
+guardian role, which can only pause new mints (never selling, never in-kind redemption). It cannot
+change a price, a weight, a trade or any parameter, and cannot move the reserve's funds.
+
+The same signatures can be checked without trusting the chain: the app's transaction page
+re-verifies an oracle round's ML-DSA-87 signature in the browser with `@qorechain/pqc` (and a
+user trade's hybrid signature with QoreSign). See also the cryptographic inventory in
+[cbom/](cbom/).
