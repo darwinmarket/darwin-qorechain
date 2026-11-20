@@ -48,7 +48,7 @@ post-quantum port, written during the fest, with the same front.
   EVM cannot call the native AMM), `DarwinRouter` (buy or sell a whole basket with fUSD), `WQOR`.
 - **Ops** (TypeScript, QoreChain SDK): coin-118 treasury and coin-60 deployer / reporter / curator
   from one mnemonic; ML-DSA-87 registration with proof of possession; hybrid-signed native txs;
-  `MsgConvertCoin`/`MsgConvertERC20` for the Fest tokens; QWAKK bought on the native AMM; a keeper
+  `MsgConvertCoin`/`MsgConvertERC20` for the Fest tokens; QOR and QWAKK first bought on the native AMM, then held as the price-tracking stand-ins fQOR/fQWAKK (minted only by an ML-DSA-87 admin signature) because the real testnet supply capped buys at tens of dollars; a keeper
   that keeps a scoped EVM window, posts signed rounds (10-minute heartbeat or a 0.25% move) and runs
   the weekly rebalance.
 - **App** (Next.js, forked from our mainnet front): reads everything from the chain; trades through

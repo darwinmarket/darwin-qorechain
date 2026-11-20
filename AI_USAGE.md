@@ -43,6 +43,9 @@ Every change went through the same loop, and "done" meant the last step passed:
   - the four baskets and their weights (Blue Chip 70/30, Degen 70% QWAKK), the naming (BLUEDW on
     chain, BLUEdw on screen), the four tabs, and that the front must be the mainnet front, exactly;
   - "is that really QWAKK's price? check it thoroughly", which led to the repricing below.
+  - real QOR and QWAKK first, then, once the agent showed the testnet's real supply capped the QOR
+    baskets at tens of dollars, price-tracking stand-ins (fQOR, fQWAKK) with the real assets given
+    back to the public pools.
 - **The testnet funds and keys** (faucet claims need the dashboard sign-in), the QCAI audit runs,
   the video and the submission.
 
