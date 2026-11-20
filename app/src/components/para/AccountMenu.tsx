@@ -8,6 +8,7 @@
  */
 import { useEffect, useRef, useState } from "react";
 import clsx from "clsx";
+import { PqcStatusBadge } from "@qorechain/react";
 
 export function AccountMenu({
   label,
@@ -74,6 +75,19 @@ export function AccountMenu({
       </button>
       {open && (
         <div role="menu" className="account-menu__pop">
+          {/* @qorechain/react: is this account's ML-DSA-87 key registered on chain? */}
+          <PqcStatusBadge address={accountId}>
+            {({ isRegistered, isLoading }) => (
+              <div
+                data-pqc-badge={isLoading ? "loading" : String(isRegistered)}
+                className="account-menu__item"
+                style={{ cursor: "default", fontSize: 12, color: isRegistered ? "var(--green)" : "var(--ink-3)" }}
+                title="Read from the chain's PQC module: transactions from this account carry an ML-DSA-87 signature"
+              >
+                {isLoading ? "Checking PQC key…" : isRegistered ? "● ML-DSA-87 key registered" : "○ No ML-DSA-87 key yet"}
+              </div>
+            )}
+          </PqcStatusBadge>
           <button type="button" role="menuitem" className="account-menu__item" onClick={copy}>
             {copied ? "Copied ✓" : "Copy address"}
           </button>
