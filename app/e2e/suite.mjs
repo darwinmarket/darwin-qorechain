@@ -368,15 +368,17 @@ await browser.close();
 const passed = results.filter((r) => r.ok).length;
 const skipped = results.filter((r) => r.skip).length;
 console.log(`\n${passed}/${results.length} passed${skipped ? `, ${skipped} skipped` : ""}`);
-const date = new Date().toISOString().slice(0, 16).replace(":", "");
+// seconds in the name, and a subset run (ONLY=...) never takes a full run's name
+const date = new Date().toISOString().slice(0, 19).replace(/:/g, "");
+const file = `browser-${date}${ONLY ? "-subset" : ""}.md`;
 const dir = new URL("../../docs/e2e/", import.meta.url).pathname;
 mkdirSync(dir, { recursive: true });
 writeFileSync(
-  `${dir}browser-${date}.md`,
+  `${dir}${file}`,
   [
     `# Browser E2E run, ${new Date().toISOString()}`,
     "",
-    `The Darwin front (mainnet design) at ${BASE}, QoreX test double (real hybrid signing), qorechain-diana. Suite: \`app/e2e/suite.mjs\`. Result: **${passed}/${results.length} passed${skipped ? `, ${skipped} skipped` : ""}**.`,
+    `The Darwin front (mainnet design) at ${BASE}, QoreX test double (real hybrid signing), qorechain-diana. Suite: \`app/e2e/suite.mjs\`. Result: **${passed}/${results.length} passed${skipped ? `, ${skipped} skipped` : ""}**${ONLY ? ` (subset: \`ONLY=${process.env.ONLY}\`)` : ""}.`,
     "",
     "| | Check | Detail | Time |",
     "|---|---|---|---|",
@@ -384,5 +386,5 @@ writeFileSync(
     "",
   ].join("\n"),
 );
-console.log(`report: docs/e2e/browser-${date}.md`);
+console.log(`report: docs/e2e/${file}`);
 if (passed !== results.length) process.exitCode = 1;
