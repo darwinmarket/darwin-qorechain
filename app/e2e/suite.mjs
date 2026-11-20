@@ -135,16 +135,16 @@ await check("a basket URL opens its screen with the pre-connect trade card", asy
   return "$50 -> ≈ $49.85 after the 0.30% fee";
 });
 
-await check("QOR and QWAKK baskets draw their index from the oracle's on-chain history", async () => {
+await check("QOR and QWAKK baskets chart their market history (QOR from CoinGecko, QWAKK from its pool ratio)", async () => {
   for (const d of ["DEGENdw", "QOREdw"]) {
     await openBasket(d);
     await page.waitForSelector("text=Index base 100 at launch", { timeout: 30000 });
     await sleep(4000);
     assert((await page.getByText("Price history unavailable.").count()) === 0, `${d} has a chart`);
   }
-  const h = await (await fetch(`${BASE}/api/oracle-history`)).json();
-  assert(h.timestamps.length > 5 && h.closes.QWAKK && h.closes.QOR, "oracle history served");
-  return `${h.timestamps.length} hourly points of signed oracle prices`;
+  const h = await (await fetch(`${BASE}/api/history?symbols=QOR-USD,QWAKK-USD,ETH-USD&range=3mo&interval=1d`)).json();
+  assert(h.timestamps.length > 20 && h.closes["QOR-USD"] && h.closes["QWAKK-USD"], "market history served");
+  return `${h.timestamps.length} daily bars for QOR and QWAKK`;
 });
 
 await check("Security tab: oracle feeds, rounds, rules, the keeper's scoped window, contracts", async () => {
