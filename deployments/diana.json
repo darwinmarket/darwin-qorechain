@@ -159,7 +159,8 @@
     "f deploy DEGENDW": "2026-11-20T14:02:09.550Z",
     "f reserve exempt DEGENDW": "2026-11-20T14:02:10.663Z",
     "f seed DEGENDW": "2026-11-20T14:02:15.259Z",
-    "f switch DEGENDW": "2026-11-20T14:02:15.260Z"
+    "f switch DEGENDW": "2026-11-20T14:02:15.260Z",
+    "deploy DarwinAccountFactory": "2026-11-20T21:36:40.612Z"
   },
   "oracle": "0xabe07a51e1974d36970b40d3c1c84da37364685f",
   "reserve": "0x3a87144e2193db059228f5b982ffb2bdf65bc264",
@@ -606,5 +607,6 @@
       "retired": "2026-11-20T13:25:48.963Z"
     }
   ],
-  "stack": 2
+  "stack": 2,
+  "accountFactory": "0x09891b295bf34c6ed6b364e53bcd68e06fc2bd12"
 }

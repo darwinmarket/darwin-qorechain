@@ -35,7 +35,12 @@ async function sequence(address: string) {
 export async function sendNative(role: Role, messages: EncodeObject[], gas: number, memo = ""): Promise<string> {
   const acc = await account(role);
   const { accountNumber, sequence: seq } = await sequence(acc.cosmos);
-  const signer = new EthNativeSigner(acc, { signMode: "hybrid", rest: REST, registry: qorechainRegistry() });
+  // messages encoded by hand (lib/qore/proto.ts: { typeUrl, value: bytes }) pass through as they are
+  const registry = qorechainRegistry();
+  for (const m of messages)
+    if (m.value instanceof Uint8Array && !registry.lookupType(m.typeUrl))
+      registry.register(m.typeUrl, { encode: (v: Uint8Array) => ({ finish: () => v }), decode: (b: Uint8Array) => b, fromPartial: (v: Uint8Array) => v } as any);
+  const signer = new EthNativeSigner(acc, { signMode: "hybrid", rest: REST, registry });
   const transport = await StargateClient.connect(RPC);
   try {
     const res = (await signer.signAndBroadcast(transport, {
