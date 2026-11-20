@@ -12,6 +12,12 @@ contract MockPqc {
     }
 
     mapping(address => Key) internal keys;
+    /// @dev 0 means ML-DSA-87 (id 1), as on the testnet; set to test a key of another algorithm.
+    mapping(address => uint8) internal algorithmOverride;
+
+    function setAlgorithm(address account, uint8 id) external {
+        algorithmOverride[account] = id;
+    }
 
     function setKey(address account, bytes calldata pubkey, bool proven) external {
         keys[account] = Key(pubkey, proven);
@@ -27,6 +33,7 @@ contract MockPqc {
 
     function pqcKeyStatus(address account) external view returns (bool, uint8, bytes memory, bool) {
         Key memory k = keys[account];
-        return (k.pubkey.length != 0, 1, k.pubkey, k.proven);
+        uint8 alg = algorithmOverride[account];
+        return (k.pubkey.length != 0, alg == 0 ? 1 : alg, k.pubkey, k.proven);
     }
 }
