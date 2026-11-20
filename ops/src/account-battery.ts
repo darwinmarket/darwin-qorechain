@@ -432,7 +432,7 @@ if (toConvert > 0n && depErc < toConvert) {
   log(`deployer draws ${(Number(need - depErc) / 1e6).toFixed(2)} fUSD from the reserve (admin, ML-DSA-87)`);
   const { adminCall } = await import("./evm.js");
   const { encodeAbiParameters: enc, parseAbiParameters } = await import("viem");
-  await adminCall(d.reserve, artifact("DarwinReserve").abi, "withdraw", "withdraw", enc(parseAbiParameters("address, uint256, address"), [d.tokens.fUSD, toConvert - depErc, dep.evm]), [d.tokens.fUSD, toConvert - depErc, dep.evm]);
+  await adminCall(d.reserve, artifact("DarwinReserve").abi, "withdraw", "withdraw", enc(parseAbiParameters("address, uint256, address"), [d.tokens.fUSD, toConvert - depErc, dep.evm as Address]), [d.tokens.fUSD, toConvert - depErc, dep.evm]);
 }
 if (toConvert > 0n) {
   await sendFromRole("deployer", [{ typeUrl: CONVERT_ERC20_TYPE_URL, value: { contractAddress: d.tokens.fUSD, amount: toConvert.toString(), receiver: dep.cosmos, sender: dep.cosmos } } as any], "hybrid", "2000000");
