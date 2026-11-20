@@ -19,7 +19,7 @@ QoreX does not send EVM transactions either. So a QoreX user cannot send Darwin'
 
 | Step | Who | Signature |
 |---|---|---|
-| Open an EVM access window | the user, in QoreX | hybrid `MsgOpenEVMWindow` |
+| Open an EVM access window (~7 h) | the user, in QoreX | hybrid `MsgOpenEVMWindow` |
 | Grant `MsgCrossVMCall` and `MsgConvertCoin` to the relayer for 24 h | the user, in the app | hybrid `MsgGrant`, decoded by QoreX |
 | Sign a trade intent | the user, in the app | `signArbitrary`: secp256k1 + ML-DSA-87 |
 | Verify it | the relayer | QoreSign `verifyMessageWithChain` against the user's registered key |

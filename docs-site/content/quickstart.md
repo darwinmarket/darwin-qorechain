@@ -14,7 +14,7 @@ Claim the faucet on the [QoreChain dashboard](https://dashboard.qorechain.io/fau
 
 ## 3. Open an EVM access window
 
-In the QoreX extension, open an **EVM access window**. Darwin's baskets are EVM contracts; the chain lets them be called on your account's behalf only while your window is open. The app shows this step until it sees an open window.
+In the QoreX extension, open an **EVM access window**. Darwin's baskets are EVM contracts; the chain lets them be called on your account's behalf only while your window is open. The app shows this step until it sees an open window. A window opened from QoreX lasts about 7 hours (17,000 blocks at ~1.4 s), while the relayer's authorization lasts 24 hours: coming back later, you reopen only the window.
 
 ## 4. Authorize Darwin's relayer
 
