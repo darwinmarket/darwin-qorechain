@@ -16,7 +16,7 @@ import {
   BaseError, ContractFunctionRevertedError, encodeAbiParameters, parseAbiParameters, parseUnits, formatUnits,
   type Abi, type Address, type Hex,
 } from "viem";
-import { evmAccount } from "./accounts.js";
+import { evmAccount, mnemonic } from "./accounts.js";
 import { action, adminCall, artifact, loadDeployments, pqSign, ROOT, write } from "./evm.js";
 import { publicClient, REST } from "./net.js";
 import { FEED, fetchPrices, toWad } from "./prices.js";
@@ -346,6 +346,39 @@ async function main() {
     const e2 = await bal(d.tokens.fUSD, twin);
     assert(e2 === e0, `ERC-20 balance restored ${e0} -> ${e2}`);
     return `to bank ${r1.transactionHash}, back ${r2.transactionHash}`;
+  });
+
+  // ------------------------------------------------------------------ the QoreX path: relayer
+  // QoreX signs no cross-VM call; a QoreX user signs a trade intent, Darwin's relayer executes it
+  // through the user's authz grant and EVM window (relayer.ts, relay-setup.ts).
+  await check("relayer: an ML-DSA-87 signed intent is executed as the user; a replay and a tampered intent are refused", async () => {
+    const { ensureRelaySetup } = await import("./relay-setup.js");
+    const { trade: relay } = await import("./relayer.js");
+    const { deriveCanonicalPqKey, deriveClassicalKey, signMessage } = await import("@qorechain/qoresign");
+    const { randomBytes } = await import("node:crypto");
+    const { address: user } = await ensureRelaySetup();
+    const amount = 1_000_000n;
+    const [shares] = await read<[bigint, bigint]>(d.router, routerAbiAll, "quoteBuy", [bal_, amount]);
+    const intent = {
+      darwin: "trade-v1", chainId: "qorechain-diana", account: user, action: "buy", basket: bal_,
+      amount: amount.toString(), min: ((shares * 99n) / 100n).toString(), nonce: randomBytes(12).toString("hex"),
+      expires: Math.floor(Date.now() / 1000) + 300,
+    };
+    const text = JSON.stringify(intent);
+    const m = mnemonic();
+    const signature = signMessage({ chainId: "qorechain-diana", signer: user, data: text, classicalKey: deriveClassicalKey({ mnemonic: m }), pqKey: deriveCanonicalPqKey({ mnemonic: m, address: user }) });
+    const userTwin = evmTwin(user) as Address;
+    const s0 = await bal(bal_, userTwin);
+    const r = await relay(text, signature);
+    await new Promise((res) => setTimeout(res, 5000));
+    const s1 = await bal(bal_, userTwin);
+    assert(s1 > s0, `the user's shares ${s0} -> ${s1}`);
+    const refused = async (t: string) => relay(t, signature).then(() => "accepted", (e) => String(e?.message ?? e));
+    const replay = await refused(text);
+    assert(/already executed/.test(replay), `replay: ${replay}`);
+    const tampered = await refused(JSON.stringify({ ...intent, amount: (amount * 10n).toString(), nonce: randomBytes(12).toString("hex") }));
+    assert(/does not verify/.test(tampered), `tampered: ${tampered}`);
+    return `MsgExec ${r.txHash.slice(0, 12)}… [${r.messages.join(", ")}], shares +${(Number(s1 - s0) / 1e18).toFixed(4)}; replay refused; tampered refused (${tampered.slice(0, 50)})`;
   });
 
   // ------------------------------------------------------------------ second opinion

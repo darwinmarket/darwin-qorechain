@@ -20,7 +20,9 @@
     "sweep": "tsx src/sweep.ts",
     "refill": "tsx src/refill.ts",
     "amm": "tsx src/amm.ts",
-    "cbom": "qorescan scan --name 'Darwin on QoreChain (qorechain-diana)' --network testnet --address qor1h92yt25my24uwl8tkju7h0yl6gez6zpcyen9q5 --address qor1yzq84n9uj6fmgzsh7tk88gr7dhrh60u95gpw8p --address qor1dg5x70vqts47p4jnajrvrjketxph8jewxe3phs --address qor1uzauedcmwcgyrvlnqw9numxm8yk0hcmnyvuq5u --solidity ../contracts/src --tls api-testnet.qore.host:443 --tls evm-testnet.qore.host:443 --out ../docs/cbom/darwin.cbom.json && qorescan report --framework dora --cbom ../docs/cbom/darwin.cbom.json --out ../docs/cbom/dora-report.md && qorescan template agility --cbom ../docs/cbom/darwin.cbom.json --out ../docs/cbom/crypto-agility.md"
+    "cbom": "qorescan scan --name 'Darwin on QoreChain (qorechain-diana)' --network testnet --address qor1h92yt25my24uwl8tkju7h0yl6gez6zpcyen9q5 --address qor1yzq84n9uj6fmgzsh7tk88gr7dhrh60u95gpw8p --address qor1dg5x70vqts47p4jnajrvrjketxph8jewxe3phs --address qor1uzauedcmwcgyrvlnqw9numxm8yk0hcmnyvuq5u --solidity ../contracts/src --tls api-testnet.qore.host:443 --tls evm-testnet.qore.host:443 --out ../docs/cbom/darwin.cbom.json && qorescan report --framework dora --cbom ../docs/cbom/darwin.cbom.json --out ../docs/cbom/dora-report.md && qorescan template agility --cbom ../docs/cbom/darwin.cbom.json --out ../docs/cbom/crypto-agility.md",
+    "relayer": "tsx src/relayer.ts",
+    "relay-setup": "tsx src/relay-setup.ts"
   },
   "keywords": [],
   "author": "",
