@@ -215,7 +215,8 @@ await check("the account menu shows the account's registered ML-DSA-87 key (@qor
 });
 
 // fUSD in ERC-20 form on the twin for the trades below
-const twin = await (async () => {
+// (null in a subset run without the connect check: the trade checks then need it in ONLY too)
+const twin = !me ? null : await (async () => {
   const words = me.native;
   const { bech32 } = await import("@scure/base").catch(() => ({ bech32: null }));
   if (bech32) return "0x" + Buffer.from(bech32.fromWords(bech32.decode(words).words)).toString("hex");
