@@ -82,7 +82,7 @@ export function TxScreen({ hash }: { hash: string }) {
         <AgamaNavbar
           tabs={["Baskets", "Portfolio", "Activity", "Security"]}
           onHome={home}
-          onTab={() => home()}
+          onTab={(t) => (window.location.href = t === "Baskets" ? "/" : `/?tab=${t}`)}
           right={null}
         />
       }
