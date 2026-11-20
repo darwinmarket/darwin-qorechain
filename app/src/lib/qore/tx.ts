@@ -30,6 +30,8 @@ export type TxView = {
   hybridVerified: boolean;
   /** An EVM tx admitted by its sender's post-quantum EVM window. */
   evmWindow?: { address: string; usedTxs: string };
+  /** Set when Darwin's relayer executed this trade for a QoreX user (authz MsgExec). */
+  relayedFor?: string;
   actions: DarwinAction[];
   log?: string;
 };
@@ -73,8 +75,10 @@ async function readTx(input: string): Promise<TxView> {
   const win = events.find((e) => e.type === "pqc_evm_window_used");
   const actions: DarwinAction[] = [];
 
-  // Native cross-VM calls (QoreX trades): decode the router calldata.
-  for (const m of tx.body.messages) {
+  // Native cross-VM calls: decode the router calldata, including the calls Darwin's relayer
+  // executed for a QoreX user inside an authz MsgExec.
+  const relayedFor = (tx.body.messages as any[]).find((m) => m["@type"].endsWith("MsgExec"))?.msgs?.[0]?.sender as string | undefined;
+  for (const m of (tx.body.messages as any[]).flatMap((x) => (x["@type"].endsWith("MsgExec") ? (x.msgs ?? []) : [x]))) {
     if (m["@type"].endsWith("MsgCrossVMCall") && m.payload && ROUTERS.includes(m.target_contract?.toLowerCase())) {
       try {
         const call = decodeFunctionData({ abi: routerAbi, data: b64(m.payload) });
@@ -120,6 +124,7 @@ async function readTx(input: string): Promise<TxView> {
     messages: tx.body.messages.map((m: any) => m["@type"].split(".").at(-1)),
     hybridVerified: events.some((e) => e.type === "pqc_hybrid_verify" && attr(e, "status") === "verified"),
     evmWindow: win ? { address: attr(win, "address"), usedTxs: attr(win, "used_txs") } : undefined,
+    relayedFor,
     actions,
     log: t.code === 0 ? undefined : t.raw_log,
   };

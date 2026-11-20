@@ -34,14 +34,21 @@ const ALL_BASKETS: [string, { address: string; name: string; display: string }][
 const basketOf = (addr: string) => ALL_BASKETS.find(([, b]) => b.address.toLowerCase() === addr.toLowerCase());
 
 async function readHistory(address: string): Promise<TradeEntry[]> {
-  const q = encodeURIComponent(`message.sender='${address}'`);
-  const res = await fetch(`${REST}/cosmos/tx/v1beta1/txs?query=${q}`);
-  if (!res.ok) return [];
-  const { tx_responses } = (await res.json()) as { tx_responses?: any[] };
+  // trades the user sent itself, and trades Darwin's relayer executed for it (authz MsgExec), whose
+  // cross-VM calls still name the user as sender
+  const search = async (query: string) => {
+    const r = await fetch(`${REST}/cosmos/tx/v1beta1/txs?query=${encodeURIComponent(query)}`);
+    return r.ok ? (((await r.json()) as { tx_responses?: any[] }).tx_responses ?? []) : [];
+  };
+  const seen = new Set<string>();
+  const txs = [...(await search(`message.sender='${address}'`)), ...(await search(`crossvm_request.sender='${address}'`))].filter((t) =>
+    seen.has(t.txhash) ? false : (seen.add(t.txhash), true),
+  );
   const out: TradeEntry[] = [];
-  for (const t of tx_responses ?? []) {
+  for (const t of txs) {
     const hybrid = t.events?.some((e: any) => e.type === "pqc_hybrid_verify" && e.attributes.some((a: any) => a.key === "status" && a.value === "verified"));
-    for (const m of t.tx.body.messages) {
+    const msgs = (t.tx.body.messages as any[]).flatMap((m) => (m["@type"]?.endsWith("MsgExec") ? (m.msgs ?? []) : [m]));
+    for (const m of msgs) {
       if (!m["@type"]?.endsWith("MsgCrossVMCall") || !ROUTERS.includes(m.target_contract?.toLowerCase()) || !m.payload) continue;
       try {
         const call = decodeFunctionData({ abi: routerAbi, data: b64(m.payload) });

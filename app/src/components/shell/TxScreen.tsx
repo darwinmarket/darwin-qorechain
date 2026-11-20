@@ -180,6 +180,15 @@ export function TxScreen({ hash }: { hash: string }) {
                     <div style={sub}>pqc_hybrid_verify recorded by the chain for {tx.signer}</div>
                   </Row>
                 )}
+                {tx.relayedFor && (
+                  <Row label="Relayed for">
+                    <strong>{tx.relayedFor}</strong>
+                    <div style={sub}>
+                      Darwin&apos;s relayer executed this trade through the user&apos;s authz grant, after verifying the user&apos;s ML-DSA-87
+                      signed intent; the chain admitted it through the user&apos;s own EVM window.
+                    </div>
+                  </Row>
+                )}
                 {tx.evmWindow && (
                   <Row label="EVM admission" first={!tx.hybridVerified}>
                     <strong>Admitted by a post-quantum EVM window</strong>
