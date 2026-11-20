@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { Providers } from "@/components/Providers";
-import { ToastProvider } from "@/components/para/Toast";
+import { ToastProvider } from "@/components/shell/Toast";
 
 const geist = Geist({ subsets: ["latin"], variable: "--font-sans", display: "swap" });
 const geistMono = Geist_Mono({ subsets: ["latin"], variable: "--font-mono", display: "swap" });

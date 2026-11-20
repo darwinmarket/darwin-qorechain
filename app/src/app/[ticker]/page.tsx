@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import { AppEntry } from "@/components/para/AppEntry";
+import { AppEntry } from "@/components/shell/AppEntry";
 import { BASKETS, basketByUrlKey } from "@/lib/baskets";
 
 /** `/BLUEdw` opens that basket inside the app, as on mainnet. */
