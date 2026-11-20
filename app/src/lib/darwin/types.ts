@@ -59,6 +59,8 @@ export type Basket = {
   legs: Leg[];
   /** Tradable on QoreChain today. */
   live?: boolean;
+  /** Price of one share in USD at the oracle (navUsd is the index, base 100 at launch). */
+  sharePriceUsd?: number;
   /** ISO date the fixed units were set, and the share value on that day. */
   inception?: string;
   shareAtInception?: number;

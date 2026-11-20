@@ -3,23 +3,23 @@ import type { ReactNode } from "react";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { Providers } from "@/components/Providers";
-import { AppShell } from "@/components/app/AppShell";
+import { ToastProvider } from "@/components/para/Toast";
 
 const geist = Geist({ subsets: ["latin"], variable: "--font-sans", display: "swap" });
 const geistMono = Geist_Mono({ subsets: ["latin"], variable: "--font-mono", display: "swap" });
 
 export const metadata: Metadata = {
-  title: { default: "Darwin on QoreChain | Crypto baskets that survive Q-Day", template: "Darwin | %s" },
+  title: { default: "Darwin | One token, a whole strategy", template: "Darwin | %s" },
   description:
-    "Buy a whole crypto portfolio as one token. Prices signed with ML-DSA-87 and verified on chain by pqcVerify, rebalances signed by the curator, trades hybrid-signed from QoreX.",
+    "Structured investing on QoreChain. One trade buys the whole basket. Prices signed with ML-DSA-87 and checked on chain, trades signed twice by QoreX.",
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="en" className={`${geist.variable} ${geistMono.variable}`}>
+    <html lang="en" className={`${geist.variable} ${geistMono.variable}`} suppressHydrationWarning>
       <body suppressHydrationWarning>
         <Providers>
-          <AppShell>{children}</AppShell>
+          <ToastProvider>{children}</ToastProvider>
         </Providers>
       </body>
     </html>

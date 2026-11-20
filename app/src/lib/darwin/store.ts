@@ -35,6 +35,9 @@ async function readOracle(): Promise<OracleState> {
   };
 }
 
+/** Every basket was seeded at 10 USD per share: that is index 100. */
+const SEED_SHARE_USD = 10;
+
 async function readBasket(key: string, prices: Record<string, number>, inventory: Map<string, bigint>): Promise<Basket> {
   const meta = D.baskets[key];
   const address = meta.address;
@@ -56,7 +59,8 @@ async function readBasket(key: string, prices: Record<string, number>, inventory
       symbol: info.tracks,
       decimals: info.decimals,
       class: "crypto",
-      perShare: supplyFloat > 0 ? units / supplyFloat : 0,
+      // units per index point x 100: perShare x price sums to the index, as on mainnet
+      perShare: supplyFloat > 0 ? (units / supplyFloat) * (100 / SEED_SHARE_USD) : 0,
       priceUsd: prices[info.tracks] ?? 0,
       valueUsd: Number(values[i]) / 1e18,
       weight: weights[i] / 10_000,
@@ -68,7 +72,7 @@ async function readBasket(key: string, prices: Record<string, number>, inventory
   return {
     address,
     symbol: key,
-    name: meta.name,
+    name: meta.name.replace(/^Darwin /, ""),
     description: meta.description,
     owner: D.roles.admin,
     supplyFloat,
@@ -77,7 +81,9 @@ async function readBasket(key: string, prices: Record<string, number>, inventory
     redeemFeeBps: 30,
     protocolMintFeeBps: 0,
     protocolRedeemFeeBps: 0,
-    navUsd: supplyFloat > 0 ? tvlUsd / supplyFloat : 0,
+    // The index, as on mainnet: base 100 at launch (every basket was seeded at 10 USD a share).
+    navUsd: supplyFloat > 0 ? (tvlUsd / supplyFloat) * (100 / SEED_SHARE_USD) : 0,
+    sharePriceUsd: supplyFloat > 0 ? tvlUsd / supplyFloat : 0,
     tvlUsd,
     capacityUsd: Number.isFinite(capacityUsd) ? capacityUsd : 0,
     costPerShareUsd: supplyFloat > 0 ? (tvlUsd / supplyFloat) * 1.006 : 0,
@@ -85,7 +91,7 @@ async function readBasket(key: string, prices: Record<string, number>, inventory
     legs,
     live: !mintPaused,
     inception: D.deployedAt?.slice(0, 10),
-    shareAtInception: 10,
+    shareAtInception: 100,
   };
 }
 
@@ -107,10 +113,19 @@ export function useChainState() {
 
 export function useBaskets() {
   const q = useChainState();
-  return { data: q.data?.baskets, error: q.error ? String((q.error as Error).message ?? q.error) : undefined, isLoading: q.isLoading };
+  return { data: q.data?.baskets, error: q.error && !q.data ? "Couldn't reach the price feed. Retrying…" : null, isLoading: q.isLoading };
 }
 
 export function useOracle() {
   const q = useChainState();
   return q.data?.oracle;
+}
+
+/** Start reading the chain before the app mounts (the loading frame calls it), so the grid paints at once. */
+let warm: Promise<unknown> | null = null;
+export function warmPrices(): Promise<unknown> {
+  warm ??= readAll().catch(() => {
+    warm = null;
+  });
+  return warm;
 }
