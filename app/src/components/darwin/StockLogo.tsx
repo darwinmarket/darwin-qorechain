@@ -8,7 +8,7 @@ const COIN_ICONS = new Set(["BTC", "ETH", "USDC", "QOR"]);
  *  so it is shown from Qwakk's own site rather than copied into this repository. */
 const REMOTE_ICONS: Record<string, string> = { QWAKK: "/api/logo/qwakk" };
 /** Basket legs are named by what they track; fUSD (the Fest test dollar) shows the dollar mark. */
-const ALIAS: Record<string, string> = { USD: "USDC", FUSD: "USDC", FBTC: "BTC", FETH: "ETH", WQOR: "QOR" };
+const ALIAS: Record<string, string> = { USD: "USDC", FUSD: "USDC", FBTC: "BTC", FETH: "ETH", WQOR: "QOR", FQOR: "QOR", FQWAKK: "QWAKK" };
 /** PNG unless named here. Vector where we have it: these are drawn as small as 18px and scale up
  *  into the basket headers, and the bitmap XAUT was visibly soft at both ends. SOL is the official
  *  wordless gradient logomark, shipped as a vector so it stays crisp at every bubble size. */
