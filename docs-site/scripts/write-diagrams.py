@@ -54,24 +54,24 @@ def flow(name, title, subtitle, steps):
 flow(
     "buy-flow.svg",
     "One buy, one signature",
-    "You sign the intent. The relayer verifies it and the chain executes it as you, inside your grant and your EVM window.",
+    "You sign plain text in QoreX. Your Darwin account checks it on chain. No EVM window, no grant, no gas for the trade.",
     [
-        ("You sign the intent", ["In QoreX: action, basket,", "fUSD in, minimum shares,", "nonce, expiry.", "secp256k1 + ML-DSA-87."], "your signature", True),
-        ("The relayer checks", ["QoreSign verifies it against", "your on-chain ML-DSA-87", "key. Fields, expiry, and a", "nonce never used before."], "refuses replays", False),
-        ("The chain executes", ["MsgExec as you, admitted by", "your EVM window. The router", "takes 0.30%, buys components", "from the reserve, mints."], "router + basket", False),
-        ("The shares are yours", ["An ERC-20 balance on your", "account. Darwin has no key", "that moves it. The relayer", "paid the gas."], "done", True),
+        ("You sign the text", ["In QoreX: the trade, your", "account, nonce, deadline,", "hash of the exact calls.", "secp256k1 + ML-DSA-87."], "your signature", True),
+        ("The relayer checks", ["Both halves against your", "on-chain keys (QoreSign).", "A trade paying your own", "account. Then it submits."], "pays the gas", False),
+        ("Your account checks", ["pqcVerify against your", "ML-DSA-87 key, nonce used", "once. Then the router buys", "from the reserve, mints."], "enforced on chain", False),
+        ("The shares are yours", ["On your Darwin account.", "Only your ML-DSA-87 key", "moves them. First buy:", "one fUSD deposit before."], "done", True),
     ],
 )
 
 flow(
     "sell-flow.svg",
     "One sell, one signature",
-    "Same shape: an intent you sign, verified by the relayer, executed as you. Selling stays open when buying is paused.",
+    "Same shape: one text you sign, checked by your account on chain. Selling stays open when buying is paused.",
     [
-        ("You sign the intent", ["In QoreX: action sell, basket,", "shares, minimum fUSD,", "nonce, expiry.", "secp256k1 + ML-DSA-87."], "your signature", True),
-        ("The relayer checks", ["Same checks as a buy:", "your on-chain key, the", "fields, expiry, nonce."], "refuses replays", False),
-        ("Redeem and sell", ["The router redeems your", "shares in kind and sells", "each component to the", "reserve at oracle prices."], "no price for redeem", False),
-        ("fUSD is yours", ["Paid to your account,", "minus 0.30%. Never less", "than your minimum."], "done", True),
+        ("You sign the text", ["In QoreX: sell, basket,", "shares, minimum fUSD,", "nonce, deadline, calls.", "secp256k1 + ML-DSA-87."], "your signature", True),
+        ("The relayer checks", ["Same checks as a buy.", "It submits and pays the", "gas; it cannot change", "a call."], "pays the gas", False),
+        ("Redeem and sell", ["Your account verifies,", "then the router redeems", "in kind and sells each", "component to the reserve."], "enforced on chain", False),
+        ("fUSD is yours", ["On your Darwin account,", "minus 0.30%. Never less", "than your minimum.", "Withdraw it to QoreX."], "done", True),
     ],
 )
 
@@ -99,19 +99,22 @@ def arrow(x1, y1, x2, y2, label=None, lx=None, ly=None):
     return s
 
 
-out += box(56, 130, 230, 120, "You, in QoreX", ["signArbitrary: trade intent", "secp256k1 + ML-DSA-87", "+ EVM window, 24 h grant"], True)
-out += box(360, 130, 250, 120, "Darwin's relayer", ["QoreSign: verifies the intent", "against your on-chain key", "sends MsgExec as you"])
-out += box(690, 130, 200, 120, "DarwinRouter", ["fee 0.30%", "buys or sells every", "component, no admin"])
-out += box(930, 110, 180, 90, "DarwinBasket", ["mint / redeem in kind", "curator-signed rebalance"])
-out += box(930, 230, 180, 90, "DarwinReserve", ["oracle-priced inventory", "spread 0.30%"])
+out += box(56, 130, 190, 120, "You, in QoreX", ["signArbitrary: text", "secp256k1 + ML-DSA-87", "no window, no grant"], True)
+out += box(300, 130, 190, 120, "Darwin's relayer", ["QoreSign: both halves", "checked, then submits", "and pays the gas"])
+out += box(540, 130, 190, 120, "Your DarwinAccount", ["pqcVerify: your key", "nonce, deadline, calls", "Darwin targets only"], True)
+out += box(770, 130, 160, 120, "DarwinRouter", ["fee 0.30%", "buys or sells every", "component, no admin"])
+out += box(950, 110, 170, 90, "DarwinBasket", ["mint / redeem in kind", "curator-signed rebalance"])
+out += box(950, 230, 170, 90, "DarwinReserve", ["oracle-priced inventory", "spread 0.30%"])
 out += box(690, 380, 200, 110, "DarwinOracle", ["rounds signed by the", "reporter (ML-DSA-87)", "15% breaker, 60 s apart"])
 out += box(360, 380, 250, 110, "pqcVerify / pqcKeyStatus", ["QoreChain precompiles", "0x...0A01, 0x...0A02", "used by PqcAuth"])
 out += box(56, 380, 230, 110, "Reporter, curator, admin", ["ML-DSA-87 keys registered", "with proof of possession", "no secp256k1 power"], True)
 
-out += arrow(288, 190, 356, 190, "intent", 300, 180)
-out += arrow(612, 190, 686, 190, "MsgExec", 622, 180)
-out += arrow(892, 175, 926, 160)
-out += arrow(892, 210, 926, 262)
+out += arrow(248, 190, 296, 190, "signed", 252, 180)
+out += arrow(492, 190, 536, 190, "submit", 495, 180)
+out += arrow(732, 190, 766, 190)
+out += arrow(932, 175, 946, 160)
+out += arrow(932, 210, 946, 262)
+out += arrow(620, 252, 560, 376, "checks", 600, 320)
 out += arrow(1020, 322, 900, 410, "prices", 975, 375)
 out += arrow(288, 435, 356, 435, "signatures", 292, 425)
 out += arrow(612, 435, 686, 435)

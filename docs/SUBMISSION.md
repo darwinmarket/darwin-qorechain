@@ -14,8 +14,9 @@ only with ML-DSA-87 signatures checked on chain.
 Darwin turns a portfolio into one token. Four baskets are live on qorechain-diana: Blue Chip
 (BLUEdw, 70% BTC / 30% ETH), Balanced (BALdw, 35% BTC / 35% ETH / 30% USD), Qore Ecosystem
 (QOREdw, 60% QOR / 25% ETH / 15% QWAKK) and Degen (DEGENdw, 70% QWAKK / 30% QOR). You buy one
-with fUSD from QoreX in a single approval, and you exit by selling it for fUSD; the vault holds the
-coins.
+with fUSD from QoreX with one signature (the first buy adds one fUSD deposit approval), and you
+exit by selling it for fUSD and withdrawing to QoreX; the vault holds the coins. No EVM window, no
+authorization, no gas for the trade.
 
 A basket protocol has three keys worth stealing: the one that sets prices, the one that trades the
 vault, and the one that administers it. On Q-Day a quantum computer derives a secp256k1 private
@@ -28,15 +29,20 @@ precompiles against keys registered with proof of possession:
   lose more than 1% of NAV at oracle prices; rebalances run once a week, Mondays 12:00 UTC;
 - every admin action (15 of them, including moving the reserve's funds) needs the admin's
   ML-DSA-87 signature; no function trusts `msg.sender` for admin powers;
-- every user trade is an intent the user signs in QoreX with secp256k1 and ML-DSA-87
-  (`signArbitrary`); Darwin's relayer verifies it against the user's on-chain key with QoreSign and
-  executes it as the user through an expiring authz grant, admitted by the user's own EVM window
-  (QoreX does not sign cross-VM calls, which we established message type by message type);
-- the keeper's EVM window is scoped to Darwin's own contracts.
+- every user trade is plain text the user signs in QoreX with secp256k1 and ML-DSA-87
+  (`signArbitrary`), and is executed by the user's own DarwinAccount, a contract controlled only by
+  the user's registered ML-DSA-87 key: it rebuilds the text (account, single-use nonce, deadline,
+  hash of the exact calls) and checks it with `pqcVerify` before calling Darwin's router. Darwin's
+  relayer first verifies both halves with QoreSign so it never pays for a message the chain would
+  refuse, then submits it and pays the gas; it cannot change or replay a call. Windowless: the user
+  opens no EVM window and signs no grant (QoreX does not sign cross-VM calls or send EVM
+  transactions, which we established message type by message type);
+- the keeper's EVM window is scoped to Darwin's own contracts, the relayer's to the account factory.
 
 And you don't have to take the chain's word for it: each transaction page re-verifies the
-signatures in the browser, with QoreSign for a trade and with `@qorechain/pqc` for an oracle
-round (and shows that the same signature fails for the next round).
+signatures in the browser with `@qorechain/pqc`: a trade's owner signature, rebuilt from the
+calldata and the account's nonce (and shown to fail for the next nonce), and an oracle round's
+reporter signature (shown to fail for the next round); hybrid transaction signatures with QoreSign.
 
 Darwin is already live on Miden mainnet (app.darwin.market, 120+ wallets). This is its
 post-quantum port, written during the fest, with the same front.
@@ -47,26 +53,37 @@ post-quantum port, written during the fest, with the same front.
   `pqcKeyStatus` (0x0A02) and `pqcVerify` (0x0A01); `PqcAdmin` puts every admin power behind it;
   `DarwinOracle` (signed rounds, breaker, staleness), `DarwinBasket` (ERC-20 share, in-kind
   mint/redeem, curator-signed rebalances), `DarwinReserve` (oracle-priced inventory, because the
-  EVM cannot call the native AMM), `DarwinRouter` (buy or sell a whole basket with fUSD), `WQOR`.
+  EVM cannot call the native AMM), `DarwinRouter` (buy or sell a whole basket with fUSD), `WQOR`,
+  `DarwinAccount` and `DarwinAccountFactory` (each QoreX user's account, CREATE2 from the owner,
+  ML-DSA-87 only, allowed targets changed only by the admin's ML-DSA-87 signature).
 - **Ops** (TypeScript, QoreChain SDK): coin-118 treasury and coin-60 deployer / reporter / curator
   from one mnemonic; ML-DSA-87 registration with proof of possession; hybrid-signed native txs;
   `MsgConvertCoin`/`MsgConvertERC20` for the Fest tokens; QOR and QWAKK first bought on the native AMM, then held as the price-tracking stand-ins fQOR/fQWAKK (minted only by an ML-DSA-87 admin signature) because the real testnet supply capped buys at tens of dollars; a keeper
   that keeps a scoped EVM window, posts signed rounds (10-minute heartbeat or a 0.25% move) and runs
   the weekly rebalance.
 - **App** (Next.js, forked from our mainnet front): reads everything from the chain; trades through
-  QoreX with the wallet adapter's helpers; a Security tab with the oracle's feeds and rounds, the
+  QoreX with the wallet adapter's helpers and the user's DarwinAccount; its server is the relayer
+  (deposits: one `MsgSend` of fUSD converted onto the account; withdrawals: back to the QoreX
+  wallet in bank form); a Security tab with the oracle's feeds and rounds, the
   rules and the keeper's window; a transaction page with the chain's post-quantum evidence and the
   browser's own ML-DSA-87 verdict; a PQC key badge from `@qorechain/react`.
 - **Prices:** BTC and ETH from four spot APIs; QOR at its market price (CoinGecko, MEXC); QWAKK
   from its only market, the QWAKK/QOR pool, whose history the charts replay swap by swap.
-- **Tests:** 94 unit, fuzz and invariant tests; 26 on-chain checks against the real precompiles
-  (forged, tampered, replayed, stale and expired signatures refused, plus a second opinion from the
-  `qore` CLI); an 8-user parallel battery (32/32 trades hybrid-verified); 25 browser checks with the QoreX test double and real
-  hybrid signing. Reports with every tx hash in `docs/e2e`.
+- **Tests:** 110 unit, fuzz and invariant tests (11 for DarwinAccount); 26 on-chain checks against
+  the real precompiles (forged, tampered, replayed, stale and expired signatures refused, plus a
+  second opinion from the `qore` CLI); 9/9 on-chain checks of DarwinAccounts (deposit credited
+  once, buy, sell, withdraw; replay, changed calls, another key, a target outside Darwin and a
+  forged call sent on chain directly, all refused); an 8-user parallel battery (32/32 trades
+  hybrid-verified); 26 browser checks with the QoreX test double and real hybrid signing (24/26
+  locally plus a rerun of the flaky check, 7/7 on production). Reports with every tx hash in
+  `docs/e2e`.
 - **Audit:** the two-stage QCAI audit (run by the team on the dashboard) and the post-quantum
   design map in `docs/AUDIT.md`; QoreScan
   CBOM in `docs/cbom`.
-- **Hard parts:** QoreX cannot sign EVM transactions, so trades go native to EVM by cross-VM call;
+- **Hard parts:** QoreX cannot sign EVM transactions, so trades go through an account that checks
+  the user's ML-DSA-87 signature itself (the first version went native to EVM by cross-VM call,
+  through each user's EVM window and an authz grant); an EVM window lasts at most 17,280 blocks;
+  the ERC-20 conversions need ~2M gas, below which the chain reports a misleading balance error;
   the EVM lane needs coin-60 keys; EVM logs of cross-VM calls are not in `eth_getLogs`, so the app
   reads trades from the native tx search; the REST endpoint sends no CORS headers; the testnet AMM
   pools priced QOR about 10x above its market, so the oracle moved to market prices (round 60).
@@ -84,9 +101,11 @@ qor1yzq84n9uj6fmgzsh7tk88gr7dhrh60u95gpw8p
 qor1dg5x70vqts47p4jnajrvrjketxph8jewxe3phs
 qor1uzauedcmwcgyrvlnqw9numxm8yk0hcmnyvuq5u
 qor1pzkqj8xadyhlqtpplps8jl5xmccf664s554wvf
+0x09891b295bf34c6ed6b364e53bcd68e06fc2bd12
 ```
 
-(treasury and QoreX test trader; deployer, admin and keeper; oracle reporter; curator; trade relayer)
+(treasury and QoreX test trader; deployer, admin and keeper; oracle reporter; curator; trade relayer;
+DarwinAccountFactory)
 
 ## Boxes to tick
 

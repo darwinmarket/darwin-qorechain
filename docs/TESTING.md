@@ -1,14 +1,15 @@
 # Testing
 
-Four layers, from pure logic to the live chain. Every layer is run before a change is called done.
+Five layers, from pure logic to the live chain. Every layer is run before a change is called done.
 
 | Layer | Where | What | Run |
 |---|---|---|---|
-| Unit and fuzz | `contracts/test/*.t.sol` | 85 tests: oracle rounds and refusals, PQ admin, reserve pricing, basket mint/redeem/rebalance, router, WQOR, QOREDW | `cd contracts && forge test` |
+| Unit and fuzz | `contracts/test/*.t.sol` | oracle rounds and refusals, PQ admin, reserve pricing, basket mint/redeem/rebalance, router, WQOR, QOREDW, and DarwinAccount (11 tests, `DarwinAccount.t.sol`: the address known beforehand and the account created by the first action, buy then sell by signatures only, a withdrawal as a signed transfer, a signature works once, the submitter cannot change the calls, another key cannot sign, expired messages refused, only Darwin's contracts callable, no account for an owner without a proven key, targets changed only by the admin's PQ signature, `create` idempotent). Full forge suite with the invariants: **110/110** | `cd contracts && forge test` |
 | Invariant | `contracts/test/invariant` | two campaigns of 256 runs x 500 calls. At fixed prices (random mints, redeems, buys, sells): shares fully backed, NAV per share never drops, router keeps nothing, weights sum to 100%, sells refused only for an empty reserve or dust. With the oracle's prices walking (signed rounds a minute apart, up to ±10% each): still fully backed, **in-kind redemption never fails**, sells refused only for known reasons, router keeps nothing. Failures are counted, never swallowed | `forge test --match-path "test/invariant/*"` |
-| On-chain E2E | `ops/src/e2e.ts` | 27 checks on qorechain-diana against the real `pqcVerify` and `pqcKeyStatus` precompiles: forged, tampered, replayed and stale signatures refused; admin, guardian, router, in-kind redemption, native cross-VM trades, ERC-20 conversions, curator rebalances (restoring the basket's own targets), every basket pinned to its published weights, a feed twice in a round and a round seconds after the last refused, every seed at `0x…dEaD`, the relayer executing an ML-DSA-87 signed intent as the user and refusing a replay and a tampered intent, and a second opinion from the official `qore` CLI | `cd ops && npm run e2e` (stop the keeper first) |
+| On-chain E2E | `ops/src/e2e.ts` | 27 checks on qorechain-diana against the real `pqcVerify` and `pqcKeyStatus` precompiles: forged, tampered, replayed and stale signatures refused; admin, guardian, router, in-kind redemption, native cross-VM trades, ERC-20 conversions, curator rebalances (restoring the basket's own targets), every basket pinned to its published weights, a feed twice in a round and a round seconds after the last refused, every seed at `0x…dEaD`, the original relayer path executing an ML-DSA-87 signed intent as the user and refusing a replay and a tampered intent, and a second opinion from the official `qore` CLI | `cd ops && npm run e2e` (stop the keeper first) |
+| DarwinAccounts on chain | `ops/src/account-check.ts` | **9/9** on qorechain-diana, through the app's API, with the test wallet as QoreX (same mnemonic, coin 118; `signMessage` = what QoreX `signArbitrary` signs): a deposit (one `MsgSend`) lands on the account as ERC-20 and is credited once; a buy and a sell by one signed message each, no window, no grant; a withdrawal back to the wallet's bank balance; refused: the same signature replayed, calls changed after signing, another key's signature, a target outside Darwin, and the forged call submitted on chain directly (refused by the account's `pqcVerify`). Separately, a withdrawal deliberately cut halfway on chain was completed by `settleWithdrawals()` | `cd ops && APP=<app url> npx tsx src/account-check.ts [BASKET] [usd]` |
 | Multi-user battery | `ops/src/battery.ts` | 8 fresh QoreX-style users trade all four baskets in parallel (buys, sells, in-kind redemptions, faucet-form and ERC-20 fUSD), every trade's hybrid signature checked on chain, then solvency, NAV and router invariants; the users then exit the QOR baskets (whose QOR and QWAKK inventory is scarce) and leftover gas is returned | `cd ops && npm run battery` |
-| Browser E2E | `app/e2e/suite.mjs` | 25 checks in Chromium with the QoreX test double (real hybrid signing, real broadcast); every trade is an intent signed with `signArbitrary` and executed by the relayer, checked on chain (`MsgExec`, hybrid signature, the user's EVM window); the app's own in-browser ML-DSA-87 verification of a round and of a trade; the PQC key badge; buys sized to the vault's capacity (SKIP, not FAIL, when the testnet reserve is empty) | `cd app && npm run build && npm start & npm run e2e` (`ONLY=<regex>` for a subset) |
+| Browser E2E | `app/e2e/suite.mjs` | 26 checks in Chromium with the QoreX test double (real hybrid signing, real broadcast); every buy and sell is one message signed with `signArbitrary` and checked on chain by the user's DarwinAccount, with no window; a buy above the account's fUSD deposits the rest first (one `MsgSend`) then signs once; Portfolio withdraws fUSD back to QoreX; the transaction page re-verifies the owner's ML-DSA-87 signature in the browser and shows it fails for the next nonce; Activity lists the account's trades from the chain; the in-browser verification of a round; the PQC key badge; buys sized to the vault's capacity (SKIP, not FAIL, when the testnet reserve is empty). Latest local run 24/26 with 1 skip and 1 page-load timeout (`more fUSD than the balance disables the button`), which passed on rerun (`browser-2026-11-20T221356.md`, `browser-2026-11-20T221408-subset.md`); on production (darwin.market/qorechain) 7/7: buys, the transaction page's browser re-verification, withdraw, Activity (`browser-2026-11-20T222533-subset.md`) | `cd app && npm run build && npm start & npm run e2e` (`ONLY=<regex>` for a subset) |
 
 Locally the precompiles do not exist, so `test/utils/MockPqc.sol` is etched at `0x…0A01` and
 `0x…0A02`: a signature is valid when it equals `keccak256("ok", key, message)`. The on-chain suite
@@ -66,4 +67,16 @@ bank sends, authz grants and CosmWasm calls are shown and signed; `MsgCrossVMCal
 `MsgConvertCoin` and `MsgConvertERC20` are refused. A grant executed by a third party further needs
 the user's own EVM window (`did not send this call itself, and its EVM authorisation window does
 not admit it`). Hence the relayer design, verified with the real QoreX on testnet
-(tx `4DCBD85715036495D6C32CF3A07AF7DD0ADE6C01191BE69470A9EFFA03986BA3`).
+(tx `4DCBD85715036495D6C32CF3A07AF7DD0ADE6C01191BE69470A9EFFA03986BA3`). It was later replaced for
+new trades by DarwinAccounts, which need no window and no grant (see the README's "How a trade
+works"); the original path remains for selling shares bought before.
+
+## What building DarwinAccounts found (2026-11-20)
+
+- **An EVM window can be opened for at most 17,280 blocks**, about 7 hours at 1.43 s blocks.
+- **`MsgConvertCoin` and `MsgConvertERC20` sent by the relayer need ~2M gas.** Below it the chain
+  reports a misleading `failed to retrieve balance: EVM call unexpected error`.
+- **`MsgConvertERC20`'s `sender` must be bech32** (`qor1…`), not `0x`.
+- **A withdrawal is two transactions**, and a serverless call can be cut between them;
+  `settleWithdrawals()` completes it before the next withdrawal and in the daily cron. Tested on
+  chain by cutting one halfway.

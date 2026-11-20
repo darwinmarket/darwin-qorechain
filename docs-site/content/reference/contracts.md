@@ -10,6 +10,15 @@ Network: QoreChain testnet `qorechain-diana`, EVM chain id 9800. Source of truth
 | DarwinReserve | `0x3a87144e2193db059228f5b982ffb2bdf65bc264` |
 | DarwinRouter | `0xf402f3ce6505be9ba382ddf0bc53c27c1bd1d018` |
 
+## Accounts
+
+| Contract | Address |
+|---|---|
+| DarwinAccountFactory | `0x09891b295bf34c6ed6b364e53bcd68e06fc2bd12` (`accountFactory`) |
+| DarwinAccount | one per QoreX user, at `factory.accountOf(owner)` (CREATE2) |
+
+Allowed targets of every account: the router, the four baskets and fUSD; changed only by the admin's ML-DSA-87 signature (`setTarget`). See [Darwin Accounts](/chain/accounts).
+
 ## Baskets
 
 | Basket | Address |
@@ -39,7 +48,7 @@ Network: QoreChain testnet `qorechain-diana`, EVM chain id 9800. Source of truth
 | `qor1yzq84n9uj6fmgzsh7tk88gr7dhrh60u95gpw8p` | deployer, admin, guardian, fee recipient (`0x20807acc...`) |
 | `qor1dg5x70vqts47p4jnajrvrjketxph8jewxe3phs` | oracle reporter (`0x6A286f3D...`) |
 | `qor1uzauedcmwcgyrvlnqw9numxm8yk0hcmnyvuq5u` | curator (`0xe0BBCcb7...`) |
-| `qor1pzkqj8xadyhlqtpplps8jl5xmccf664s554wvf` | trade relayer (`0x08Ac091C...`) |
+| `qor1pzkqj8xadyhlqtpplps8jl5xmccf664s554wvf` | trade relayer (`0x08Ac091C...`): submits users' signed messages to the factory; receives fUSD deposits |
 
 ## Precompiles
 

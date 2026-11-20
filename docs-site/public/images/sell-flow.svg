@@ -11,38 +11,40 @@
 <rect width="1160" height="430" fill="#201e17"/>
 <rect x="22" y="22" width="1116" height="386" fill="none" stroke="#f5f2e8" stroke-opacity="0.10" rx="8"/>
 <text x="56" y="64" fill="#f5f2e8" font-size="21" font-weight="600">One sell, one signature</text>
-<text x="56" y="88" fill="#a69f8c" font-size="13">Same shape: an intent you sign, verified by the relayer, executed as you. Selling stays open when buying is paused.</text>
+<text x="56" y="88" fill="#a69f8c" font-size="13">Same shape: one text you sign, checked by your account on chain. Selling stays open when buying is paused.</text>
 <rect x="56" y="124" width="235" height="210" rx="12" fill="#201e17" stroke="#e2c57e" stroke-opacity="0.5" stroke-width="1.5"/>
 <circle cx="86" cy="156" r="14" fill="url(#gold)"/><text x="86" y="161" fill="#ffffff" font-size="14" font-weight="700" text-anchor="middle">1</text>
-<text x="110" y="161" fill="#f5f2e8" font-size="14.5" font-weight="700">You sign the intent</text>
-<text x="76" y="196" fill="#a69f8c" font-size="12">In QoreX: action sell, basket,</text>
+<text x="110" y="161" fill="#f5f2e8" font-size="14.5" font-weight="700">You sign the text</text>
+<text x="76" y="196" fill="#a69f8c" font-size="12">In QoreX: sell, basket,</text>
 <text x="76" y="216" fill="#a69f8c" font-size="12">shares, minimum fUSD,</text>
-<text x="76" y="236" fill="#a69f8c" font-size="12">nonce, expiry.</text>
+<text x="76" y="236" fill="#a69f8c" font-size="12">nonce, deadline, calls.</text>
 <text x="76" y="256" fill="#a69f8c" font-size="12">secp256k1 + ML-DSA-87.</text>
 <text x="76" y="300" fill="#e2c57e" font-size="12" font-weight="600">your signature</text>
 <path d="M293 229 L325 229" stroke="#e2c57e" stroke-width="2" marker-end="url(#b)"/>
 <rect x="329" y="124" width="235" height="210" rx="12" fill="#2d2b22" stroke="#474334" stroke-width="1.5"/>
 <circle cx="359" cy="156" r="14" fill="#474334"/><text x="359" y="161" fill="#f5f2e8" font-size="14" font-weight="700" text-anchor="middle">2</text>
 <text x="383" y="161" fill="#f5f2e8" font-size="14.5" font-weight="700">The relayer checks</text>
-<text x="349" y="196" fill="#a69f8c" font-size="12">Same checks as a buy:</text>
-<text x="349" y="216" fill="#a69f8c" font-size="12">your on-chain key, the</text>
-<text x="349" y="236" fill="#a69f8c" font-size="12">fields, expiry, nonce.</text>
-<text x="349" y="300" fill="#a69f8c" font-size="12" font-weight="600">refuses replays</text>
+<text x="349" y="196" fill="#a69f8c" font-size="12">Same checks as a buy.</text>
+<text x="349" y="216" fill="#a69f8c" font-size="12">It submits and pays the</text>
+<text x="349" y="236" fill="#a69f8c" font-size="12">gas; it cannot change</text>
+<text x="349" y="256" fill="#a69f8c" font-size="12">a call.</text>
+<text x="349" y="300" fill="#a69f8c" font-size="12" font-weight="600">pays the gas</text>
 <path d="M566 229 L598 229" stroke="#e2c57e" stroke-width="2" marker-end="url(#b)"/>
 <rect x="602" y="124" width="235" height="210" rx="12" fill="#2d2b22" stroke="#474334" stroke-width="1.5"/>
 <circle cx="632" cy="156" r="14" fill="#474334"/><text x="632" y="161" fill="#f5f2e8" font-size="14" font-weight="700" text-anchor="middle">3</text>
 <text x="656" y="161" fill="#f5f2e8" font-size="14.5" font-weight="700">Redeem and sell</text>
-<text x="622" y="196" fill="#a69f8c" font-size="12">The router redeems your</text>
-<text x="622" y="216" fill="#a69f8c" font-size="12">shares in kind and sells</text>
-<text x="622" y="236" fill="#a69f8c" font-size="12">each component to the</text>
-<text x="622" y="256" fill="#a69f8c" font-size="12">reserve at oracle prices.</text>
-<text x="622" y="300" fill="#a69f8c" font-size="12" font-weight="600">no price for redeem</text>
+<text x="622" y="196" fill="#a69f8c" font-size="12">Your account verifies,</text>
+<text x="622" y="216" fill="#a69f8c" font-size="12">then the router redeems</text>
+<text x="622" y="236" fill="#a69f8c" font-size="12">in kind and sells each</text>
+<text x="622" y="256" fill="#a69f8c" font-size="12">component to the reserve.</text>
+<text x="622" y="300" fill="#a69f8c" font-size="12" font-weight="600">enforced on chain</text>
 <path d="M839 229 L871 229" stroke="#e2c57e" stroke-width="2" marker-end="url(#b)"/>
 <rect x="875" y="124" width="235" height="210" rx="12" fill="#201e17" stroke="#e2c57e" stroke-opacity="0.5" stroke-width="1.5"/>
 <circle cx="905" cy="156" r="14" fill="url(#gold)"/><text x="905" y="161" fill="#ffffff" font-size="14" font-weight="700" text-anchor="middle">4</text>
 <text x="929" y="161" fill="#f5f2e8" font-size="14.5" font-weight="700">fUSD is yours</text>
-<text x="895" y="196" fill="#a69f8c" font-size="12">Paid to your account,</text>
+<text x="895" y="196" fill="#a69f8c" font-size="12">On your Darwin account,</text>
 <text x="895" y="216" fill="#a69f8c" font-size="12">minus 0.30%. Never less</text>
 <text x="895" y="236" fill="#a69f8c" font-size="12">than your minimum.</text>
+<text x="895" y="256" fill="#a69f8c" font-size="12">Withdraw it to QoreX.</text>
 <text x="895" y="300" fill="#e2c57e" font-size="12" font-weight="600">done</text>
 </svg>

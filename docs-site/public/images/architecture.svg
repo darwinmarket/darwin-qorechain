@@ -12,29 +12,34 @@
 <rect x="22" y="22" width="1116" height="516" fill="none" stroke="#f5f2e8" stroke-opacity="0.10" rx="8"/>
 <text x="56" y="64" fill="#f5f2e8" font-size="21" font-weight="600">Darwin on QoreChain</text>
 <text x="56" y="88" fill="#a69f8c" font-size="13">Every arrow that changes state carries an ML-DSA-87 signature checked on chain, or against an on-chain key.</text>
-<rect x="56" y="130" width="230" height="120" rx="12" fill="#201e17" stroke="#e2c57e" stroke-opacity="0.5" stroke-width="1.5"/>
+<rect x="56" y="130" width="190" height="120" rx="12" fill="#201e17" stroke="#e2c57e" stroke-opacity="0.5" stroke-width="1.5"/>
 <text x="74" y="160" fill="#f5f2e8" font-size="14.5" font-weight="700">You, in QoreX</text>
-<text x="74" y="184" fill="#a69f8c" font-size="12">signArbitrary: trade intent</text>
+<text x="74" y="184" fill="#a69f8c" font-size="12">signArbitrary: text</text>
 <text x="74" y="203" fill="#a69f8c" font-size="12">secp256k1 + ML-DSA-87</text>
-<text x="74" y="222" fill="#a69f8c" font-size="12">+ EVM window, 24 h grant</text>
-<rect x="360" y="130" width="250" height="120" rx="12" fill="#2d2b22" stroke="#474334" stroke-width="1.5"/>
-<text x="378" y="160" fill="#f5f2e8" font-size="14.5" font-weight="700">Darwin's relayer</text>
-<text x="378" y="184" fill="#a69f8c" font-size="12">QoreSign: verifies the intent</text>
-<text x="378" y="203" fill="#a69f8c" font-size="12">against your on-chain key</text>
-<text x="378" y="222" fill="#a69f8c" font-size="12">sends MsgExec as you</text>
-<rect x="690" y="130" width="200" height="120" rx="12" fill="#2d2b22" stroke="#474334" stroke-width="1.5"/>
-<text x="708" y="160" fill="#f5f2e8" font-size="14.5" font-weight="700">DarwinRouter</text>
-<text x="708" y="184" fill="#a69f8c" font-size="12">fee 0.30%</text>
-<text x="708" y="203" fill="#a69f8c" font-size="12">buys or sells every</text>
-<text x="708" y="222" fill="#a69f8c" font-size="12">component, no admin</text>
-<rect x="930" y="110" width="180" height="90" rx="12" fill="#2d2b22" stroke="#474334" stroke-width="1.5"/>
-<text x="948" y="140" fill="#f5f2e8" font-size="14.5" font-weight="700">DarwinBasket</text>
-<text x="948" y="164" fill="#a69f8c" font-size="12">mint / redeem in kind</text>
-<text x="948" y="183" fill="#a69f8c" font-size="12">curator-signed rebalance</text>
-<rect x="930" y="230" width="180" height="90" rx="12" fill="#2d2b22" stroke="#474334" stroke-width="1.5"/>
-<text x="948" y="260" fill="#f5f2e8" font-size="14.5" font-weight="700">DarwinReserve</text>
-<text x="948" y="284" fill="#a69f8c" font-size="12">oracle-priced inventory</text>
-<text x="948" y="303" fill="#a69f8c" font-size="12">spread 0.30%</text>
+<text x="74" y="222" fill="#a69f8c" font-size="12">no window, no grant</text>
+<rect x="300" y="130" width="190" height="120" rx="12" fill="#2d2b22" stroke="#474334" stroke-width="1.5"/>
+<text x="318" y="160" fill="#f5f2e8" font-size="14.5" font-weight="700">Darwin's relayer</text>
+<text x="318" y="184" fill="#a69f8c" font-size="12">QoreSign: both halves</text>
+<text x="318" y="203" fill="#a69f8c" font-size="12">checked, then submits</text>
+<text x="318" y="222" fill="#a69f8c" font-size="12">and pays the gas</text>
+<rect x="540" y="130" width="190" height="120" rx="12" fill="#201e17" stroke="#e2c57e" stroke-opacity="0.5" stroke-width="1.5"/>
+<text x="558" y="160" fill="#f5f2e8" font-size="14.5" font-weight="700">Your DarwinAccount</text>
+<text x="558" y="184" fill="#a69f8c" font-size="12">pqcVerify: your key</text>
+<text x="558" y="203" fill="#a69f8c" font-size="12">nonce, deadline, calls</text>
+<text x="558" y="222" fill="#a69f8c" font-size="12">Darwin targets only</text>
+<rect x="770" y="130" width="160" height="120" rx="12" fill="#2d2b22" stroke="#474334" stroke-width="1.5"/>
+<text x="788" y="160" fill="#f5f2e8" font-size="14.5" font-weight="700">DarwinRouter</text>
+<text x="788" y="184" fill="#a69f8c" font-size="12">fee 0.30%</text>
+<text x="788" y="203" fill="#a69f8c" font-size="12">buys or sells every</text>
+<text x="788" y="222" fill="#a69f8c" font-size="12">component, no admin</text>
+<rect x="950" y="110" width="170" height="90" rx="12" fill="#2d2b22" stroke="#474334" stroke-width="1.5"/>
+<text x="968" y="140" fill="#f5f2e8" font-size="14.5" font-weight="700">DarwinBasket</text>
+<text x="968" y="164" fill="#a69f8c" font-size="12">mint / redeem in kind</text>
+<text x="968" y="183" fill="#a69f8c" font-size="12">curator-signed rebalance</text>
+<rect x="950" y="230" width="170" height="90" rx="12" fill="#2d2b22" stroke="#474334" stroke-width="1.5"/>
+<text x="968" y="260" fill="#f5f2e8" font-size="14.5" font-weight="700">DarwinReserve</text>
+<text x="968" y="284" fill="#a69f8c" font-size="12">oracle-priced inventory</text>
+<text x="968" y="303" fill="#a69f8c" font-size="12">spread 0.30%</text>
 <rect x="690" y="380" width="200" height="110" rx="12" fill="#2d2b22" stroke="#474334" stroke-width="1.5"/>
 <text x="708" y="410" fill="#f5f2e8" font-size="14.5" font-weight="700">DarwinOracle</text>
 <text x="708" y="434" fill="#a69f8c" font-size="12">rounds signed by the</text>
@@ -50,12 +55,15 @@
 <text x="74" y="434" fill="#a69f8c" font-size="12">ML-DSA-87 keys registered</text>
 <text x="74" y="453" fill="#a69f8c" font-size="12">with proof of possession</text>
 <text x="74" y="472" fill="#a69f8c" font-size="12">no secp256k1 power</text>
-<path d="M288 190 L356 190" stroke="#e2c57e" stroke-width="2" marker-end="url(#b)"/>
-<text x="300" y="180" fill="#e2c57e" font-size="11.5" font-weight="600">intent</text>
-<path d="M612 190 L686 190" stroke="#e2c57e" stroke-width="2" marker-end="url(#b)"/>
-<text x="622" y="180" fill="#e2c57e" font-size="11.5" font-weight="600">MsgExec</text>
-<path d="M892 175 L926 160" stroke="#e2c57e" stroke-width="2" marker-end="url(#b)"/>
-<path d="M892 210 L926 262" stroke="#e2c57e" stroke-width="2" marker-end="url(#b)"/>
+<path d="M248 190 L296 190" stroke="#e2c57e" stroke-width="2" marker-end="url(#b)"/>
+<text x="252" y="180" fill="#e2c57e" font-size="11.5" font-weight="600">signed</text>
+<path d="M492 190 L536 190" stroke="#e2c57e" stroke-width="2" marker-end="url(#b)"/>
+<text x="495" y="180" fill="#e2c57e" font-size="11.5" font-weight="600">submit</text>
+<path d="M732 190 L766 190" stroke="#e2c57e" stroke-width="2" marker-end="url(#b)"/>
+<path d="M932 175 L946 160" stroke="#e2c57e" stroke-width="2" marker-end="url(#b)"/>
+<path d="M932 210 L946 262" stroke="#e2c57e" stroke-width="2" marker-end="url(#b)"/>
+<path d="M620 252 L560 376" stroke="#e2c57e" stroke-width="2" marker-end="url(#b)"/>
+<text x="600" y="320" fill="#e2c57e" font-size="11.5" font-weight="600">checks</text>
 <path d="M1020 322 L900 410" stroke="#e2c57e" stroke-width="2" marker-end="url(#b)"/>
 <text x="975" y="375" fill="#e2c57e" font-size="11.5" font-weight="600">prices</text>
 <path d="M288 435 L356 435" stroke="#e2c57e" stroke-width="2" marker-end="url(#b)"/>

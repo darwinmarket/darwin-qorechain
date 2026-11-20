@@ -13,38 +13,59 @@ QoreX shows every message it signs, decoded, and refuses what it cannot display.
 | `qorechain.crossvm.v1.MsgCrossVMCall` | refused: "QoreX cannot show what ... does" |
 | `cosmos.evm.erc20.v1.MsgConvertCoin`, `MsgConvertERC20` | refused |
 
-QoreX does not send EVM transactions either. So a QoreX user cannot send Darwin's trade transaction, which is a cross-VM call into the router. The testnet also has CosmWasm uploads switched off, which rules out a CosmWasm gateway.
+QoreX does not send EVM transactions either. So a QoreX user cannot send Darwin's trade transaction, which is a call into the router. The testnet also has CosmWasm uploads switched off, which rules out a CosmWasm gateway.
+
+What QoreX does sign is enough: a `MsgSend` to deposit fUSD, and plain text (`signArbitrary`) for each trade. A [Darwin Account](/chain/accounts) checks that text on chain.
 
 ## The design
 
 | Step | Who | Signature |
 |---|---|---|
-| Open an EVM access window (~7 h) | the user, in QoreX | hybrid `MsgOpenEVMWindow` |
-| Grant `MsgCrossVMCall` and `MsgConvertCoin` to the relayer for 24 h | the user, in the app | hybrid `MsgGrant`, decoded by QoreX |
-| Sign a trade intent | the user, in the app | `signArbitrary`: secp256k1 + ML-DSA-87 |
-| Verify it | the relayer | QoreSign `verifyMessageWithChain` against the user's registered key |
-| Execute it as the user | the relayer | hybrid `MsgExec`; admitted by the user's EVM window |
+| Deposit fUSD (when a buy needs more than the account holds) | the user, in QoreX | hybrid `MsgSend` of fUSD to the relayer |
+| Credit the deposit to the account | the relayer | hybrid `MsgConvertCoin`, receiver = the account, memo `darwin deposit <txhash>` |
+| Sign a trade | the user, in QoreX | `signArbitrary`: secp256k1 + ML-DSA-87 over the [exact text](/chain/accounts#the-exact-signed-text) |
+| Check it | the relayer | QoreSign `verifyMessageWithChain`, both halves, against the user's on-chain keys |
+| Submit it | the relayer | `factory.execute(owner, calls, summary, deadline, pqSignature)`, through its window scoped to the factory |
+| Execute it | the user's DarwinAccount | `pqcVerify` against the user's ML-DSA-87 key, nonce, allowed targets |
+| Withdraw fUSD | the user signs; the relayer returns it | the account transfers fUSD to the relayer; `MsgConvertERC20`, receiver = the user, memo `darwin withdraw <evm hash>` |
+
+No EVM window, no authz grant, no gas for the user's trades. The deposit `MsgSend` costs the user a little QOR.
 
 ## What the relayer checks
 
-`ops/src/relayer.ts`:
+`app/src/server/accounts.ts`, in the app's server:
 
-- the intent's signature, with `requirePq`, against the key the user registered on chain;
-- `darwin: "trade-v1"`, chain id `qorechain-diana`, a known Darwin basket, positive amounts;
-- `expires` in the future and at most 10 minutes ahead;
-- the nonce was never used for this account (kept until the intent expires);
-- the user's window is open and the grant is live.
-
-A replay is refused (`already executed`), a tampered intent is refused (the signature does not verify). Both are checked on chain by Darwin's test suite.
+- both halves of the signature, with `requirePq`, against the keys the user registered on chain, so it never pays for a message the chain would refuse;
+- one to three calls, every target one of Darwin's contracts (router, baskets, fUSD);
+- the calls are a buy or sell paying the account itself, optionally after router approvals, or an fUSD withdrawal to the relayer; anything else is refused;
+- the deadline is in the future and at most 15 minutes ahead;
+- the account's nonce has not moved since signing (`already executed`);
+- for a deposit: the transaction exists and succeeded, and sends fUSD from the user to the relayer; it is credited once (the relayer's memo is read back from the chain).
 
 ## What it sends
 
-One `MsgExec` from the relayer, with the user as the sender of every inner message: `MsgConvertCoin` if the user's ERC-20 fUSD is short, an `approve` if the router's allowance is short, then the router's `buy` or `sell` with the user's minimum. The relayer pays the gas.
+- For a trade or a withdrawal: one EVM transaction to the factory, which creates the account on its first action and calls it. The relayer pays the gas. Before a trade it publishes a fresh oracle round if the last is more than 20 minutes old.
+- For a deposit: one native `MsgConvertCoin` (2M gas).
+- After a withdrawal: one native `MsgConvertERC20` (2M gas). `settleWithdrawals()` completes any withdrawal cut halfway, before the next withdrawal and in the daily cron.
 
 ## Trust bounds
 
-See [Risks](/risks#the-relayer).
+The relayer cannot change a call, replay a message or reach a contract outside Darwin's list: the account refuses all three on chain. It can refuse or delay a message, and it holds fUSD for one transaction during a deposit or a withdrawal. See [Darwin Accounts](/chain/accounts#what-the-relayer-can-and-cannot-do) and [Risks](/risks#the-relayer).
+
+## Before DarwinAccounts
+
+Shares bought before DarwinAccounts sit on the user's EVM twin. Selling them still uses the original path, `app/src/server/relayer.ts` and `app/src/lib/qore/relay.ts`. The trade card switches to it on its own for those holdings.
+
+| Step | Who | Signature |
+|---|---|---|
+| Open an EVM access window (at most 17,280 blocks, ~7 h) | the user, in QoreX | hybrid `MsgOpenEVMWindow` |
+| Grant `MsgCrossVMCall` and `MsgConvertCoin` to the relayer for 24 h | the user, in the app | hybrid `MsgGrant`, decoded by QoreX |
+| Sign a trade intent (JSON) | the user, in the app | `signArbitrary`: secp256k1 + ML-DSA-87 |
+| Verify it | the relayer | QoreSign `verifyMessageWithChain` against the user's registered key; fields, expiry (10 min), single-use nonce |
+| Execute it as the user | the relayer | hybrid authz `MsgExec`; admitted by the user's own EVM window |
+
+On that path the relayer is bounded by the grant (two message types, 24 hours, revocable) and the user's window (transaction count, value, expiry). Every action is a public `MsgExec` naming the user as sender.
 
 ## Running it
 
-`npm run relayer` in `ops/` (port 3046). The app proxies `/api/relay/status` and `/api/relay/trade` to it.
+The relayer is a route of the app (`/api/relay/account`, `/api/relay/deposit`, `/api/relay/execute`; `/api/relay/status` and `/api/relay/trade` for the original path). It runs in the app's server, on Vercel in production; its keys stay server-side.
