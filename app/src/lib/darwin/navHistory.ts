@@ -37,7 +37,9 @@ async function fetchHistory(symbols: string[], range: Range, fromOracle: boolean
     if (!res.ok) throw new Error(`oracle history ${res.status}`);
     return res.json();
   }
-  const q = RANGE_QUERY[range];
+  // QWAKK only trades since 2026-11-18: daily bars would leave a basket holding it two or three
+  // points, so it is charted hourly over whatever part of the range it existed.
+  const q = symbols.includes("QWAKK") ? { range: range === "7D" ? "1mo" : "3mo", interval: "1h" } : RANGE_QUERY[range];
   const res = await fetch(`/api/history?symbols=${symbols.map(tickerFor).join(",")}&range=${q.range}&interval=${q.interval}`);
   if (!res.ok) throw new Error(`history ${res.status}`);
   return res.json();
