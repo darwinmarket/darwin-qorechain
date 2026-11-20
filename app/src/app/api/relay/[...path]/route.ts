@@ -1,32 +1,32 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { status, trade } from "@/server/relayer";
 
 /**
- * Proxy to Darwin's trade relayer (ops/src/relayer.ts), which holds its own key server-side.
- * Only its two routes are forwarded: the setup status of an account, and a signed trade intent.
+ * Darwin's trade relayer (src/server/relayer.ts), in this app's server: the setup status of an
+ * account, and the execution of a trade intent the user signed in QoreX. Keys stay server-side.
  */
-const UPSTREAM = process.env.RELAYER_URL ?? "http://localhost:3046";
+export const runtime = "nodejs";
+export const maxDuration = 60;
+
+const fail = (e: unknown, code = 400) => NextResponse.json({ error: String((e as Error)?.message ?? e).slice(0, 400) }, { status: code });
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ path: string[] }> }) {
-  const path = (await params).path.join("/");
-  if (path !== "status") return NextResponse.json({ error: "not found" }, { status: 404 });
-  const account = req.nextUrl.searchParams.get("account") ?? "";
+  if ((await params).path.join("/") !== "status") return fail("not found", 404);
   try {
-    const r = await fetch(`${UPSTREAM}/relay/status?account=${encodeURIComponent(account)}`, { cache: "no-store" });
-    return new NextResponse(await r.text(), { status: r.status, headers: { "content-type": "application/json" } });
-  } catch {
-    return NextResponse.json({ error: "Darwin's relayer is not reachable" }, { status: 503 });
+    return NextResponse.json(await status(req.nextUrl.searchParams.get("account") ?? ""), { headers: { "cache-control": "no-store" } });
+  } catch (e) {
+    return fail(e);
   }
 }
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ path: string[] }> }) {
-  const path = (await params).path.join("/");
-  if (path !== "trade") return NextResponse.json({ error: "not found" }, { status: 404 });
+  if ((await params).path.join("/") !== "trade") return fail("not found", 404);
   const body = await req.text();
-  if (body.length > 64_000) return NextResponse.json({ error: "too large" }, { status: 413 });
+  if (body.length > 64_000) return fail("too large", 413);
   try {
-    const r = await fetch(`${UPSTREAM}/relay/trade`, { method: "POST", body, headers: { "content-type": "application/json" } });
-    return new NextResponse(await r.text(), { status: r.status, headers: { "content-type": "application/json" } });
-  } catch {
-    return NextResponse.json({ error: "Darwin's relayer is not reachable" }, { status: 503 });
+    const { intent, signature } = JSON.parse(body);
+    return NextResponse.json(await trade(String(intent), signature));
+  } catch (e) {
+    return fail(e);
   }
 }
