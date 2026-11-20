@@ -152,6 +152,27 @@ contract DarwinBasketTest is DarwinTest {
         assertEq(bal.targetWeightBps(address(fUSD)), 2_000);
     }
 
+    function test_weightsRefuseASignatureFromAnotherKey() public {
+        uint16[] memory w = new uint16[](3);
+        (w[0], w[1], w[2]) = (4_000, 4_000, 2_000);
+        uint256 d = block.timestamp + 10 minutes;
+        // the reporter's key is registered and proven, but it is not the curator's
+        bytes memory sig = _sign(reporter, bal.weightsMessage(w, 0, d));
+        vm.expectRevert(abi.encodeWithSelector(PqcAuth.BadPqcSignature.selector, curator));
+        bal.setTargetWeights(w, d, sig);
+    }
+
+    function test_weightsSignatureIsBoundToItsWeights() public {
+        uint16[] memory signed = new uint16[](3);
+        (signed[0], signed[1], signed[2]) = (4_000, 4_000, 2_000);
+        uint16[] memory sent = new uint16[](3);
+        (sent[0], sent[1], sent[2]) = (1_000, 1_000, 8_000);
+        uint256 d = block.timestamp + 10 minutes;
+        bytes memory sig = _sign(curator, bal.weightsMessage(signed, 0, d));
+        vm.expectRevert(abi.encodeWithSelector(PqcAuth.BadPqcSignature.selector, curator));
+        bal.setTargetWeights(sent, d, sig);
+    }
+
     function test_weightsMustSumTo100Percent() public {
         uint16[] memory w = new uint16[](3);
         (w[0], w[1], w[2]) = (4_000, 4_000, 1_000);
