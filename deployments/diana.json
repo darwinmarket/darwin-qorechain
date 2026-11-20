@@ -80,7 +80,19 @@
     "QOREDW v3 deploy": "2026-11-20T10:43:56.672Z",
     "QOREDW v3 reserve exempt": "2026-11-20T10:43:58.074Z",
     "QOREDW v3 seed": "2026-11-20T10:44:03.841Z",
-    "QOREDW v3 leftovers back to reserve": "2026-11-20T10:44:08.007Z"
+    "QOREDW v3 leftovers back to reserve": "2026-11-20T10:44:08.007Z",
+    "QOREDW v3 pause mint": "2026-11-20T10:55:03.902Z",
+    "QOREDW v4 seed from reserve": "2026-11-20T10:55:04.910Z",
+    "QOREDW v4 deploy": "2026-11-20T10:55:10.006Z",
+    "QOREDW v4 reserve exempt": "2026-11-20T10:55:11.109Z",
+    "QOREDW v4 seed": "2026-11-20T10:55:17.136Z",
+    "QOREDW v4 leftovers back to reserve": "2026-11-20T10:55:21.347Z",
+    "DEGENDW v1 pause mint": "2026-11-20T10:55:26.789Z",
+    "DEGENDW v2 seed from reserve": "2026-11-20T10:55:33.866Z",
+    "DEGENDW v2 deploy": "2026-11-20T10:55:35.666Z",
+    "DEGENDW v2 reserve exempt": "2026-11-20T10:55:36.777Z",
+    "DEGENDW v2 seed": "2026-11-20T10:55:41.110Z",
+    "DEGENDW v2 leftovers back to reserve": "2026-11-20T10:55:43.905Z"
   },
   "oracle": "0x26ede83659e3e007f3fe568ee6c6a20df77929e6",
   "reserve": "0x39a401ae133e80b05c6f7076bc0bc6d5e3df1a23",
@@ -149,49 +161,36 @@
       }
     },
     "QOREDW": {
-      "address": "0xe0f6f58dbcb03f863ccf0bea8c2a5a8e16494b6b",
-      "version": 3,
+      "address": "0x2a78aedc518aadbd99f2f206d82c1cfd2863f961",
+      "version": 4,
       "name": "Darwin Qore Ecosystem",
       "display": "QOREdw",
-      "description": "QoreChain's ecosystem: 50% QOR, 25% ETH, 25% QWAKK.",
+      "description": "QoreChain's ecosystem: 60% QOR, 25% ETH, 15% QWAKK.",
       "components": [
         "WQOR",
         "fETH",
         "QWAKK"
       ],
       "weights": [
-        5000,
+        6000,
         2500,
-        2500
+        1500
       ]
     },
     "DEGENDW": {
-      "address": "0x48775d391021698298f6fcdb1826ba3a59db8d91",
+      "address": "0x77cf407ef0ded53ff39d0eb83e1ece1049d733a6",
+      "version": 2,
       "name": "Darwin Degen",
       "display": "DEGENdw",
-      "description": "QoreChain's own degen pair: 50% QOR, 50% QWAKK. High risk, for fun.",
+      "description": "QoreChain's degen pair: 70% QWAKK, 30% QOR. High risk, for fun.",
       "components": [
         "WQOR",
         "QWAKK"
       ],
       "weights": [
-        5000,
-        5000
-      ],
-      "seed": {
-        "amounts": [
-          "5766097391820282880",
-          "3949842277"
-        ],
-        "shares": "40000000000000000",
-        "prices": {
-          "fUSD": 1,
-          "fETH": 1743.71,
-          "fBTC": 61538.05,
-          "WQOR": 0.03468550501483336,
-          "QWAKK": 0.00005063493322713778
-        }
-      }
+        3000,
+        7000
+      ]
     }
   },
   "router": "0x9a3ec4cc1163ee8fdce4049944178da6d74972c9",
@@ -259,6 +258,58 @@
       ],
       "retired": "2026-11-20T10:43:56.672Z",
       "reason": "v3 changes the components; they are fixed per contract"
+    },
+    {
+      "key": "QOREDW",
+      "version": 3,
+      "address": "0xe0f6f58dbcb03f863ccf0bea8c2a5a8e16494b6b",
+      "name": "Darwin Qore Ecosystem",
+      "display": "QOREdw",
+      "description": "QoreChain's ecosystem: 50% QOR, 25% ETH, 25% QWAKK.",
+      "components": [
+        "WQOR",
+        "fETH",
+        "QWAKK"
+      ],
+      "weights": [
+        5000,
+        2500,
+        2500
+      ],
+      "retired": "2026-11-20T10:55:10.006Z",
+      "reason": "v4: new components or reseed at market prices"
+    },
+    {
+      "key": "DEGENDW",
+      "version": 1,
+      "address": "0x48775d391021698298f6fcdb1826ba3a59db8d91",
+      "name": "Darwin Degen",
+      "display": "DEGENdw",
+      "description": "QoreChain's own degen pair: 50% QOR, 50% QWAKK. High risk, for fun.",
+      "components": [
+        "WQOR",
+        "QWAKK"
+      ],
+      "weights": [
+        5000,
+        5000
+      ],
+      "seed": {
+        "amounts": [
+          "5766097391820282880",
+          "3949842277"
+        ],
+        "shares": "40000000000000000",
+        "prices": {
+          "fUSD": 1,
+          "fETH": 1743.71,
+          "fBTC": 61538.05,
+          "WQOR": 0.03468550501483336,
+          "QWAKK": 0.00005063493322713778
+        }
+      },
+      "retired": "2026-11-20T10:55:35.666Z",
+      "reason": "v2: new components or reseed at market prices"
     }
   ]
 }
