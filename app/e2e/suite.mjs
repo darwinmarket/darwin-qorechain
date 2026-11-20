@@ -4,6 +4,7 @@
 //
 //   npm run build && npm start &          # port 3032
 //   node e2e/suite.mjs                     # mnemonic from QORE_MNEMONIC or ~/.config/qorechain/testnet.mnemonic
+import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { chromium } from "playwright";
@@ -66,7 +67,13 @@ const assert = (c, m) => {
   if (!c) throw new Error(`assertion failed: ${m}`);
 };
 
-const mock = createQorexMock({ profile: "current", mnemonic, chainId: "qorechain-diana", rest: `${BASE}/api/rest` });
+// "planned" adds signArbitrary, which today's QoreX has: trades are intents it signs, executed by
+// Darwin's relayer. The account's EVM window and grants to the relayer (the one-time setup a user
+// does in QoreX and in the app) are put in place by ops/src/relay-setup.ts.
+const mock = createQorexMock({ profile: "planned", mnemonic, chainId: "qorechain-diana", rest: `${BASE}/api/rest` });
+const setup = JSON.parse(
+  execFileSync("npx", ["--no-install", "tsx", "src/relay-setup.ts"], { cwd: new URL("../../ops/", import.meta.url).pathname, encoding: "utf8", timeout: 180_000 }).trim().split("\n").at(-1),
+);
 const browser = await chromium.launch();
 const page = await browser.newPage({ viewport: { width: 1440, height: 1100 } });
 const consoleErrors = [];
@@ -95,6 +102,29 @@ async function txInfo(hash) {
   throw new Error(`tx ${hash} not found`);
 }
 
+/** The newest trade Darwin's relayer executed for `account` since `since` (ms). */
+async function relayedTx(account, since) {
+  const q = encodeURIComponent(`crossvm_request.sender='${account}'`);
+  for (let i = 0; i < 20; i++) {
+    const r = await fetch(`${REST}/cosmos/tx/v1beta1/txs?query=${q}&order_by=ORDER_BY_DESC&pagination.limit=5`);
+    const t = r.ok ? (await r.json()).tx_responses?.find((x) => Date.parse(x.timestamp) >= since) : null;
+    if (t) {
+      const outer = t.tx.body.messages.map((m) => m["@type"].split(".").at(-1));
+      const inner = t.tx.body.messages.flatMap((m) => (m["@type"].endsWith("MsgExec") ? m.msgs : [m])).map((m) => m["@type"].split(".").at(-1));
+      const ev = (type) => t.events.find((e) => e.type === type);
+      return {
+        hash: t.txhash,
+        outer,
+        types: inner,
+        hybrid: t.events.some((e) => e.type === "pqc_hybrid_verify" && e.attributes.some((a) => a.key === "status" && a.value === "verified")),
+        window: ev("pqc_evm_window_used")?.attributes.find((a) => a.key === "address")?.value,
+      };
+    }
+    await sleep(2000);
+  }
+  throw new Error("no relayed trade found on chain");
+}
+
 async function openBasket(display) {
   await page.goto(`${BASE}/${display}`, { waitUntil: "networkidle" });
   await page.waitForSelector("text=Your position", { timeout: 30000 });
@@ -109,16 +139,17 @@ async function trade({ display, key, side, amount }) {
   await cta.waitFor({ timeout: 30000 });
   for (let i = 0; i < 40 && (await cta.isDisabled()); i++) await sleep(500); // quote arrives
   assert(!(await cta.isDisabled()), "CTA enabled after the quote");
-  const before = (await page.evaluate(() => window.__qorexMock.requests.length));
+  const t0 = Date.now() - 5000;
   await cta.click();
   await page.waitForSelector(`text=${side === "buy" ? "Bought" : "Sold"} ${NAME[key]}`, { timeout: 150000 });
   await page.screenshot({ path: `${SHOTS}${display}-${side}.png` });
-  const req = await lastBroadcast();
-  assert(req && req.id > before - 1, "a new signAndBroadcast");
-  assert(req.result.shield === "shielded", `shield ${req.result.shield}`);
-  const tx = await txInfo(req.result.txHash);
-  assert(tx.hybrid, "pqc_hybrid_verify verified on chain");
-  return { hash: req.result.txHash, types: tx.types };
+  // the user signed an intent (signArbitrary); the relayer's MsgExec carries the trade as the user
+  const signed = await page.evaluate(() => window.__qorexMock.requests.filter((r) => r.method.endsWith("signArbitrary") && r.outcome === "ok").length);
+  assert(signed > 0, "the intent was signed in QoreX");
+  const tx = await relayedTx(me.native, t0);
+  assert(tx.hybrid, "the relayer's MsgExec carries a verified hybrid signature");
+  assert(tx.window === me.native, `admitted by the user's EVM window (${tx.window})`);
+  return { hash: tx.hash, types: tx.types };
 }
 
 // ------------------------------------------------------------------------------- signed out
@@ -250,7 +281,7 @@ for (const [display, key, target] of [["BLUEdw", "BLUEDW", 1], ["BALdw", "BALDW"
     const r = await trade({ display, key, side: "buy", amount: usd });
     const s1 = await bal(D.baskets[key].address, twin);
     assert(s1 > s0, `shares ${s0} -> ${s1}`);
-    return `${usd} fUSD (vault capacity ${cap === Infinity ? "above the balance" : `$${cap}`}) -> +${(Number(s1 - s0) / 1e18).toFixed(4)} ${display}, msgs [${r.types.join(", ")}], ML-DSA-87 verified`;
+    return `${usd} fUSD (vault capacity ${cap === Infinity ? "above the balance" : `$${cap}`}) -> +${(Number(s1 - s0) / 1e18).toFixed(4)} ${display}, intent signed in QoreX, relayed [${r.types.join(", ")}], hybrid-verified`;
   });
 }
 
