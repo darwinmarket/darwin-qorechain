@@ -43,7 +43,8 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ path
 }
 
 /** Broadcast and simulate, for in-page signers (the QoreX test double). The real QoreX broadcasts itself. */
-const POST_ALLOWED = [/^cosmos\/tx\/v1beta1\/txs$/, /^cosmos\/tx\/v1beta1\/simulate$/];
+/** Also encode: QoreSign re-encodes a committed tx to check its signatures in the browser. */
+const POST_ALLOWED = [/^cosmos\/tx\/v1beta1\/txs$/, /^cosmos\/tx\/v1beta1\/simulate$/, /^cosmos\/tx\/v1beta1\/encode$/];
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ path: string[] }> }) {
   const path = (await params).path.join("/");
