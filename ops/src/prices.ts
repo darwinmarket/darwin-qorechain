@@ -40,6 +40,8 @@ const SOURCES: Record<"BTC" | "ETH" | "QOR", (() => Promise<number>)[]> = {
   QOR: [
     async () => Number((await json("https://api.coingecko.com/api/v3/simple/price?ids=qorechain&vs_currencies=usd")).qorechain.usd),
     async () => Number((await json("https://api.mexc.com/api/v3/ticker/price?symbol=QORUSDT")).price),
+    // MEXC's 5-minute average: same book, but a single wick in the last trade cannot set the median
+    async () => Number((await json("https://api.mexc.com/api/v3/avgPrice?symbol=QORUSDT")).price),
   ],
   BTC: [
     async () => Number((await json("https://api.coinbase.com/v2/prices/BTC-USD/spot")).data.amount),
@@ -98,10 +100,11 @@ export interface PriceSet { USD: number; ETH: number; BTC: number; QOR: number; 
 
 export async function fetchPrices(): Promise<PriceSet> {
   const [btc, eth] = await Promise.all([spot("BTC"), spot("ETH")]);
-  // both QOR sources must answer: one alone could be stale or wrong, and a missing round is safe
-  // (readers refuse stale prices, so buys pause; selling to the router waits, redeeming never does)
-  const q = await spot("QOR", 2);
-  const w = await qwakk(q.price);
+  // QOR needs two of its three quotes. Without them, QOR and QWAKK are left out of the round
+  // (NaN) and their feeds go stale: buying QOR baskets pauses, the BTC/ETH baskets carry on, and
+  // in-kind redemption never depends on a price.
+  const q = await spot("QOR", 2).catch(() => ({ price: NaN, sources: 0 }));
+  const w = Number.isFinite(q.price) ? await qwakk(q.price) : { price: NaN, sources: 0, samples: 0 };
   return {
     USD: 1,
     ETH: eth.price,
