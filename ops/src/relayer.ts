@@ -19,7 +19,7 @@
  * The relayer can act only within the user's grants (types and expiry) and EVM window (count,
  * value, expiry), and only on an intent the user signed.
  *
- *   tsx src/relayer.ts        (listens on RELAYER_PORT, default 3034; the app proxies /api/relay)
+ *   tsx src/relayer.ts        (listens on RELAYER_PORT, default 3046; the app proxies /api/relay)
  */
 import { createHash } from "node:crypto";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
@@ -37,7 +37,7 @@ import { sendFromRole } from "./nativeClient.js";
 import { crossVmCallMsg, evmTwin } from "./crossvm.js";
 import { CONVERT_COIN_TYPE_URL, ERC20_REGISTRY_TYPES } from "./erc20Msgs.js";
 
-const PORT = Number(process.env.RELAYER_PORT ?? 3034);
+const PORT = Number(process.env.RELAYER_PORT ?? 3046);
 const CHAIN_ID = "qorechain-diana";
 const CROSSVM = "/qorechain.crossvm.v1.MsgCrossVMCall";
 const NONCES = join(dirname(fileURLToPath(import.meta.url)), "../.relayer-nonces.json");
