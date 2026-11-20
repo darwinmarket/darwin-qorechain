@@ -47,7 +47,7 @@ type Q = { native?: { capabilities?: string[]; enable(c: string): Promise<unknow
 /** A full SignDoc for one message, to hand to QoreX's signDirect. Never broadcast. */
 async function signDocFor(me: string, msg: Msg) {
   const k = await (window as unknown as { qorex: Q }).qorex.native!.getKey(CHAIN_ID);
-  const acc = await (await fetch(`/api/rest/cosmos/auth/v1beta1/account_info/${me}`)).json();
+  const acc = await (await fetch(`${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/api/rest/cosmos/auth/v1beta1/account_info/${me}`)).json();
   const info = acc.info ?? acc;
   const any = (t: string, v: Uint8Array) => new W().string(1, t).bytes(2, v).done();
   const body = new W().bytes(1, any(msg.typeUrl, msg.value)).string(2, "darwin: QoreX signDirect test (never broadcast)").done();

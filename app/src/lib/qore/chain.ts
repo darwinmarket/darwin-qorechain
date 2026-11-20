@@ -1,9 +1,10 @@
+import { withBase } from "@/lib/base";
 import { createPublicClient, defineChain, http, type Address } from "viem";
 import deployments from "@/config/deployments.json";
 
 export const COSMOS_CHAIN_ID = "qorechain-diana";
 /** The browser reads REST through /api/rest: the public endpoint sends no CORS headers. */
-export const REST = process.env.NEXT_PUBLIC_QORE_REST ?? "/api/rest";
+export const REST = process.env.NEXT_PUBLIC_QORE_REST ?? withBase("/api/rest");
 export const EVM_RPC = process.env.NEXT_PUBLIC_QORE_EVM ?? "https://evm-testnet.qore.host";
 export const EXPLORER = "https://explore.qore.network";
 
@@ -48,5 +49,5 @@ export const tokenKeyOf = (address: string) =>
   Object.entries(D.tokens).find(([, a]) => a.toLowerCase() === address.toLowerCase())?.[0] ?? address;
 
 /** Darwin's own transaction page: the public explorer opens on mainnet, these txs are on testnet. */
-export const txUrl = (hash: string) => `/tx/${hash}`;
+export const txUrl = (hash: string) => withBase(`/tx/${hash}`);
 export const addressUrl = (a: string) => `${EXPLORER}/address/${a}`;

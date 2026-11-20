@@ -11,6 +11,7 @@ import { useBrowserCheck } from "@/lib/qore/verify";
 import { AgamaFrame } from "./AgamaFrame";
 import { AgamaNavbar } from "./AgamaNavbar";
 import { SectionHeading } from "./SectionHeading";
+import { withBase } from "@/lib/base";
 
 const MONO = "var(--font-mono-stack)";
 const box: CSSProperties = { border: "1px solid var(--rule)", borderRadius: 12, overflow: "hidden" };
@@ -144,14 +145,14 @@ function HashLink({ hash, small = false }: { hash: string; small?: boolean }) {
 
 export function TxScreen({ hash }: { hash: string }) {
   const { data: tx, error, isLoading } = useTx(hash);
-  const home = () => (window.location.href = "/");
+  const home = () => (window.location.href = withBase("/"));
   return (
     <AgamaFrame
       nav={
         <AgamaNavbar
           tabs={["Baskets", "Portfolio", "Activity", "Security"]}
           onHome={home}
-          onTab={(t) => (window.location.href = t === "Baskets" ? "/" : `/?tab=${t}`)}
+          onTab={(t) => (window.location.href = withBase(t === "Baskets" ? "/" : `/?tab=${t}`))}
           right={null}
         />
       }

@@ -4,6 +4,7 @@
  * (`/BLUEdw` opens the basket, the root is the grid).
  */
 import { D } from "./qore/chain";
+import { stripBase, withBase } from "@/lib/base";
 
 export type BasketSymbol = string;
 
@@ -60,12 +61,12 @@ export function basketByUrlKey(key: string | null | undefined): BasketMeta | und
 }
 
 export function basketPath(symbol: string): string {
-  return `/${basketTicker(symbol)}`;
+  return withBase(`/${basketTicker(symbol)}`);
 }
 
 export function basketSymbolFromLocation(loc: { pathname: string; search: string }): BasketSymbol | null {
   try {
-    const seg = decodeURIComponent(loc.pathname.replace(/^\/+|\/+$/g, ""));
+    const seg = decodeURIComponent(stripBase(loc.pathname).replace(/^\/+|\/+$/g, ""));
     const fromPath = seg && !seg.includes("/") ? basketByUrlKey(seg) : undefined;
     if (fromPath) return fromPath.symbol;
     return basketByUrlKey(new URLSearchParams(loc.search).get("b"))?.symbol ?? null;
@@ -77,7 +78,7 @@ export function basketSymbolFromLocation(loc: { pathname: string; search: string
 export function syncBasketUrl(symbol: string | null, replace = false): void {
   const url = new URL(window.location.href);
   const current = basketSymbolFromLocation(url);
-  const path = symbol ? basketPath(symbol) : "/";
+  const path = symbol ? basketPath(symbol) : withBase("/");
   if (current === symbol && (symbol === null || url.pathname === path)) return;
   url.searchParams.delete("b");
   url.pathname = path;

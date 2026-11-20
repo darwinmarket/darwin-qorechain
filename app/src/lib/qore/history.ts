@@ -6,11 +6,12 @@
  */
 import { useQuery } from "@tanstack/react-query";
 import type { TradeEntry } from "./trades";
+import { withBase } from "@/lib/base";
 
 export type { TradeEntry };
 
 async function readHistory(address: string): Promise<TradeEntry[]> {
-  const r = await fetch(`/api/trades?account=${address}`);
+  const r = await fetch(withBase(`/api/trades?account=${address}`));
   return r.ok ? r.json() : [];
 }
 
