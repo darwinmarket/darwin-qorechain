@@ -64,7 +64,28 @@ export async function connectQorex(): Promise<Account> {
 }
 
 /** Hand QoreX the messages; it builds, hybrid-signs (secp256k1 + ML-DSA-87) and broadcasts. */
+/**
+ * Run a QoreX request; if QoreX answers that it is locked, ask it to connect, which opens QoreX
+ * for the user to unlock, then run the same request once more. A locked wallet refuses signing
+ * requests outright, but answers a connection request with its unlock screen.
+ */
+export async function withUnlock<T>(request: () => Promise<T>): Promise<T> {
+  try {
+    return await request();
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    const n = qorex();
+    if (!n || !/wallet is locked/i.test(msg)) throw e;
+    await n.enable(COSMOS_CHAIN_ID);
+    return request();
+  }
+}
+
 export async function signAndBroadcast(messages: EncodedMsg[], memo: string, gasLimit: number): Promise<QorexResult> {
+  return withUnlock(() => signAndBroadcastOnce(messages, memo, gasLimit));
+}
+
+async function signAndBroadcastOnce(messages: EncodedMsg[], memo: string, gasLimit: number): Promise<QorexResult> {
   const n = qorex();
   if (!n) throw new Error("QoreX is not installed");
   // validates the request (1-32 messages, memo <= 256 bytes, gas 100k-5M) before the prompt

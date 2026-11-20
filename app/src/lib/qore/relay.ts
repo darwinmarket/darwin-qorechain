@@ -12,7 +12,7 @@
  */
 import { useQuery } from "@tanstack/react-query";
 import { COSMOS_CHAIN_ID } from "./chain";
-import { qorex, signAndBroadcast, type QorexResult } from "./qorex";
+import { qorex, signAndBroadcast, withUnlock, type QorexResult } from "./qorex";
 import type { EncodedMsg } from "./proto";
 
 export type RelayStatus = {
@@ -102,7 +102,8 @@ export async function relayTrade(req: TradeRequest, onSigned?: () => void): Prom
     expires: Math.floor(Date.now() / 1000) + 300,
   });
   // secp256k1 (ADR-36) and ML-DSA-87 over these exact bytes, by the user's own keys in QoreX
-  const signature = await n.signArbitrary(COSMOS_CHAIN_ID, req.account, intent);
+  // a locked QoreX is opened for the user to unlock, then asked again (withUnlock)
+  const signature = await withUnlock(() => n.signArbitrary!(COSMOS_CHAIN_ID, req.account, intent));
   onSigned?.();
   const r = await fetch("/api/relay/trade", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ intent, signature }) });
   const j = await r.json();
