@@ -13,10 +13,15 @@ fest.
 
 | Basket | Ticker | Composition | Address (EVM 9800) |
 |---|---|---|---|
-| Darwin Blue Chip | BLUEdw (`BLUEDW`) | 70% BTC, 30% ETH | `0x033e85e85853bcf9b580c5613f373eb739bd9c2a` |
-| Darwin Balanced | BALdw (`BALDW`) | 35% BTC, 35% ETH, 30% USD | `0x5e8290cfe9ad6487c7336780b0069ecb9b9b92cd` |
-| Darwin Qore Ecosystem | QOREdw (`QOREDW`) | 60% QOR, 25% ETH, 15% QWAKK | `0x2a78aedc518aadbd99f2f206d82c1cfd2863f961` (v4; earlier versions in `basketHistory`) |
-| Darwin Degen | DEGENdw (`DEGENDW`) | 70% QWAKK, 30% QOR | `0x77cf407ef0ded53ff39d0eb83e1ece1049d733a6` (v2) |
+| Darwin Blue Chip | BLUEdw (`BLUEDW`) | 70% BTC, 30% ETH | `0xc35a0eb298693a011d26132eb7f4b8aca8112f92` |
+| Darwin Balanced | BALdw (`BALDW`) | 35% BTC, 35% ETH, 30% USD | `0xfe862c4947626bc9c86bcee12d82153f8286df9a` |
+| Darwin Qore Ecosystem | QOREdw (`QOREDW`) | 60% QOR, 25% ETH, 15% QWAKK | `0x8061be1bcdd9c230c8376c381e14878890dc8dae` |
+| Darwin Degen | DEGENdw (`DEGENDW`) | 70% QWAKK, 30% QOR | `0x0b11e4be57144c2bc3d430aef61c9e93b342c779` |
+
+These are the **v2 stack** (2026-11-20), deployed on the contracts fixed by our review (see
+[Known limitations](#known-limitations)); every seed was minted to `0x…dEaD`. Earlier versions are
+listed in `deployments/diana.json` (`stackHistory`, `basketHistory`, `routerHistory`): their
+minting is paused and their holders can always redeem in kind.
 
 BTC, ETH and USD are held as the Fest test tokens fBTC, fETH and fUSD; QOR as WQOR; QOR is priced at
 its market price (CoinGecko and MEXC); QWAKK is QoreChain's community memecoin, bought on the
@@ -104,10 +109,14 @@ deployments/diana.json  every address, role and seed
 | Reporter | `0x6A286f3D805c2bE0d653Ec86c1CaD9598373CB2e` | ML-DSA-87 only signs; never sends a tx |
 | Curator | `0xe0BBCcb71b761041B3f3038b3E6cdb392CfbE373` | ML-DSA-87 only signs; never sends a tx |
 
-Oracle `0x26ede83659e3e007f3fe568ee6c6a20df77929e6`, reserve
-`0x39a401ae133e80b05c6f7076bc0bc6d5e3df1a23`, router v2 `0x9a3ec4cc1163ee8fdce4049944178da6d74972c9`
-(v1 `0x6b4d…9de3` retired),
-WQOR `0xa140f05ff3fec2d757ae758cddc064e2e386b749` (see `deployments/diana.json`).
+Oracle `0xabe07a51e1974d36970b40d3c1c84da37364685f`, reserve
+`0x3a87144e2193db059228f5b982ffb2bdf65bc264`, router `0xf402f3ce6505be9ba382ddf0bc53c27c1bd1d018`,
+WQOR `0xa140f05ff3fec2d757ae758cddc064e2e386b749` (v2 stack; see `deployments/diana.json`).
+
+Each EVM window also caps the **value** it admits (0.75 QOR per allowed transaction): a stolen
+secp256k1 key cannot drain more QOR through the EVM than the window allows, and opening a new one
+needs the account's ML-DSA-87 signature. We hit it ourselves funding the reserve, and had to wrap
+QOR in pieces.
 
 ### Measured on qorechain-diana
 
@@ -228,16 +237,16 @@ node e2e/trade.mjs BLUEdw 2              # one trade: connect, buy 2 fUSD of BLU
 
 ## Known limitations
 
-Found by our own review on 2026-11-20 (an independent read of the repo, as a juror would). Fixed in
-code and tested; the testnet deployment moves to them with the v2 redeploy:
+Found by our own review on 2026-11-20 (an independent read of the repo, as a juror would), fixed,
+tested, and live on the v2 stack the same day:
 
 | Limitation | Status |
 |---|---|
-| Duplicate feed ids in one round could chain the 15% breaker; rounds could follow each other within seconds | **fixed in code**: ids strictly increasing, rounds at least 60 s apart (`test_aFeedAppearsOnceARound`, `test_roundsAreAtLeastAMinuteApart`); live with the v2 oracle |
-| `PqcAuth` assumed the registered key is ML-DSA-87 | **fixed in code**: algorithm id 1 enforced (`test_aKeyOfAnotherAlgorithmIsRefused`) |
-| A basket emptied by redemptions could be re-seeded by the classical seeder key | **fixed in code**: one-shot seed (`test_aBasketIsSeededOnceEvenIfEmptiedLater`) |
-| The oracle address was fixed in the reserve and baskets | **fixed in code**: `setOracle`, ML-DSA-87 admin only |
-| The seed shares sit on the deployer, whose secp256k1 key relays through the keeper's EVM window: a stolen key could sell them | v2 seeds to an unspendable address, so no classical key holds shares |
+| Duplicate feed ids in one round could chain the 15% breaker; rounds could follow each other within seconds | **fixed and live (v2)**: ids strictly increasing, rounds at least 60 s apart (`test_aFeedAppearsOnceARound`, `test_roundsAreAtLeastAMinuteApart`; on chain: `FeedsNotSorted`, `TooSoon`) |
+| `PqcAuth` assumed the registered key is ML-DSA-87 | **fixed and live (v2)**: algorithm id 1 enforced (`test_aKeyOfAnotherAlgorithmIsRefused`) |
+| A basket emptied by redemptions could be re-seeded by the classical seeder key | **fixed and live (v2)**: one-shot seed (`test_aBasketIsSeededOnceEvenIfEmptiedLater`) |
+| The oracle address was fixed in the reserve and baskets | **fixed and live (v2)**: `setOracle`, ML-DSA-87 admin only |
+| The seed shares sat on the deployer, whose secp256k1 key relays through the keeper's EVM window: a stolen key could sell them | **fixed and live (v2)**: every seed minted to `0x…dEaD`, checked by the on-chain suite |
 | QWAKK's only market is a thin pool, whose spot could be pumped | **fixed**: the oracle uses the pool's 30-minute median; QOR needs two of three quotes, else QOR and QWAKK sit out the round |
 | The reserve trades at the oracle price with a 0.30% spread, which arbitrage can farm around updates | accepted on testnet; a staleness-dependent spread is the mainnet answer |
 
