@@ -4,7 +4,7 @@ import { useMemo } from "react";
 import { LogoStack } from "./StockLogo";
 import { indexLevel } from "@/lib/darwin/format";
 import { basketTicker } from "@/lib/baskets";
-import { useNavHistory } from "@/lib/darwin/navHistory";
+import { moveLabel, useNavHistory } from "@/lib/darwin/navHistory";
 import type { Basket } from "@/lib/darwin/types";
 import { BasketLink } from "./BasketLink";
 import { HeroShader } from "./HeroShader";
@@ -39,7 +39,7 @@ function BasketChip({ basket, onOpen }: { basket: Basket; onOpen?: (symbol: stri
         ) : (
           <span className={styles.change}>
             {history.change >= 0 ? "+" : ""}
-            {(100 * history.change).toFixed(2)}% 30d
+            {(100 * history.change).toFixed(2)}% {moveLabel(history, "30D")}
           </span>
         )}
       </span>
@@ -80,7 +80,7 @@ export function Hero({
       {shader && <HeroShader className={styles.shader} palette="sunset" />}
       <div className={styles.copy}>
         <h1 className="t-hero">One token, a whole strategy.</h1>
-        <p className="t-lead">Structured investing, onchain. One trade buys the whole basket, held privately in your own wallet.</p>
+        <p className="t-lead">Structured investing, onchain. One trade buys the whole basket, priced and rebalanced only with post-quantum signatures.</p>
         <div className={styles.actions}>
           {/* Every mount passes `actions` (HeroActions), so there is no default pair any more.
               The one that used to be here linked to /baskets, now deleted, and to /create, which
