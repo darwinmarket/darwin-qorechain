@@ -10,7 +10,7 @@ All in `ops/`, run with `npx tsx src/<script>.ts` or the npm scripts.
 | `deploy`, `redeploy-v2` | idempotent deployments, recorded in `deployments/diana.json` |
 | `oracle` | sign and relay a price round |
 | `rebalance plan\|run\|weights <BASKET>` | the curator's planner, rebalances and target weights |
-| `keeper` | rounds, the weekly rebalance, the scoped window |
+| `keeper` | local runs only: rounds, the weekly rebalance, the scoped window (in production the app does these on demand and by two daily/weekly crons) |
 | `relayer` | the QoreX trade relayer |
 | `relay-setup` | a test account's one-time setup (window, grants) |
 | `refill`, `mint-ftokens`, `source-qor`, `return-to-amm` | the reserve's inventory |

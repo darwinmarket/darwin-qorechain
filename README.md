@@ -11,6 +11,9 @@ Category: **Post-Quantum dApp**. Darwin is already live on Miden mainnet at
 [app.darwin.market](https://app.darwin.market); this is its post-quantum port, written during the
 fest.
 
+**Live:** the app at **[darwin.market/qorechain](https://darwin.market/qorechain)** (QoreX, testnet)
+and its documentation at **[docs.darwin.market/qorechain](https://docs.darwin.market/qorechain)**.
+
 | Basket | Ticker | Composition | Address (EVM 9800) |
 |---|---|---|---|
 | Darwin Blue Chip | BLUEdw (`BLUEDW`) | 70% BTC, 30% ETH | `0xc35a0eb298693a011d26132eb7f4b8aca8112f92` |
@@ -126,8 +129,8 @@ ops/         TypeScript, @qorechain/sdk 0.14, viem
   crossvm.ts            trade from the native lane with the SDK (the keeper and tests)
   relayer.ts            executes QoreX users' ML-DSA-87 signed intents through their authz grants
   relay-setup.ts        a test account's one-time setup (EVM window, grants)
-  keeper.ts             one loop: scoped window, oracle heartbeat (10 min or a 0.25% move),
-                        the weekly rebalance (Mondays 12:00 UTC, curator-signed)
+  keeper.ts             the always-on keeper for local runs: scoped window, oracle heartbeat,
+                        the weekly rebalance (in production these run on demand, see below)
 app/         Next.js 15, React 18, viem: Darwin's mainnet front (same frame, navbar, home, basket
              screen and trade card) on QoreChain, with QoreX; tabs Baskets, Portfolio, Activity, Security
 deployments/diana.json  every address, role and seed
@@ -232,7 +235,7 @@ npm run fund -- tokens               # faucet fUSD/fETH/fBTC -> ERC-20 on the de
 npm run window -- register all       # ML-DSA-87 keys, with proof of possession
 npm run window -- open deployer      # an EVM window for the deployment
 (cd ../contracts && forge build) && npm run deploy
-npm run keeper                       # oracle rounds, rebalances, scoped window upkeep
+npm run keeper                       # local only: oracle rounds, rebalances, window upkeep
 npm run relayer                      # the QoreX trade relayer on :3046 (the app proxies /api/relay)
 npm run trade -- buy BLUEDW 5        # or: tsx src/crossvm.ts buy BLUEDW 5 (native, hybrid)
 npm run rebalance -- plan BALDW
@@ -246,6 +249,23 @@ npm run e2e                              # the full browser suite (25 checks)
 ONLY="buy BLUEdw|declined" npm run e2e   # a subset: each trade costs testnet QOR in fees
 node e2e/trade.mjs BLUEdw 2              # one trade: connect, buy 2 fUSD of BLUEdw, sell half
 ```
+
+## How it runs in production
+
+The app is one Vercel project (`app/`, base path `/qorechain`), served at darwin.market/qorechain by a
+Cloudflare Worker attached to that path alone (`infra/cloudflare/worker.js`); the rest of
+darwin.market is untouched. Its server holds the role keys (an encrypted environment variable) and
+does the keeper's work on demand, so nothing runs while nobody trades:
+
+- **Prices:** before executing a trade, the relayer publishes a signed round if the last one is more
+  than 20 minutes old (the router refuses prices older than 30). QWAKK's price is the median of its
+  pool's last 30 minutes of swaps, read from the chain, so no state is kept between calls.
+- **Daily cron** (06:00 UTC): renews the deployer's scoped EVM window and publishes a round.
+- **Weekly cron** (Mondays 12:05 UTC): the curator-signed rebalance of every basket that drifted.
+- **Relayer:** a route of the app (`app/src/server/relayer.ts`); single use of an intent is checked
+  against the relayer's own on-chain memos, so it survives serverless restarts.
+
+If none of it runs, the app still displays, and in-kind redemption never needs a price.
 
 ## Security notes
 

@@ -75,7 +75,7 @@ post-quantum port, written during the fest, with the same front.
 
 - GitHub: https://github.com/darwinmarket/darwin-qorechain (MIT)
 - Video: _to record (3 minutes max)_
-- Demo: _local for now (`app/`, port 3032)_
+- Demo: https://darwin.market/qorechain (docs: https://docs.darwin.market/qorechain)
 - Testnet addresses (one per line):
 
 ```
