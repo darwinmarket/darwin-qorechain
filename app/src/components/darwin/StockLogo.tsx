@@ -1,12 +1,13 @@
 "use client";
 
 import { memo, useState, type CSSProperties } from "react";
+import { withBase } from "@/lib/base";
 
 /** Official coin logos, served locally so nothing depends on a third-party CDN. */
 const COIN_ICONS = new Set(["BTC", "ETH", "USDC", "QOR"]);
 /** Logos served by their owner. QWAKK's mark is all rights reserved (see its repo's NOTICE.md),
  *  so it is shown from Qwakk's own site rather than copied into this repository. */
-const REMOTE_ICONS: Record<string, string> = { QWAKK: "/api/logo/qwakk" };
+const REMOTE_ICONS: Record<string, string> = { QWAKK: withBase("/api/logo/qwakk") };
 /** Basket legs are named by what they track; fUSD (the Fest test dollar) shows the dollar mark. */
 const ALIAS: Record<string, string> = { USD: "USDC", FUSD: "USDC", FBTC: "BTC", FETH: "ETH", WQOR: "QOR", FQOR: "QOR", FQWAKK: "QWAKK" };
 /** PNG unless named here. Vector where we have it: these are drawn as small as 18px and scale up
@@ -17,7 +18,7 @@ const SVG_ICONS = new Set(["USDC", "QOR"]);
 const logoUrl = (raw: string) => {
   const symbol = ALIAS[raw] ?? raw;
   if (REMOTE_ICONS[symbol]) return REMOTE_ICONS[symbol];
-  return COIN_ICONS.has(symbol) ? `/logos/crypto/${symbol}.${SVG_ICONS.has(symbol) ? "svg" : "png"}` : "";
+  return COIN_ICONS.has(symbol) ? withBase(`/logos/crypto/${symbol}.${SVG_ICONS.has(symbol) ? "svg" : "png"}`) : "";
 };
 
 export const StockLogo = memo(function StockLogo({ sym, size = 22 }: { sym: string; size?: number }) {

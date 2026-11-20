@@ -14,6 +14,7 @@ import { useQuery } from "@tanstack/react-query";
 import { COSMOS_CHAIN_ID } from "./chain";
 import { qorex, signAndBroadcast, withUnlock, type QorexResult } from "./qorex";
 import type { EncodedMsg } from "./proto";
+import { withBase } from "@/lib/base";
 
 export type RelayStatus = {
   relayer: string;
@@ -27,7 +28,7 @@ export function useRelayStatus(account: string | null | undefined) {
     enabled: Boolean(account),
     refetchInterval: 15_000,
     queryFn: async (): Promise<RelayStatus> => {
-      const r = await fetch(`/api/relay/status?account=${account}`, { cache: "no-store" });
+      const r = await fetch(withBase(`/api/relay/status?account=${account}`), { cache: "no-store" });
       const j = await r.json();
       if (!r.ok) throw new Error(j.error ?? `relayer ${r.status}`);
       return j;
@@ -105,7 +106,7 @@ export async function relayTrade(req: TradeRequest, onSigned?: () => void): Prom
   // a locked QoreX is opened for the user to unlock, then asked again (withUnlock)
   const signature = await withUnlock(() => n.signArbitrary!(COSMOS_CHAIN_ID, req.account, intent));
   onSigned?.();
-  const r = await fetch("/api/relay/trade", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ intent, signature }) });
+  const r = await fetch(withBase("/api/relay/trade"), { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ intent, signature }) });
   const j = await r.json();
   if (!r.ok) throw new Error(j.error ?? `relayer ${r.status}`);
   return j;

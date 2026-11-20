@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { calendarDay } from "./format";
 import { COINS } from "./catalogue";
 import type { Leg, NavHistory, Range } from "./types";
+import { withBase } from "@/lib/base";
 
 export const RANGES: readonly Range[] = ["7D", "30D", "90D", "1Y"];
 
@@ -33,14 +34,14 @@ const oracleOnly = (symbol: string) => !COINS[symbol]?.yahoo && symbol !== "USD"
  */
 async function fetchHistory(symbols: string[], range: Range, fromOracle: boolean): Promise<History> {
   if (fromOracle) {
-    const res = await fetch("/api/oracle-history");
+    const res = await fetch(withBase("/api/oracle-history"));
     if (!res.ok) throw new Error(`oracle history ${res.status}`);
     return res.json();
   }
   // QWAKK only trades since 2026-11-18: daily bars would leave a basket holding it two or three
   // points, so it is charted hourly over whatever part of the range it existed.
   const q = symbols.includes("QWAKK") ? { range: range === "7D" ? "1mo" : "3mo", interval: "1h" } : RANGE_QUERY[range];
-  const res = await fetch(`/api/history?symbols=${symbols.map(tickerFor).join(",")}&range=${q.range}&interval=${q.interval}`);
+  const res = await fetch(withBase(`/api/history?symbols=${symbols.map(tickerFor).join(",")}&range=${q.range}&interval=${q.interval}`));
   if (!res.ok) throw new Error(`history ${res.status}`);
   return res.json();
 }
