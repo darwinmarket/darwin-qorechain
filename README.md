@@ -250,6 +250,7 @@ tested, and live on the v2 stack the same day:
 | The seed shares sat on the deployer, whose secp256k1 key relays through the keeper's EVM window: a stolen key could sell them | **fixed and live (v2)**: every seed minted to `0x…dEaD`, checked by the on-chain suite |
 | QWAKK's only market is a thin pool, whose spot could be pumped | **fixed**: the oracle uses the pool's 30-minute median; QOR needs two of three quotes, else QOR and QWAKK sit out the round |
 | The reserve trades at the oracle price with a 0.30% spread, which arbitrage can farm around updates | accepted on testnet; a staleness-dependent spread is the mainnet answer |
+| The QOR baskets are bounded by the real QOR and QWAKK on the testnet (QWAKK's whole market is about $330) | the reserve bought ~19,750 QOR and 5M QWAKK on the native AMM: Qore Ecosystem fills ~$66, Degen ~$36-40 ([PRICING](docs/PRICING.md#capacity)) |
 
 ## Credits
 
