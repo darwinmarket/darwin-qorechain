@@ -1,0 +1,14 @@
+/*
+ * Verbatim the metrics of `.t-h2` in darwin-ui.css, plus the family that class relies on its
+ * wrapper to supply. Change one and change the other: the whole point is that "Explore baskets"
+ * and a Portfolio heading are the same object.
+ */
+.heading {
+  margin: 0;
+  font-family: var(--font-instrument-sans), var(--font-sans-stack), system-ui, sans-serif;
+  font-size: clamp(22px, 2.2vw, 26px);
+  font-weight: 600;
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+  color: #191918; /* --ink inside .darwin-ui, which does not reach here */
+}

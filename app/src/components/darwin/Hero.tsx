@@ -2,7 +2,7 @@
 
 import { useMemo } from "react";
 import { LogoStack } from "./StockLogo";
-import { usd } from "@/lib/darwin/format";
+import { indexLevel } from "@/lib/darwin/format";
 import { basketTicker } from "@/lib/baskets";
 import { useNavHistory } from "@/lib/darwin/navHistory";
 import type { Basket } from "@/lib/darwin/types";
@@ -22,9 +22,9 @@ function BasketChip({ basket, onOpen }: { basket: Basket; onOpen?: (symbol: stri
       basket={basket}
       onOpen={onOpen}
       className={`${styles.chip}${soon ? ` ${styles.soon}` : ""}`}
-      ariaLabel={`Open ${basket.name}, ${basketTicker(basket.symbol)}. NAV ${usd(basket.navUsd)}.`}
+      ariaLabel={`Open ${basket.name}, ${basketTicker(basket.symbol)}. Index ${indexLevel(basket.navUsd)}.`}
     >
-      {soon && <span className={styles.soonTag}>{basket.paused ? "Paused" : "Soon"}</span>}
+      {soon && <span className={styles.soonTag}>Soon</span>}
       <span className={styles.identity}>
         <LogoStack legs={legs} size={26} />
         <span className={styles.name}>
@@ -33,7 +33,7 @@ function BasketChip({ basket, onOpen }: { basket: Basket; onOpen?: (symbol: stri
         </span>
       </span>
       <span className={styles.values}>
-        <span className={`${styles.nav} num`}>{usd(basket.navUsd)}</span>
+        <span className={`${styles.nav} num`}>{indexLevel(basket.navUsd)}</span>
         {history.change === null ? (
           <span className={styles.pending} aria-hidden />
         ) : (
@@ -79,8 +79,8 @@ export function Hero({
     <section className={styles.hero}>
       {shader && <HeroShader className={styles.shader} palette="sunset" />}
       <div className={styles.copy}>
-        <h1 className="t-hero">Crypto baskets that survive Q-Day.</h1>
-        <p className="t-lead">One token, a whole portfolio. Priced by an oracle whose every round is ML-DSA-87 signed, rebalanced only with a post-quantum signature, traded from QoreX with a hybrid signature.</p>
+        <h1 className="t-hero">One token, a whole strategy.</h1>
+        <p className="t-lead">Structured investing, onchain. One trade buys the whole basket, held privately in your own wallet.</p>
         <div className={styles.actions}>
           {/* Every mount passes `actions` (HeroActions), so there is no default pair any more.
               The one that used to be here linked to /baskets, now deleted, and to /create, which

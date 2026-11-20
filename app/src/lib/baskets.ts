@@ -1,13 +1,74 @@
+/**
+ * Darwin's baskets on QoreChain, with the same API as the mainnet front's lib/baskets: the list,
+ * display tickers (BLUEDW on chain, BLUEdw on screen), and the basket-in-the-URL helpers
+ * (`/BLUEdw` opens the basket, the root is the grid).
+ */
 import { D } from "./qore/chain";
 
-/** Screens show a basket by its display ticker (BLUEdw); the on-chain symbol is BLUEDW. */
-export function basketTicker(symbol: string): string {
-  const key = symbol.toUpperCase();
-  return D.baskets[key]?.display ?? symbol;
+export type BasketSymbol = string;
+
+export interface BasketMeta {
+  readonly symbol: BasketSymbol; // on-chain symbol, e.g. BLUEDW
+  readonly ticker: string; // display ticker, e.g. BLUEdw
+  readonly name: string;
+  readonly description: string;
+  readonly address: string;
+  readonly live: boolean;
 }
 
-/** Resolve a URL segment (/BLUEdw, /bluedw, /BLUEDW) to the on-chain symbol. */
-export function canonicalBasketSymbol(s: string): string | null {
-  const key = s.toUpperCase();
-  return D.baskets[key] ? key : null;
+export const BASKETS: readonly BasketMeta[] = Object.entries(D.baskets).map(([symbol, b]) => ({
+  symbol,
+  ticker: b.display,
+  name: b.name.replace(/^Darwin /, ""),
+  description: b.description,
+  address: b.address,
+  live: true,
+}));
+
+/** Darwin's trade fee, taken by the router on every buy and sell. */
+export const SKIM_FEE_BPS = 30;
+
+export function isWindingDown(_symbol: string): boolean {
+  return false;
+}
+
+export function canonicalBasketSymbol(symbol: string): string {
+  return basketByUrlKey(symbol)?.symbol ?? symbol;
+}
+
+/** The display ticker (BLUEdw) of an on-chain symbol (BLUEDW). */
+export function basketTicker(symbol: string): string {
+  return basketByUrlKey(symbol)?.ticker ?? symbol;
+}
+
+export function basketByUrlKey(key: string | null | undefined): BasketMeta | undefined {
+  if (!key) return undefined;
+  const k = key.toUpperCase();
+  return BASKETS.find((b) => b.symbol === k || b.ticker.toUpperCase() === k);
+}
+
+export function basketPath(symbol: string): string {
+  return `/${basketTicker(symbol)}`;
+}
+
+export function basketSymbolFromLocation(loc: { pathname: string; search: string }): BasketSymbol | null {
+  try {
+    const seg = decodeURIComponent(loc.pathname.replace(/^\/+|\/+$/g, ""));
+    const fromPath = seg && !seg.includes("/") ? basketByUrlKey(seg) : undefined;
+    if (fromPath) return fromPath.symbol;
+    return basketByUrlKey(new URLSearchParams(loc.search).get("b"))?.symbol ?? null;
+  } catch {
+    return null;
+  }
+}
+
+export function syncBasketUrl(symbol: string | null, replace = false): void {
+  const url = new URL(window.location.href);
+  const current = basketSymbolFromLocation(url);
+  const path = symbol ? basketPath(symbol) : "/";
+  if (current === symbol && (symbol === null || url.pathname === path)) return;
+  url.searchParams.delete("b");
+  url.pathname = path;
+  if (replace || current === symbol) window.history.replaceState(null, "", url);
+  else window.history.pushState(null, "", url);
 }

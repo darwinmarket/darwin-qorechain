@@ -1,0 +1,186 @@
+/*
+ * The trade's progress, in the space the button was standing in.
+ *
+ * It is exactly the CTA's box — same width, same height, same corner, same margin — because the
+ * card must not change height when a trade starts. Nothing below it moves, so the page the user
+ * was reading stays where it was.
+ *
+ * Two rows, both single-line and clipped: the steps, and what is happening. A row that could wrap
+ * would make the box grow, which is the one thing this must never do.
+ */
+
+.rail {
+  box-sizing: border-box;
+  width: 100%;
+  height: 50px; /* === .cta — do not change one without the other */
+  margin-top: 16px;
+  padding: 0 13px;
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-xl);
+  background: var(--color-bg-elevated);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 8px;
+  overflow: hidden;
+  animation: trade-rail-in var(--dur-med) var(--ease-out);
+}
+.rail[data-tone="done"] {
+  border-color: #c7ddd1;
+  background: #eef7f2;
+}
+.rail[data-tone="error"] {
+  border-color: #ecc9c4;
+  background: #fbefed;
+}
+
+/* ── the steps: one segment each, filling the width ────────────────────────── */
+
+.track {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.seg {
+  flex: 1;
+  height: 5px;
+  min-width: 10px;
+  border-radius: var(--radius-round);
+  /* Darker than --color-bg-track: the rail's own background is already the elevated tone, and an
+     empty step has to read as empty against it rather than melt into it. */
+  background: #d6d4ca;
+}
+.seg[data-state="done"] {
+  background: var(--ink);
+}
+/*
+ * A sweep, not a percentage: the step is running and we do not pretend to know how far in.
+ *
+ * It has to read as ONE belt moving at one speed, because anything else reads as the thing having
+ * stalled — which is the single question this rail exists to answer. The first version managed the
+ * opposite. It eased in and out of a non-repeating gradient whose dark band sat off-canvas at both
+ * ends of its travel, so each cycle decelerated into a dead stretch and then snapped back. Measured
+ * off a 60fps recording: 9.2px per frame at mid-cycle, under 1px for the last five frames — a
+ * standstill of ~85ms, every 1.5s, followed by a 101px jump.
+ *
+ * So: a repeating gradient twice the segment's width, holding exactly two periods, translated by
+ * exactly one. The end state is pixel-identical to the start, so there is no reset to see, and
+ * `linear` means the speed never varies. It runs on transform rather than background-position, so
+ * the compositor carries it and nothing re-paints.
+ */
+.seg[data-state="active"] {
+  position: relative;
+  overflow: hidden;
+}
+.seg[data-state="active"]::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 200%;
+  background-image: repeating-linear-gradient(90deg, #d6d4ca 0%, var(--ink) 25%, #d6d4ca 50%);
+  animation: trade-rail-sweep 1.5s linear infinite;
+}
+.rail[data-tone="done"] .seg {
+  background: var(--color-status-positive);
+  background-image: none;
+}
+.rail[data-tone="done"] .seg::after,
+.rail[data-tone="error"] .seg[data-state="active"]::after {
+  display: none;
+}
+.rail[data-tone="error"] .seg[data-state="active"] {
+  background: var(--color-status-negative);
+  background-image: none;
+}
+
+.count {
+  flex: none;
+  margin-left: 5px;
+  font-size: 10px;
+  font-weight: 650;
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* ── what is happening ─────────────────────────────────────────────────────── */
+
+.status {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+}
+.spinner {
+  flex: none;
+  width: 12px;
+  height: 12px;
+  border-radius: var(--radius-round);
+  border: 2px solid #d6d4ca;
+  border-top-color: var(--ink);
+}
+.glyph {
+  flex: none;
+  width: 11px;
+  text-align: center;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+}
+.label {
+  min-width: 0;
+  font-size: 12px;
+  line-height: 1.25;
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-variant-numeric: tabular-nums; /* a ticking countdown must not shuffle the text sideways */
+}
+.rail[data-tone="done"] .label,
+.rail[data-tone="done"] .glyph {
+  color: var(--color-status-positive);
+  font-weight: 600;
+}
+.rail[data-tone="error"] .label,
+.rail[data-tone="error"] .glyph {
+  color: var(--color-status-negative);
+}
+
+@keyframes trade-rail-in {
+  from {
+    opacity: 0;
+    transform: translateY(3px);
+  }
+}
+/*
+ * One period of the repeating gradient — the frame it lands on is the frame it started from.
+ *
+ * Rightward, with the progress. The rail reads left to right: step one is the leftmost segment and
+ * each one fills as it completes. A sweep running the other way reads as the thing going backwards.
+ * Measured off a recording: 114 of 115 frames moved left, against every other cue on the rail.
+ */
+@keyframes trade-rail-sweep {
+  from {
+    transform: translateX(-50%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rail {
+    animation: none;
+  }
+  .seg[data-state="active"] {
+    background: var(--color-border-hover);
+  }
+  .seg[data-state="active"]::after {
+    display: none;
+  }
+}
