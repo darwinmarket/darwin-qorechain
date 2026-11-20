@@ -189,12 +189,28 @@ async function capacity(basket: Address): Promise<bigint> {
   return max;
 }
 
+let resolvedAfterCut = 0;
 async function exec(u: User, calls: Call[], summary: string) {
   const req = await signed(u, calls, summary);
   u.lastSigned = req;
-  const r = await api("execute", req);
-  u.executed++;
-  return r;
+  const before = BigInt((await info(u)).nonce);
+  try {
+    const r = await api("execute", req);
+    u.executed++;
+    return r;
+  } catch (e: any) {
+    // as the app does: a cut call (HTTP 5xx with no JSON answer) is resolved from the account's nonce
+    if (!/^HTTP 5\d\d/.test(String(e?.message))) throw e;
+    for (let i = 0; i < 30; i++) {
+      await sleep(3000);
+      if (BigInt((await info(u)).nonce) > before) {
+        u.executed++;
+        resolvedAfterCut++;
+        return { txHash: "", returned: undefined };
+      }
+    }
+    throw e;
+  }
 }
 
 async function buy(u: User, key: string) {
@@ -470,6 +486,7 @@ const pct = (p: number) => (lat.length ? (lat[Math.min(lat.length - 1, Math.floo
 const summary = [
   `users ${USERS}, rounds ${ROUNDS}, operations ${ops.length} (${okOps.length} ok), trades ${tradeOps.length}, deposits ${okOps.filter((o) => o.action.startsWith("deposit")).length}, withdrawals ${okOps.filter((o) => o.action.startsWith("withdraw")).length}`,
   `attacks ${attacks.length}, refused ${attacks.filter((a) => a.refused).length}`,
+  `calls cut before their answer and resolved from the account's nonce: ${resolvedAfterCut}`,
   sigs,
   `trade latency (sign -> confirmed on chain, through the API): p50 ${pct(0.5)} s, p90 ${pct(0.9)} s, max ${pct(1)} s`,
   `failures: ${failures.length}`,

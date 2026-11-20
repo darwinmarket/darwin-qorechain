@@ -52,7 +52,8 @@ async function sendNativeOnce(role: Role, messages: EncodeObject[], gas: number,
   const acc = await account(role);
   const { accountNumber, sequence: fetched } = await sequence(acc.cosmos);
   const seq = forced != null && forced > fetched ? forced : fetched;
-  // messages encoded by hand (lib/qore/proto.ts: { typeUrl, value: bytes }) pass through as they are
+  // messages encoded by hand (lib/qore/proto.ts: { typeUrl, value: bytes }) pass through as they
+  // are; a type the registry already knows must come in object form, or it is re-encoded empty
   const registry = qorechainRegistry();
   for (const m of messages)
     if (m.value instanceof Uint8Array && !registry.lookupType(m.typeUrl))
