@@ -167,7 +167,7 @@ export function QoreTradePanel({ symbol, name }: { symbol: string; name: string 
       fine={`Includes the ${(SKIM_FEE_BPS / 100).toFixed(2)}% fee`}
       warn={
         overCapacity && !over
-          ? `The vault can fill about $${fmt(basket?.capacityUsd ?? 0)} right now.`
+          ? `The vault can fill about $${fmt(basket?.capacityUsd ?? 0, (basket?.capacityUsd ?? 0) < 1 ? 4 : 2)} right now.`
           : paused
             ? "New buys are paused. Selling stays open."
             : null
