@@ -31,6 +31,9 @@ contract DarwinOracle is PqcAdmin {
     uint16 public maxDeviationBps;
     /// @notice How far ahead of the block a round's timestamp may be.
     uint32 public constant MAX_FUTURE_SKEW = 120;
+    /// @notice Rounds are at least this far apart, so the per-round circuit breaker bounds how fast
+    /// a price can move over time, not only within one round.
+    uint32 public constant MIN_ROUND_INTERVAL = 60;
 
     mapping(uint16 => Feed) internal feeds;
     /// @notice The feed that prices a token (0 = none).
@@ -48,6 +51,8 @@ contract DarwinOracle is PqcAdmin {
 
     error LengthMismatch();
     error EmptyRound();
+    error TooSoon(uint64 timestamp, uint64 earliest);
+    error FeedsNotSorted(uint16 feedId);
     error StaleRound(uint64 timestamp, uint64 lastTimestamp);
     error FutureRound(uint64 timestamp);
     error UnknownFeed(uint16 feedId);
@@ -93,6 +98,9 @@ contract DarwinOracle is PqcAdmin {
         if (n == 0) revert EmptyRound();
         if (n != prices.length) revert LengthMismatch();
         if (timestamp <= lastTimestamp) revert StaleRound(timestamp, lastTimestamp);
+        if (lastTimestamp != 0 && timestamp < lastTimestamp + MIN_ROUND_INTERVAL) {
+            revert TooSoon(timestamp, lastTimestamp + MIN_ROUND_INTERVAL);
+        }
         if (timestamp > block.timestamp + MAX_FUTURE_SKEW) revert FutureRound(timestamp);
 
         uint64 r = round + 1;
@@ -101,6 +109,9 @@ contract DarwinOracle is PqcAdmin {
         uint16 maxDev = maxDeviationBps;
         for (uint256 i; i < n; ++i) {
             uint16 id = ids[i];
+            // strictly increasing ids: a feed appears at most once per round, so the breaker cannot
+            // be chained within a round (ids [BTC, BTC, ...] each +15%)
+            if (i != 0 && id <= ids[i - 1]) revert FeedsNotSorted(id);
             uint128 p = prices[i];
             if (bytes(feedName[id]).length == 0) revert UnknownFeed(id);
             if (p == 0) revert ZeroPrice(id);
