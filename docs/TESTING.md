@@ -4,7 +4,7 @@ Four layers, from pure logic to the live chain. Every layer is run before a chan
 
 | Layer | Where | What | Run |
 |---|---|---|---|
-| Unit and fuzz | `contracts/test/*.t.sol` | 81 tests: oracle rounds and refusals, PQ admin, reserve pricing, basket mint/redeem/rebalance, router, WQOR, QOREDW | `cd contracts && forge test` |
+| Unit and fuzz | `contracts/test/*.t.sol` | 83 tests: oracle rounds and refusals, PQ admin, reserve pricing, basket mint/redeem/rebalance, router, WQOR, QOREDW | `cd contracts && forge test` |
 | Invariant | `contracts/test/invariant` | 4 invariants under random mints, redeems, buys and sells (256 runs x 500 calls each): shares fully backed, NAV per share never drops at fixed prices, router keeps nothing, weights sum to 100% | `forge test --match-path "test/invariant/*"` |
 | On-chain E2E | `ops/src/e2e.ts` | 23 checks on qorechain-diana against the real `pqcVerify` and `pqcKeyStatus` precompiles: forged, tampered, replayed and stale signatures refused; admin, guardian, router, in-kind redemption, native cross-VM trades, ERC-20 conversions, curator rebalances (restoring the basket's own targets), every basket pinned to its published weights, and a second opinion from the official `qore` CLI | `cd ops && npm run e2e` (stop the keeper first) |
 | Multi-user battery | `ops/src/battery.ts` | 8 fresh QoreX-style users trade all four baskets in parallel (buys, sells, in-kind redemptions, faucet-form and ERC-20 fUSD), every trade's hybrid signature checked on chain, then solvency, NAV and router invariants; leftover gas returned | `cd ops && npm run battery` |
