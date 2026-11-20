@@ -57,9 +57,9 @@ post-quantum port, written during the fest, with the same front.
   browser's own ML-DSA-87 verdict; a PQC key badge from `@qorechain/react`.
 - **Prices:** BTC and ETH from four spot APIs; QOR at its market price (CoinGecko, MEXC); QWAKK
   from its only market, the QWAKK/QOR pool, whose history the charts replay swap by swap.
-- **Tests:** 94 unit, fuzz and invariant tests; 23 on-chain checks against the real precompiles
+- **Tests:** 94 unit, fuzz and invariant tests; 26 on-chain checks against the real precompiles
   (forged, tampered, replayed, stale and expired signatures refused, plus a second opinion from the
-  `qore` CLI); an 8-user parallel battery; 25 browser checks with the QoreX test double and real
+  `qore` CLI); an 8-user parallel battery (32/32 trades hybrid-verified); 25 browser checks with the QoreX test double and real
   hybrid signing. Reports with every tx hash in `docs/e2e`.
 - **Audit:** the two-stage QCAI audit (run by the team on the dashboard) and the post-quantum
   design map in `docs/AUDIT.md`; QoreScan

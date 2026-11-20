@@ -230,9 +230,10 @@ node e2e/trade.mjs BLUEdw 2              # one trade: connect, buy 2 fUSD of BLU
   `pqcKeyStatus` call sits and which tests cover it).
 - Cryptographic inventory: [docs/cbom](docs/cbom) (QoreScan CBOM; QoreChain's endpoints already
   negotiate the hybrid post-quantum key exchange X25519MLKEM768).
-- Tests: 94 unit, fuzz and invariant tests; on-chain E2E (23/23); an 8-user parallel battery
-  (48/48 trades); browser E2E (25 checks; the last full run, `docs/e2e/browser-2026-11-20T1210.md`, is 24/24 from
-  before the PQC-badge check, which passes on its own); see [docs/TESTING.md](docs/TESTING.md).
+- Tests, on the v2 stack: 94 unit, fuzz and invariant tests; on-chain E2E 26/26
+  (`docs/e2e/2026-11-20T1334.md`); an 8-user parallel battery, 32/32 trades with a verified hybrid
+  signature (`battery-2026-11-20T1335.md`); browser E2E 25/25 (`browser-2026-11-20T133727.md`); see
+  [docs/TESTING.md](docs/TESTING.md).
 - Testnet only: the tokens have no value and the mnemonic used here must never touch mainnet.
 
 ## Known limitations
