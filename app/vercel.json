@@ -1,0 +1,8 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": "nextjs",
+  "crons": [
+    { "path": "/qorechain/api/cron/daily", "schedule": "0 6 * * *" },
+    { "path": "/qorechain/api/cron/weekly", "schedule": "5 12 * * 1" }
+  ]
+}
