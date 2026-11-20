@@ -72,22 +72,6 @@ export function AgamaNavbar({
   );
 }
 
-/** Miden network badge — just the logomark (no chevron/selector), a compact round indicator. */
-export function NetworkPill() {
-  return (
-    <span
-      className="pill-outline flex items-center justify-center rounded-full h-10 w-10 shrink-0 text-white"
-      aria-label="Miden testnet"
-      title="Miden testnet"
-    >
-      <span className="flex h-[22px] w-[22px] items-center justify-center rounded-full overflow-hidden" style={{ background: "#fff" }}>
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src="/miden-logo.png" alt="Miden" className="h-[22px] w-[22px] object-cover" />
-      </span>
-    </span>
-  );
-}
-
 /** Connect / action pill button — Agama's exact button classes (pill-outline). */
 /** One fixed width for the far-right slot, so it reads the same in all three states:
  *  "Connect wallet" on the landing, "Cancel" while signing in, the account pill once connected.

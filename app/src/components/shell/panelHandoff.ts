@@ -6,7 +6,7 @@ import { useEffect, useLayoutEffect, useState, type RefObject } from "react";
  * Connecting must not change the page under the reader. This is what makes that true.
  *
  * THE PROBLEM. Connecting replaces the whole tree: ConnectGate unmounts, the dynamic import's
- * backdrop mounts, then MidenNativeProviders' backdrop while the Bread popup is up, then the real
+ * backdrop mounts, then the wallet providers' backdrop while QoreX asks for approval, then the real
  * shell. Every one of them draws its own AgamaFrame, so each swap hands the reader brand new DOM
  * — which does two things it shouldn't.
  *
@@ -29,7 +29,7 @@ import { useEffect, useLayoutEffect, useState, type RefObject } from "react";
  *
  * WHY THE BACKDROPS DON'T END IT. They are stand-ins; the shell is still coming and needs the same
  * treatment. Only a frame that is not `transient` consumes the handoff. Until then it survives the
- * whole connect, however long the reader leaves the Bread popup open — and their own wheel or touch
+ * whole connect, however long the reader leaves the wallet popup open — and their own wheel or touch
  * ends it immediately, because a position they have just left is not one to put them back to.
  */
 

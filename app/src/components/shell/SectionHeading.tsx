@@ -4,7 +4,7 @@
  * The product's one section heading, usable outside the `.darwin-ui` scope.
  *
  * "Explore baskets" is `.t-h2` inside `.darwin-ui`, which is where both halves of its look live:
- * the metrics in that class, and Instrument Sans on the wrapper. The Para tabs sit outside that
+ * the metrics in that class, and Instrument Sans on the wrapper. The app's tabs sit outside that
  * wrapper, so they had been setting their own sizes in inline styles and drifting — "Activity"
  * was Geist 24px while "Explore baskets" was Instrument Sans at clamp(22px, 2.2vw, 26px) with
  * −0.02em tracking. Close enough to look like a mistake rather than a choice.

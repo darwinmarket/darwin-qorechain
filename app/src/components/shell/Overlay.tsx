@@ -5,12 +5,12 @@ import { useEffect, useRef } from "react";
 /**
  * Modal overlay: click-out + Esc to close, background scroll lock, focus into the dialog.
  * Kept in its own light module (no app/WASM deps) so ConnectGate can use it without pulling
- * in ParaAppShell — that lets the connect screen render before the Miden client chunk loads.
+ * in the app shell — that lets the connect screen render before the wallet code loads.
  */
 // `hidden` keeps the dialog + its children MOUNTED but unpainted (display:none) — React keeps the
 // subtree alive, so its effects/refs/timers keep running. The trade panel uses this to stay alive
 // after the user closes the modal while a buy is still queued/firing: its queue processor must keep
-// draining even with no visible modal (see ParaAppShell), and display:none avoids remounting it
+// draining even with no visible modal (see QoreApp), and display:none avoids remounting it
 // (which would drop the processor and orphan the queued buy). When hidden we also release the scroll
 // lock / Esc / focus so the closed modal doesn't freeze the page behind it.
 export function Overlay({
