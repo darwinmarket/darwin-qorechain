@@ -22,13 +22,23 @@ type History = { timestamps: number[]; closes: Record<string, number[]>; missing
 
 /** Catalogue symbols map to their Yahoo ticker (BTC -> BTC-USD). */
 const tickerFor = (symbol: string) => COINS[symbol]?.yahoo ?? symbol;
-/** Legs with no public history (USD, QOR) are held flat at their current price. */
-const hasHistory = (symbol: string) => Boolean(COINS[symbol]?.yahoo);
+/** A leg only Darwin's oracle prices (QOR, QWAKK): no public market history exists for it. */
+const oracleOnly = (symbol: string) => !COINS[symbol]?.yahoo && symbol !== "USD";
 
-async function fetchHistory(symbols: string[], range: Range): Promise<History> {
+/**
+ * Two sources. Baskets of market coins (BTC, ETH, USD) replay Yahoo closes, which go back years.
+ * Baskets holding QOR or QWAKK replay Darwin's own oracle rounds for every leg (/api/oracle-history,
+ * read from the chain), so the whole path comes from one consistent, ML-DSA-87 signed source; it
+ * starts at launch.
+ */
+async function fetchHistory(symbols: string[], range: Range, fromOracle: boolean): Promise<History> {
+  if (fromOracle) {
+    const res = await fetch("/api/oracle-history");
+    if (!res.ok) throw new Error(`oracle history ${res.status}`);
+    return res.json();
+  }
   const q = RANGE_QUERY[range];
-  const tickers = symbols.map(tickerFor);
-  const res = await fetch(`/api/history?symbols=${tickers.join(",")}&range=${q.range}&interval=${q.interval}`);
+  const res = await fetch(`/api/history?symbols=${symbols.map(tickerFor).join(",")}&range=${q.range}&interval=${q.interval}`);
   if (!res.ok) throw new Error(`history ${res.status}`);
   return res.json();
 }
@@ -38,13 +48,14 @@ async function fetchHistory(symbols: string[], range: Range): Promise<History> {
  * the sum of units x each constituent's closing price; the live on-chain NAV is the last point.
  */
 export function useNavHistory(legs: Leg[] | undefined, range: Range = "30D"): NavHistory {
+  const fromOracle = useMemo(() => (legs ?? []).some((l) => oracleOnly(l.symbol.toUpperCase())), [legs]);
   const symbols = useMemo(
-    () => [...new Set((legs ?? []).map((l) => l.symbol.toUpperCase()).filter(hasHistory))].sort(),
-    [legs],
+    () => [...new Set((legs ?? []).map((l) => l.symbol.toUpperCase()).filter((s) => fromOracle || s !== "USD"))].sort(),
+    [legs, fromOracle],
   );
   const { data, isLoading, dataUpdatedAt } = useQuery({
-    queryKey: ["history", symbols.join(","), range],
-    queryFn: () => fetchHistory(symbols, range),
+    queryKey: ["history", fromOracle ? "oracle" : symbols.join(","), fromOracle ? "all" : range],
+    queryFn: () => fetchHistory(symbols, range, fromOracle),
     enabled: symbols.length > 0,
     staleTime: 10 * 60_000,
   });
@@ -53,9 +64,11 @@ export function useNavHistory(legs: Leg[] | undefined, range: Range = "30D"): Na
     if (!legs?.length) return EMPTY;
     if (isLoading) return { ...EMPTY, loading: true };
     const nav = legs.reduce((sum, leg) => sum + leg.perShare * Math.max(0, leg.priceUsd ?? 0), 0);
-    const tracked = legs.filter((l) => hasHistory(l.symbol.toUpperCase()));
-    if (!data || !(nav > 0) || tracked.some((l) => !data.closes[tickerFor(l.symbol.toUpperCase())])) return EMPTY;
-    const flat = legs.filter((l) => !hasHistory(l.symbol.toUpperCase())).reduce((s, l) => s + l.perShare * l.priceUsd, 0);
+    const key = (l: Leg) => (fromOracle ? l.symbol.toUpperCase() : tickerFor(l.symbol.toUpperCase()));
+    // Off the oracle every leg has a series; off Yahoo the dollar leg is held at 1.
+    const tracked = legs.filter((l) => fromOracle || l.symbol.toUpperCase() !== "USD");
+    if (!data || !(nav > 0) || tracked.some((l) => !data.closes[key(l)])) return EMPTY;
+    const flat = legs.filter((l) => !tracked.includes(l)).reduce((s, l) => s + l.perShare * l.priceUsd, 0);
 
     // Anchor on the fetch time (render must stay pure); the live NAV is stamped at that moment.
     const now = dataUpdatedAt;
@@ -63,12 +76,12 @@ export function useNavHistory(legs: Leg[] | undefined, range: Range = "30D"): Na
     const points: [number, number][] = [];
     data.timestamps.forEach((t, i) => {
       if (t * 1000 < from) return;
-      points.push([t * 1000, flat + tracked.reduce((sum, l) => sum + l.perShare * data.closes[tickerFor(l.symbol.toUpperCase())][i], 0)]);
+      points.push([t * 1000, flat + tracked.reduce((sum, l) => sum + l.perShare * data.closes[key(l)][i], 0)]);
     });
     points.push([Math.max(now, (points.at(-1)?.[0] ?? 0) + 1), nav]);
     if (points.length < 2) return EMPTY;
     return { points, change: nav / points[0][1] - 1, supported: true, loading: false };
-  }, [data, dataUpdatedAt, isLoading, legs, range]);
+  }, [data, dataUpdatedAt, fromOracle, isLoading, legs, range]);
 }
 
 export function pathFor(values: number[], width: number, height: number, pad = 4) {
