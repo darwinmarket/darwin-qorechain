@@ -11,8 +11,12 @@ import deployments from "@/config/deployments.json";
  */
 const RPC = process.env.QORE_EVM_UPSTREAM ?? "https://evm-testnet.qore.host";
 const ORACLE = deployments.oracle as `0x${string}`;
-/** The oracle's first round (the contract had no code before). */
-const FROM_BLOCK = 10_391_000n;
+/**
+ * Round 60, the first at QOR's market price (CoinGecko and MEXC). Earlier rounds priced QOR, and so
+ * QWAKK, from the testnet AMM pools at about 10x the market: replaying them would draw a crash that
+ * never happened, so the history starts here.
+ */
+const FROM_BLOCK = 10428835n;
 const SPAN = 9_000n; // the public RPC answers at most 10,000 blocks per query
 const FEEDS: Record<number, string> = { 1: "USD", 2: "ETH", 3: "BTC", 4: "QOR", 5: "QWAKK" };
 const PRICE = parseAbiItem("event PriceUpdated(uint16 indexed feedId, uint256 price, uint64 indexed round)");
