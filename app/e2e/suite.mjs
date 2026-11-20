@@ -286,7 +286,12 @@ async function vaultCapacity(display) {
   await openBasket(display);
   await page.waitForSelector("text=/^Available /", { timeout: 30000 });
   // Just under the wallet's balance: above it, "Not enough fUSD" takes precedence over liquidity.
-  const avail = Number((await page.getByText(/^Available /).first().innerText()).match(/([\d,.]+)/)[1].replace(/,/g, ""));
+  // the balances load after the card: wait for a non-zero balance (up to 20 s)
+  let avail = 0;
+  for (let i = 0; i < 40 && !(avail > 0); i++) {
+    avail = Number((await page.getByText(/^Available /).first().innerText()).match(/([\d,.]+)/)[1].replace(/,/g, ""));
+    if (!(avail > 0)) await sleep(500);
+  }
   await page.getByLabel("You spend").fill(String(Math.floor(avail * 0.99 * 100) / 100));
   const msg = page.getByText(/The vault can fill about \$/).first();
   lastAvailable = avail;
@@ -354,7 +359,11 @@ await check("Portfolio withdraws the account's fUSD back to QoreX with one signe
   const link = page.getByRole("button", { name: /^Withdraw .* fUSD to QoreX$/ });
   await link.waitFor({ timeout: 30000 });
   await link.click();
-  await page.waitForSelector("text=/^Withdrew /", { timeout: 120000 });
+  await page.waitForSelector("text=/^(Withdrew |Withdrawal failed)/", { timeout: 120000 });
+  if (await page.getByText("Withdrawal failed").count()) {
+    await page.screenshot({ path: `${SHOTS}withdraw-failed.png` });
+    throw new Error(`withdrawal failed: ${(await page.locator("text=Withdrawal failed").locator("..").innerText()).slice(0, 300)}`);
+  }
   const after = await acctInfo();
   assert(BigInt(after.fusd) === 0n, `account fUSD ${after.fusd}`);
   return `${(Number(info.fusd) / 1e6).toFixed(2)} fUSD back in the QoreX wallet`;

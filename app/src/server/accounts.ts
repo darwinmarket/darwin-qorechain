@@ -20,7 +20,7 @@ import { fetchEvmWindow, verifyMessageWithChain } from "@qorechain/qoresign/netw
 import { parseAddress, type MessageSignature } from "@qorechain/qoresign";
 import { openEvmWindowMsg } from "@qorechain/sdk";
 import { evmWindowCost } from "@qorechain/evm";
-import { createWalletClient, decodeFunctionData, http, type Address, type Hex } from "viem";
+import { createWalletClient, decodeFunctionData, getAddress, http, parseTransaction, type Address, type Hex } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { accountAbi, accountErc20Abi, accountRouterAbi, factoryAbi, FACTORY, textFor, type Call } from "@/lib/qore/account";
 import { erc20Abi } from "@/lib/qore/abis";
@@ -79,7 +79,7 @@ async function relayerMemo(tag: string): Promise<boolean> {
   if (done.has(tag)) return true;
   const rel = await account("relayer");
   const q = encodeURIComponent(`message.sender='${rel.cosmos}'`);
-  const r = await json(`${REST}/cosmos/tx/v1beta1/txs?query=${q}&order_by=ORDER_BY_DESC&pagination.limit=50`).catch(() => ({ tx_responses: [] }));
+  const r = await json(`${REST}/cosmos/tx/v1beta1/txs?query=${q}&order_by=ORDER_BY_DESC&pagination.limit=100`).catch(() => ({ tx_responses: [] }));
   return (r.tx_responses ?? []).some((t: any) => t.code === 0 && String(t.tx?.body?.memo ?? "") === tag);
 }
 
@@ -135,6 +135,47 @@ async function ensureRelayerWindow() {
   await new Promise((r) => setTimeout(r, 6000));
 }
 
+/**
+ * Finish withdrawals left halfway: a withdrawal is two transactions (the account hands fUSD to the
+ * relayer, then the relayer returns it to the owner's wallet), and a serverless call can be cut
+ * between them. The relayer's recent factory transactions are read back; every successful
+ * withdrawal without its `darwin withdraw <hash>` memo is completed now. Runs before each
+ * withdrawal and in the daily cron, so a user's fUSD never stays with the relayer. A second return
+ * of the same withdrawal cannot happen silently: the relayer's twin holds only in-flight
+ * withdrawals, so a duplicate conversion would fail for lack of balance.
+ */
+export async function settleWithdrawals(): Promise<string[]> {
+  const rel = await account("relayer");
+  const qs = new URLSearchParams({ query: `ethereum_tx.recipient='${getAddress(FACTORY)}'`, order_by: "ORDER_BY_DESC", "pagination.limit": "30" });
+  const r = await json(`${REST}/cosmos/tx/v1beta1/txs?${qs}`).catch(() => ({ tx_responses: [] }));
+  const out: string[] = [];
+  for (const t of r.tx_responses ?? []) {
+    if (Date.now() - Date.parse(t.timestamp) > 48 * 3600_000) continue; // the daily cron settles anything older first
+    if (t.code !== 0 || t.events?.some((e: any) => e.type === "ethereum_tx" && e.attributes.some((a: any) => a.key === "ethereumTxFailed"))) continue;
+    const raw = t.tx?.body?.messages?.[0]?.raw;
+    const hash = t.events?.find((e: any) => e.type === "ethereum_tx")?.attributes?.find((a: any) => a.key === "ethereumTxHash")?.value;
+    if (!raw || !hash) continue;
+    try {
+      const exec = decodeFunctionData({ abi: factoryAbi, data: parseTransaction(raw as Hex).data! });
+      if (exec.functionName !== "execute") continue;
+      const calls = exec.args[1] as readonly Call[];
+      if (calls.length !== 1 || calls[0].target.toLowerCase() !== TOKENS.fUSD.toLowerCase()) continue;
+      const call = decodeFunctionData({ abi: accountErc20Abi, data: calls[0].data });
+      if (call.functionName !== "transfer" || String(call.args[0]).toLowerCase() !== rel.evm.toLowerCase()) continue;
+      const tag = `darwin withdraw ${hash}`;
+      if (await relayerMemo(tag)) continue;
+      const { addressFromBytes } = await import("@qorechain/qoresign");
+      const owner = addressFromBytes(Buffer.from(String(exec.args[0]).slice(2), "hex")).bech32;
+      const back = await sendNative("relayer", [convertErc20(rel.cosmos, owner, TOKENS.fUSD, call.args[1] as bigint) as any], 2_000_000, tag);
+      done.add(tag);
+      out.push(`returned ${call.args[1]} to ${owner} (${back})`);
+    } catch {
+      /* not a withdrawal */
+    }
+  }
+  return out;
+}
+
 export type ExecuteRequest = { owner: string; calls: Call[]; summary: string; deadline: string; signature: MessageSignature };
 
 /** What the calls do, checked before anything is spent; withdrawals are recognised to finish them. */
@@ -177,6 +218,7 @@ export async function execute(req: ExecuteRequest) {
 
   return serial(async () => {
     if ((await nonceOf(acc)) !== nonce) throw new Error("this message was already executed");
+    if (what.kind === "withdraw") await settleWithdrawals().catch(() => []);
     if (what.kind !== "withdraw") await freshRound();
     await ensureRelayerWindow();
     const w = createWalletClient({ account: privateKeyToAccount(rel.privateKey as unknown as Hex), chain: diana, transport: http(EVM_RPC, { retryCount: 3, retryDelay: 2000 }) });
