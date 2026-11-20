@@ -28,8 +28,10 @@ precompiles against keys registered with proof of possession:
   lose more than 1% of NAV at oracle prices; rebalances run once a week, Mondays 12:00 UTC;
 - every admin action (15 of them, including moving the reserve's funds) needs the admin's
   ML-DSA-87 signature; no function trusts `msg.sender` for admin powers;
-- every user trade is hybrid-signed (secp256k1 + ML-DSA-87) by QoreX on the native lane and reaches
-  the EVM through `MsgCrossVMCall`;
+- every user trade is an intent the user signs in QoreX with secp256k1 and ML-DSA-87
+  (`signArbitrary`); Darwin's relayer verifies it against the user's on-chain key with QoreSign and
+  executes it as the user through an expiring authz grant, admitted by the user's own EVM window
+  (QoreX does not sign cross-VM calls, which we established message type by message type);
 - the keeper's EVM window is scoped to Darwin's own contracts.
 
 And you don't have to take the chain's word for it: each transaction page re-verifies the
@@ -81,9 +83,10 @@ qor1h92yt25my24uwl8tkju7h0yl6gez6zpcyen9q5
 qor1yzq84n9uj6fmgzsh7tk88gr7dhrh60u95gpw8p
 qor1dg5x70vqts47p4jnajrvrjketxph8jewxe3phs
 qor1uzauedcmwcgyrvlnqw9numxm8yk0hcmnyvuq5u
+qor1pzkqj8xadyhlqtpplps8jl5xmccf664s554wvf
 ```
 
-(treasury and test trader; deployer, admin and relayer; oracle reporter; curator)
+(treasury and QoreX test trader; deployer, admin and keeper; oracle reporter; curator; trade relayer)
 
 ## Boxes to tick
 
