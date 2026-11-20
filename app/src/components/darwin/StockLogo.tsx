@@ -6,7 +6,7 @@ import { memo, useState, type CSSProperties } from "react";
 const COIN_ICONS = new Set(["BTC", "ETH", "USDC", "QOR"]);
 /** Logos served by their owner. QWAKK's mark is all rights reserved (see its repo's NOTICE.md),
  *  so it is shown from Qwakk's own site rather than copied into this repository. */
-const REMOTE_ICONS: Record<string, string> = { QWAKK: "https://qwakk.fun/brand-mark.svg" };
+const REMOTE_ICONS: Record<string, string> = { QWAKK: "/api/logo/qwakk" };
 /** Basket legs are named by what they track; fUSD (the Fest test dollar) shows the dollar mark. */
 const ALIAS: Record<string, string> = { USD: "USDC", FUSD: "USDC", FBTC: "BTC", FETH: "ETH", WQOR: "QOR" };
 /** PNG unless named here. Vector where we have it: these are drawn as small as 18px and scale up

@@ -19,7 +19,7 @@ const ALLOWED = [
 ];
 
 /** Tx search, only for the cross-VM calls that reach one of Darwin's contracts. */
-const SEARCH = /^(crossvm_request\.target_contract='0x[0-9a-f]{40}'|message\.sender='qor1[02-9ac-hj-np-z]{38}')$/;
+const SEARCH = /^(crossvm_request\.target_contract='0x[0-9a-f]{40}'|message\.sender='qor1[02-9ac-hj-np-z]{38}'|ethereum_tx\.ethereumTxHash='0x[0-9a-f]{64}')$/;
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ path: string[] }> }) {
   const path = (await params).path.join("/");

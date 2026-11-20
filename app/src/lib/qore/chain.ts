@@ -44,5 +44,6 @@ export const TOKEN_INFO: Record<string, { symbol: string; tracks: string; decima
 export const tokenKeyOf = (address: string) =>
   Object.entries(D.tokens).find(([, a]) => a.toLowerCase() === address.toLowerCase())?.[0] ?? address;
 
-export const txUrl = (hash: string) => `${EXPLORER}/tx/${hash.replace(/^0x/, "")}`;
+/** Darwin's own transaction page: the public explorer opens on mainnet, these txs are on testnet. */
+export const txUrl = (hash: string) => `/tx/${hash}`;
 export const addressUrl = (a: string) => `${EXPLORER}/address/${a}`;
