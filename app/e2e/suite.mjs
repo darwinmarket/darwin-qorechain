@@ -135,6 +135,18 @@ await check("a basket URL opens its screen with the pre-connect trade card", asy
   return "$50 -> ≈ $49.85 after the 0.30% fee";
 });
 
+await check("QOR and QWAKK baskets draw their index from the oracle's on-chain history", async () => {
+  for (const d of ["DEGENdw", "QOREdw"]) {
+    await openBasket(d);
+    await page.waitForSelector("text=Index base 100 at launch", { timeout: 30000 });
+    await sleep(4000);
+    assert((await page.getByText("Price history unavailable.").count()) === 0, `${d} has a chart`);
+  }
+  const h = await (await fetch(`${BASE}/api/oracle-history`)).json();
+  assert(h.timestamps.length > 5 && h.closes.QWAKK && h.closes.QOR, "oracle history served");
+  return `${h.timestamps.length} hourly points of signed oracle prices`;
+});
+
 await check("Security tab: oracle feeds, rounds, rules, the keeper's scoped window, contracts", async () => {
   await page.goto(BASE, { waitUntil: "networkidle" });
   await tab("Security");
