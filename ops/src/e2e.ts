@@ -83,7 +83,9 @@ async function roundPayload() {
   const round = await read<bigint>(d.oracle, oracleAbi, "round");
   const last = await read<bigint>(d.oracle, oracleAbi, "lastTimestamp");
   const now = (await publicClient.getBlock()).timestamp;
-  const ts = now > last ? now : last + 1n;
+  // rounds are at least MIN_ROUND_INTERVAL (60 s) apart; up to 120 s ahead of the chain is allowed
+  const earliest = last + 60n;
+  const ts = now > earliest ? now : earliest;
   const msg = await read<Hex>(d.oracle, oracleAbi, "roundMessage", [round + 1n, ts, ids, prices]);
   return { ids, prices, ts, round, msg };
 }
@@ -169,6 +171,17 @@ async function main() {
     return err;
   });
 
+  await check("oracle: a feed listed twice in one round is refused (the breaker cannot be chained)", async () => {
+    const r = await roundPayload();
+    // BTC twice, each +10%: within the 15% breaker one at a time, +21% together
+    const ids = [FEED.BTC, FEED.BTC];
+    const prices = [(r.prices[2] * 110n) / 100n, (r.prices[2] * 121n) / 100n];
+    const msg = await read<Hex>(d.oracle, oracleAbi, "roundMessage", [r.round + 1n, r.ts, ids, prices]);
+    const err = await revertName(d.oracle, oracleAbi, "submit", [r.ts, ids, prices, await pqSign("reporter", msg)]);
+    assert(err.startsWith("FeedsNotSorted"), err);
+    return err;
+  });
+
   // ------------------------------------------------------------------ oracle, positive + replay
   let lastRound: { ts: bigint; ids: number[]; prices: bigint[]; sig: Hex } | null = null;
   await check("oracle: a reporter-signed round is stored (real pqcVerify)", async () => {
@@ -179,6 +192,16 @@ async function main() {
     assert(after === r.round + 1n, "round advanced");
     lastRound = { ts: r.ts, ids: r.ids, prices: r.prices, sig };
     return `round ${after}, gas ${rc.gasUsed}, tx ${rc.transactionHash}`;
+  });
+
+  await check("oracle: a correctly signed round seconds after the last one is refused", async () => {
+    const r = await roundPayload();
+    const last = await read<bigint>(d.oracle, oracleAbi, "lastTimestamp");
+    const ts = last + 5n;
+    const msg = await read<Hex>(d.oracle, oracleAbi, "roundMessage", [r.round + 1n, ts, r.ids, r.prices]);
+    const err = await revertName(d.oracle, oracleAbi, "submit", [ts, r.ids, r.prices, await pqSign("reporter", msg)]);
+    assert(err.startsWith("TooSoon"), err);
+    return err;
   });
 
   await check("oracle: replaying the exact same signed round is refused", async () => {
@@ -253,6 +276,8 @@ async function main() {
 
   await check("basket: redeem in kind pays every component pro rata", async () => {
     const shares = parseUnits("0.01", 18);
+    // the seeds sit at an unspendable address, so the deployer buys the shares it redeems
+    if ((await bal(blue, deployer)) < shares) await buy("BLUEDW", 1);
     const before = await Promise.all([d.tokens.fBTC, d.tokens.fETH].map((t: Address) => bal(t, deployer)));
     const expected = await read<bigint[]>(blue, basketAbi, "redeemAmounts", [shares]);
     const rc = await write("deployer", blue, basketAbi, "redeem", [shares, deployer]);
@@ -365,6 +390,17 @@ async function main() {
       const [, back] = await read<[Address[], number[], bigint[], bigint[], number[]]>(blue, basketAbi, "composition");
       if (back.join() !== original.join()) throw new Error(`BLUEDW targets not restored: ${back.join("/")} vs ${original.join("/")}`);
     }
+  });
+
+  await check("invariants: every seed sits at the unspendable address, and the deployer seeded once", async () => {
+    const out: string[] = [];
+    for (const [k, b] of Object.entries(d.baskets) as [string, any][]) {
+      const burned = await read<bigint>(b.address, erc20, "balanceOf", ["0x000000000000000000000000000000000000dEaD"]);
+      assert(burned >= BigInt(b.seed?.shares ?? "1"), `${k} seed at 0xdEaD: ${burned}`);
+      assert(await read<boolean>(b.address, basketAbi, "seeded"), `${k} seeded flag`);
+      out.push(`${k} ${Number(burned) / 1e18}`);
+    }
+    return out.join(", ");
   });
 
   await check("invariants: every basket's targets are the published ones", async () => {
