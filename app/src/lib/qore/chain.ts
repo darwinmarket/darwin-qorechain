@@ -39,6 +39,9 @@ export const TOKEN_INFO: Record<string, { symbol: string; tracks: string; decima
   fBTC: { symbol: "fBTC", tracks: "BTC", decimals: 8, feed: 3, denom: `erc20:${D.tokens.fBTC}` },
   WQOR: { symbol: "WQOR", tracks: "QOR", decimals: 18, feed: 4 },
   QWAKK: { symbol: "QWAKK", tracks: "QWAKK", decimals: 6, feed: 5, denom: `erc20:${D.tokens.QWAKK}` },
+  // Darwin's test stand-ins, priced by the same QOR and QWAKK feeds (docs/PRICING.md)
+  fQOR: { symbol: "fQOR", tracks: "QOR", decimals: 18, feed: 4 },
+  fQWAKK: { symbol: "fQWAKK", tracks: "QWAKK", decimals: 6, feed: 5 },
 };
 
 export const tokenKeyOf = (address: string) =>
