@@ -18,7 +18,8 @@ export async function submitRound(oracle?: Address) {
   // Publish every feed the oracle knows, in its own order.
   const known = (await publicClient.readContract({ address, abi, functionName: "feedIds" })) as number[];
   const byId = Object.fromEntries(Object.entries(FEED).map(([name, id]) => [id, name])) as Record<number, keyof typeof FEED>;
-  const ids = known.filter((id) => byId[id]);
+  // ascending: the oracle takes each feed at most once a round, in increasing id order
+  const ids = known.filter((id) => byId[id]).sort((a, b) => a - b);
   const prices = ids.map((id) => toWad(p[byId[id]]));
   const [round, last] = await Promise.all([
     publicClient.readContract({ address, abi, functionName: "round" }) as Promise<bigint>,
