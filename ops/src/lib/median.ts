@@ -16,3 +16,15 @@ export function toWad(usd: number): bigint {
   const k = Math.min(18, Math.max(9, 15 - magnitude));
   return BigInt(Math.round(usd * 10 ** k)) * 10n ** BigInt(18 - k);
 }
+
+export type Sample = { t: number; v: number };
+
+/**
+ * Median of the samples taken in the last `windowSec` seconds (the newest included), and the
+ * samples worth keeping. A thin pool's spot price can be pumped for a moment; its median over half
+ * an hour cannot, without holding the pumped price, against arbitrage, for most of that time.
+ */
+export function windowMedian(samples: Sample[], now: number, windowSec: number): { value: number; kept: Sample[]; n: number } {
+  const kept = samples.filter((s) => s.t > now - windowSec && s.t <= now && Number.isFinite(s.v) && s.v > 0);
+  return { value: median(kept.map((s) => s.v)), kept, n: kept.length };
+}
