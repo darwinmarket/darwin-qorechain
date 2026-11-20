@@ -29,6 +29,18 @@ function useDebounced<T>(value: T, ms = 300) {
   return v;
 }
 
+/**
+ * Quick amounts a buyer can always fill: $25 / $50 / $100 when the vault is deep, otherwise round
+ * amounts within what it can fill now (the QOR baskets, at QOR's market price).
+ */
+function buyChips(capacityUsd: number | undefined): number[] {
+  const cap = capacityUsd ?? Infinity;
+  if (!(cap < 150)) return [25, 50, 100];
+  const nice = [0.01, 0.02, 0.05, 0.1, 0.2, 0.25, 0.5, 1, 2, 5, 10, 20, 25, 50];
+  const fit = nice.filter((v) => v <= cap * 0.8);
+  return fit.length >= 3 ? fit.slice(-3) : fit.length ? fit : [0.01];
+}
+
 export function QoreTradePanel({ symbol, name }: { symbol: string; name: string }) {
   const { account, balances, refresh } = useWallet();
   const { data: baskets } = useBaskets();
@@ -123,7 +135,7 @@ export function QoreTradePanel({ symbol, name }: { symbol: string; name: string 
 
   const chips =
     side === "buy"
-      ? [25, 50, 100].map((v) => ({ label: `$${v}`, onClick: () => setAmount(String(v)) }))
+      ? buyChips(basket?.capacityUsd).map((v) => ({ label: `$${v}`, onClick: () => setAmount(String(v)) }))
       : [25, 50, 100].map((p) => ({
           label: p === 100 ? "All" : `${p}%`,
           disabled: shares === 0n,
