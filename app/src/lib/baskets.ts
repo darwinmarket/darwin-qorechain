@@ -25,6 +25,18 @@ export const BASKETS: readonly BasketMeta[] = Object.entries(D.baskets).map(([sy
   live: true,
 }));
 
+/**
+ * One colour per basket, used wherever baskets sit side by side (the portfolio's allocation bar
+ * and legend): orange for Blue Chip (BTC-led), USDC blue for Balanced, QoreChain violet for Qore
+ * Ecosystem, QWAKK yellow for Degen. Cash keeps its green.
+ */
+export const BASKET_COLOR: Record<string, string> = {
+  BLUEDW: "#F7931A",
+  BALDW: "#2775CA",
+  QOREDW: "#9939FF",
+  DEGENDW: "#F2B705",
+};
+
 /** Darwin's trade fee, taken by the router on every buy and sell. */
 export const SKIM_FEE_BPS = 30;
 
