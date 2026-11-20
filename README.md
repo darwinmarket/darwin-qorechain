@@ -14,11 +14,12 @@ fest.
 |---|---|---|---|
 | Darwin Blue Chip | BLUEdw (`BLUEDW`) | 70% BTC, 30% ETH | `0x033e85e85853bcf9b580c5613f373eb739bd9c2a` |
 | Darwin Balanced | BALdw (`BALDW`) | 35% BTC, 35% ETH, 30% USD | `0x5e8290cfe9ad6487c7336780b0069ecb9b9b92cd` |
-| Darwin Qore Ecosystem | QOREdw (`QOREDW`) | 50% QOR, 25% ETH, 25% QWAKK | `0xe0f6f58dbcb03f863ccf0bea8c2a5a8e16494b6b` (v3; v1 `0x16b1…2fe0` and v2 `0x7c05…3e96` retired) |
-| Darwin Degen | DEGENdw (`DEGENDW`) | 50% QOR, 50% QWAKK | `0x48775d391021698298f6fcdb1826ba3a59db8d91` |
+| Darwin Qore Ecosystem | QOREdw (`QOREDW`) | 60% QOR, 25% ETH, 15% QWAKK | `0x2a78aedc518aadbd99f2f206d82c1cfd2863f961` (v4; earlier versions in `basketHistory`) |
+| Darwin Degen | DEGENdw (`DEGENDW`) | 70% QWAKK, 30% QOR | `0x77cf407ef0ded53ff39d0eb83e1ece1049d733a6` (v2) |
 
-BTC, ETH and USD are held as the Fest test tokens fBTC, fETH and fUSD; QOR as WQOR; QWAKK is
-QoreChain's community memecoin, bought on the native AMM and priced from its QWAKK/QOR pool.
+BTC, ETH and USD are held as the Fest test tokens fBTC, fETH and fUSD; QOR as WQOR; QOR is priced at
+its market price (CoinGecko and MEXC); QWAKK is QoreChain's community memecoin, bought on the
+native AMM and priced from its only market, the QWAKK/QOR pool, times QOR's price.
 
 ## Why it matters
 
@@ -75,7 +76,7 @@ ops/         TypeScript, @qorechain/sdk 0.14, viem
   nativeClient.ts       hybrid-signed native txs (TxClient + EthNativeSigner)
   window.ts             PQC key registration (proof of possession) and scoped EVM windows
   deploy.ts             idempotent deployment and seeding, recorded in deployments/diana.json
-  prices.ts             BTC/ETH median of 4 spot APIs; QOR from QoreChain's native AMM pools
+  prices.ts             BTC/ETH median of 4 spot APIs; QOR from CoinGecko + MEXC; QWAKK from its AMM pool
   oracle.ts             signs and relays a price round
   rebalance.ts          curator: plans drift trades, signs them, relays
   amm.ts, refill.ts     buy on the native AMM (QWAKK), refill the reserve
