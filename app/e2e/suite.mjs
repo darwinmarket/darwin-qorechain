@@ -223,6 +223,9 @@ const twin = !me ? null : await (async () => {
   throw new Error("@scure/base missing");
 })();
 
+/** The wallet's fUSD, as the trade card showed it during the last vaultCapacity(). */
+let lastAvailable = Infinity;
+
 /** What the vault can fill for this basket right now, as the trade card states it. */
 async function vaultCapacity(display) {
   await openBasket(display);
@@ -231,16 +234,17 @@ async function vaultCapacity(display) {
   const avail = Number((await page.getByText(/^Available /).first().innerText()).match(/([\d,.]+)/)[1].replace(/,/g, ""));
   await page.getByLabel("You spend").fill(String(Math.floor(avail * 0.99 * 100) / 100));
   const msg = page.getByText(/The vault can fill about \$/).first();
+  lastAvailable = avail;
   if (!(await msg.waitFor({ timeout: 8000 }).then(() => true, () => false))) return Infinity;
   return Number((await msg.innerText()).match(/\$([\d,.]+)/)[1].replace(/,/g, ""));
 }
 
 // The QOR baskets are bounded by the reserve's QOR and QWAKK at their market prices (a testnet QOR
 // is worth $0.003): the buy is sized to half of what the vault can fill, capped at the target.
-for (const [display, key, target] of [["BLUEdw", "BLUEDW", 1], ["BALdw", "BALDW", 1], ["QOREdw", "QOREDW", 5], ["DEGENdw", "DEGENDW", 3]]) {
+for (const [display, key, target] of [["BLUEdw", "BLUEDW", 1], ["BALdw", "BALDW", 1], ["QOREdw", "QOREDW", 10], ["DEGENdw", "DEGENDW", 5]]) {
   await check(`buy ${display} (up to ${target} fUSD) in one QoreX approval`, async () => {
     const cap = await vaultCapacity(display);
-    const usd = Math.min(target, Math.floor(cap * 0.5 * 1e4) / 1e4);
+    const usd = Math.min(target, Math.floor(cap * 0.5 * 1e4) / 1e4, Math.floor(lastAvailable * 0.4 * 100) / 100);
     if (usd < 0.002) throw new Skip(`the vault can fill only $${cap} of ${display}: refill the reserve (ops/src/refill.ts)`);
     const s0 = await bal(D.baskets[key].address, twin);
     const r = await trade({ display, key, side: "buy", amount: usd });
@@ -305,9 +309,10 @@ await check("more fUSD than the balance disables the button", async () => {
 });
 
 await check("a buy above the vault's liquidity is refused before signing", async () => {
-  await openBasket("DEGENdw");
-  await page.waitForSelector("text=/^Available /", { timeout: 30000 });
-  await page.getByLabel("You spend").fill("5");
+  // the guard only shows when a vault can fill less than this wallet holds
+  const cap = await vaultCapacity("QOREdw");
+  if (cap === Infinity) throw new Skip("every vault can fill more than the test wallet holds (QOREdw's reserve is the shallowest)");
+  await page.getByLabel("You spend").fill(String(Math.ceil(cap * 102) / 100));
   const btn = page.getByRole("button", { name: "Above available liquidity" });
   await btn.waitFor({ timeout: 30000 });
   assert(await btn.isDisabled(), "disabled");
