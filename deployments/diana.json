@@ -74,7 +74,13 @@
     "QOREDW v2 deploy": "2026-11-20T10:38:02.227Z",
     "QOREDW v2 reserve exempt": "2026-11-20T10:38:03.520Z",
     "QOREDW v2 seed": "2026-11-20T10:38:10.894Z",
-    "QOREDW v2 leftovers back to reserve": "2026-11-20T10:38:16.586Z"
+    "QOREDW v2 leftovers back to reserve": "2026-11-20T10:38:16.586Z",
+    "QOREDW v2 pause mint": "2026-11-20T10:43:50.882Z",
+    "QOREDW v3 seed from reserve": "2026-11-20T10:43:55.221Z",
+    "QOREDW v3 deploy": "2026-11-20T10:43:56.672Z",
+    "QOREDW v3 reserve exempt": "2026-11-20T10:43:58.074Z",
+    "QOREDW v3 seed": "2026-11-20T10:44:03.841Z",
+    "QOREDW v3 leftovers back to reserve": "2026-11-20T10:44:08.007Z"
   },
   "oracle": "0x26ede83659e3e007f3fe568ee6c6a20df77929e6",
   "reserve": "0x39a401ae133e80b05c6f7076bc0bc6d5e3df1a23",
@@ -143,22 +149,20 @@
       }
     },
     "QOREDW": {
-      "address": "0x7c051cda46971306b05252c7354c226eb37c3e96",
-      "version": 2,
+      "address": "0xe0f6f58dbcb03f863ccf0bea8c2a5a8e16494b6b",
+      "version": 3,
       "name": "Darwin Qore Ecosystem",
       "display": "QOREdw",
-      "description": "QoreChain's ecosystem: 40% QOR, 20% BTC, 20% ETH, 20% QWAKK.",
+      "description": "QoreChain's ecosystem: 50% QOR, 25% ETH, 25% QWAKK.",
       "components": [
         "WQOR",
-        "fBTC",
         "fETH",
         "QWAKK"
       ],
       "weights": [
-        4000,
-        2000,
-        2000,
-        2000
+        5000,
+        2500,
+        2500
       ]
     },
     "DEGENDW": {
@@ -233,6 +237,28 @@
       },
       "retired": "2026-11-20T10:38:02.227Z",
       "reason": "v2 adds QWAKK; components are fixed per contract"
+    },
+    {
+      "key": "QOREDW",
+      "version": 2,
+      "address": "0x7c051cda46971306b05252c7354c226eb37c3e96",
+      "name": "Darwin Qore Ecosystem",
+      "display": "QOREdw",
+      "description": "QoreChain's ecosystem: 40% QOR, 20% BTC, 20% ETH, 20% QWAKK.",
+      "components": [
+        "WQOR",
+        "fBTC",
+        "fETH",
+        "QWAKK"
+      ],
+      "weights": [
+        4000,
+        2000,
+        2000,
+        2000
+      ],
+      "retired": "2026-11-20T10:43:56.672Z",
+      "reason": "v3 changes the components; they are fixed per contract"
     }
   ]
 }

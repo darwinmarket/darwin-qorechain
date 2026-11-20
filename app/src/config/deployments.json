@@ -85,22 +85,20 @@
       }
     },
     "QOREDW": {
-      "address": "0x7c051cda46971306b05252c7354c226eb37c3e96",
-      "version": 2,
+      "address": "0xe0f6f58dbcb03f863ccf0bea8c2a5a8e16494b6b",
+      "version": 3,
       "name": "Darwin Qore Ecosystem",
       "display": "QOREdw",
-      "description": "QoreChain's ecosystem: 40% QOR, 20% BTC, 20% ETH, 20% QWAKK.",
+      "description": "QoreChain's ecosystem: 50% QOR, 25% ETH, 25% QWAKK.",
       "components": [
         "WQOR",
-        "fBTC",
         "fETH",
         "QWAKK"
       ],
       "weights": [
-        4000,
-        2000,
-        2000,
-        2000
+        5000,
+        2500,
+        2500
       ]
     },
     "DEGENDW": {
@@ -175,6 +173,28 @@
       },
       "retired": "2026-11-20T10:38:02.227Z",
       "reason": "v2 adds QWAKK; components are fixed per contract"
+    },
+    {
+      "key": "QOREDW",
+      "version": 2,
+      "address": "0x7c051cda46971306b05252c7354c226eb37c3e96",
+      "name": "Darwin Qore Ecosystem",
+      "display": "QOREdw",
+      "description": "QoreChain's ecosystem: 40% QOR, 20% BTC, 20% ETH, 20% QWAKK.",
+      "components": [
+        "WQOR",
+        "fBTC",
+        "fETH",
+        "QWAKK"
+      ],
+      "weights": [
+        4000,
+        2000,
+        2000,
+        2000
+      ],
+      "retired": "2026-11-20T10:43:56.672Z",
+      "reason": "v3 changes the components; they are fixed per contract"
     }
   ]
 }
