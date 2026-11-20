@@ -52,10 +52,13 @@ async function check(name, fn) {
     console.log(`PASS  ${name}  ${detail}`);
   } catch (e) {
     const detail = String(e?.message ?? e).split("\n")[0].slice(0, 220);
-    results.push({ name, ok: false, detail, ms: Date.now() - t0 });
-    console.log(`FAIL  ${name}  ${detail}`);
+    const skip = e instanceof Skip;
+    results.push({ name, ok: false, skip, detail, ms: Date.now() - t0 });
+    console.log(`${skip ? "SKIP" : "FAIL"}  ${name}  ${detail}`);
   }
 }
+/** A check that cannot run on the testnet's current state (not a failure of the app). */
+class Skip extends Error {}
 const assert = (c, m) => {
   if (!c) throw new Error(`assertion failed: ${m}`);
 };
@@ -135,16 +138,19 @@ await check("a basket URL opens its screen with the pre-connect trade card", asy
   return "$50 -> ≈ $49.85 after the 0.30% fee";
 });
 
-await check("QOR and QWAKK baskets chart their market history (QOR from CoinGecko, QWAKK from its pool ratio)", async () => {
+await check("QOR and QWAKK baskets chart market history; QWAKK replayed from its pool swaps since the pool opened", async () => {
   for (const d of ["DEGENdw", "QOREdw"]) {
     await openBasket(d);
     await page.waitForSelector("text=Index base 100 at launch", { timeout: 30000 });
     await sleep(4000);
     assert((await page.getByText("Price history unavailable.").count()) === 0, `${d} has a chart`);
   }
-  const h = await (await fetch(`${BASE}/api/history?symbols=QOR-USD,QWAKK-USD,ETH-USD&range=3mo&interval=1d`)).json();
+  const h = await (await fetch(`${BASE}/api/history?symbols=QOR-USD,QWAKK-USD,ETH-USD&range=3mo&interval=1h`)).json();
   assert(h.timestamps.length > 20 && h.closes["QOR-USD"] && h.closes["QWAKK-USD"], "market history served");
-  return `${h.timestamps.length} daily bars for QOR and QWAKK`;
+  assert(h.timestamps[0] >= Date.UTC(2026, 10, 18, 18) / 1000, "no QWAKK price before its pool existed");
+  const ratios = h.closes["QWAKK-USD"].map((w, i) => (w / h.closes["QOR-USD"][i]).toPrecision(4));
+  assert(new Set(ratios).size > 1, "the QWAKK/QOR ratio follows the pool's swaps");
+  return `${h.timestamps.length} hourly bars since ${new Date(h.timestamps[0] * 1000).toISOString().slice(0, 16)}`;
 });
 
 await check("Security tab: oracle feeds, rounds, rules, the keeper's scoped window, contracts", async () => {
@@ -202,13 +208,30 @@ const twin = await (async () => {
   throw new Error("@scure/base missing");
 })();
 
-for (const [display, key, usd] of [["BLUEdw", "BLUEDW", 1], ["BALdw", "BALDW", 1], ["QOREdw", "QOREDW", 0.2], ["DEGENdw", "DEGENDW", 0.05]]) {
-  await check(`buy ${display} with ${usd} fUSD in one QoreX approval`, async () => {
+/** What the vault can fill for this basket right now, as the trade card states it. */
+async function vaultCapacity(display) {
+  await openBasket(display);
+  await page.waitForSelector("text=/^Available /", { timeout: 30000 });
+  // Just under the wallet's balance: above it, "Not enough fUSD" takes precedence over liquidity.
+  const avail = Number((await page.getByText(/^Available /).first().innerText()).match(/([\d,.]+)/)[1].replace(/,/g, ""));
+  await page.getByLabel("You spend").fill(String(Math.floor(avail * 0.99 * 100) / 100));
+  const msg = page.getByText(/The vault can fill about \$/).first();
+  if (!(await msg.waitFor({ timeout: 8000 }).then(() => true, () => false))) return Infinity;
+  return Number((await msg.innerText()).match(/\$([\d,.]+)/)[1].replace(/,/g, ""));
+}
+
+// The QOR baskets are bounded by the reserve's QOR and QWAKK at their market prices (a testnet QOR
+// is worth $0.003): the buy is sized to half of what the vault can fill, capped at the target.
+for (const [display, key, target] of [["BLUEdw", "BLUEDW", 1], ["BALdw", "BALDW", 1], ["QOREdw", "QOREDW", 0.05], ["DEGENdw", "DEGENDW", 0.02]]) {
+  await check(`buy ${display} (up to ${target} fUSD) in one QoreX approval`, async () => {
+    const cap = await vaultCapacity(display);
+    const usd = Math.min(target, Math.floor(cap * 0.5 * 1e4) / 1e4);
+    if (usd < 0.002) throw new Skip(`the vault can fill only $${cap} of ${display}: refill the reserve (ops/src/refill.ts)`);
     const s0 = await bal(D.baskets[key].address, twin);
     const r = await trade({ display, key, side: "buy", amount: usd });
     const s1 = await bal(D.baskets[key].address, twin);
     assert(s1 > s0, `shares ${s0} -> ${s1}`);
-    return `+${(Number(s1 - s0) / 1e18).toFixed(4)} ${display}, msgs [${r.types.join(", ")}], ML-DSA-87 verified`;
+    return `${usd} fUSD (vault capacity ${cap === Infinity ? "above the balance" : `$${cap}`}) -> +${(Number(s1 - s0) / 1e18).toFixed(4)} ${display}, msgs [${r.types.join(", ")}], ML-DSA-87 verified`;
   });
 }
 
@@ -318,7 +341,8 @@ await check("no uncaught errors in the page", async () => {
 
 await browser.close();
 const passed = results.filter((r) => r.ok).length;
-console.log(`\n${passed}/${results.length} passed`);
+const skipped = results.filter((r) => r.skip).length;
+console.log(`\n${passed}/${results.length} passed${skipped ? `, ${skipped} skipped` : ""}`);
 const date = new Date().toISOString().slice(0, 16).replace(":", "");
 const dir = new URL("../../docs/e2e/", import.meta.url).pathname;
 mkdirSync(dir, { recursive: true });
@@ -327,11 +351,11 @@ writeFileSync(
   [
     `# Browser E2E run, ${new Date().toISOString()}`,
     "",
-    `The Darwin front (mainnet design) at ${BASE}, QoreX test double (real hybrid signing), qorechain-diana. Suite: \`app/e2e/suite.mjs\`. Result: **${passed}/${results.length} passed**.`,
+    `The Darwin front (mainnet design) at ${BASE}, QoreX test double (real hybrid signing), qorechain-diana. Suite: \`app/e2e/suite.mjs\`. Result: **${passed}/${results.length} passed${skipped ? `, ${skipped} skipped` : ""}**.`,
     "",
     "| | Check | Detail | Time |",
     "|---|---|---|---|",
-    ...results.map((r) => `| ${r.ok ? "PASS" : "FAIL"} | ${r.name} | ${String(r.detail).replace(/\|/g, "\\|")} | ${(r.ms / 1000).toFixed(1)}s |`),
+    ...results.map((r) => `| ${r.ok ? "PASS" : r.skip ? "SKIP" : "FAIL"} | ${r.name} | ${String(r.detail).replace(/\|/g, "\\|")} | ${(r.ms / 1000).toFixed(1)}s |`),
     "",
   ].join("\n"),
 );
