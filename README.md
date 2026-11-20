@@ -50,7 +50,7 @@ precompiles against keys registered on chain:
 | Rebalance (exact trades) | curator's ML-DSA-87 key | `DarwinBasket.rebalance`, plus a max NAV loss of 1% |
 | Target weights | curator's ML-DSA-87 key | `DarwinBasket.setTargetWeights` |
 | Every admin action | admin's ML-DSA-87 key | `PqcAdmin`: no function checks `msg.sender` for admin powers |
-| User buy and sell | the user's QoreX keys, hybrid | the chain's hybrid ante check, then `MsgCrossVMCall` into the router |
+| User buy and sell | the user's ML-DSA-87 + secp256k1 signed intent (QoreX `signArbitrary`) | the relayer's QoreSign check against the user's on-chain key, then `MsgExec` within the user's authz grant and EVM window |
 | Keeper relaying | scoped EVM window | `allowed_targets` = Darwin's contracts and tokens only |
 | Pause new mints | guardian (classical key) | the only classical power, and it can never cost a holder anything |
 | Sell the basket token for fUSD | the user's QoreX keys, hybrid | always open, even when buying is paused |
@@ -68,20 +68,40 @@ signature fails for the next round number.
 
 ## How a trade works
 
+QoreX signs only what it can show its user decoded. We tested it message by message
+(`/debug/qorex` in the app): it signs bank sends, authz grants and CosmWasm calls, and refuses
+`MsgCrossVMCall` and the ERC-20 conversions (`MsgConvertCoin`, `MsgConvertERC20`). It cannot send
+EVM transactions either. So a QoreX user trades through Darwin's relayer, and every step is
+post-quantum:
+
 ```
-QoreX (secp256k1 + ML-DSA-87)
-  └─ one native tx, up to 3 messages:
-       MsgConvertCoin        faucet fUSD (bank form) -> ERC-20 on the user's 0x twin, if needed
-       MsgCrossVMCall(fUSD)  approve the router, if needed
-       MsgCrossVMCall(router) buy(basket, fUSD, minShares, you)
-                               └─ DarwinRouter: fee 0.30%, buys each component from the
-                                  DarwinReserve at oracle prices, mints the shares, refunds the rest
+setup, once (the app guides it)
+  QoreX: open an EVM access window            hybrid MsgOpenEVMWindow, bounded by txs, value, expiry
+  QoreX: authorize Darwin's relayer, 24 h      hybrid MsgGrant (MsgCrossVMCall, MsgConvertCoin),
+                                               shown decoded with its expiry
+
+each trade
+  QoreX signArbitrary: the trade intent        {"darwin":"trade-v1","action":"buy","basket":…,
+                                                "amount":…,"min":…,"nonce":…,"expires":…}
+                                               ADR-36 secp256k1 + ML-DSA-87 over those exact bytes
+  relayer (ops/src/relayer.ts)                 QoreSign verifyMessageWithChain against the user's
+                                               registered ML-DSA-87 key; fields, expiry (<= 10 min),
+                                               single-use nonce; then, hybrid-signed:
+    MsgExec [ MsgConvertCoin        faucet fUSD -> ERC-20 on the user's 0x twin, if needed
+              MsgCrossVMCall(fUSD)  approve the router, if needed
+              MsgCrossVMCall(router) buy(basket, fUSD, minShares, the user) ]
+                                               the user is the sender of every inner message; the
+                                               chain admits the EVM call only through the user's
+                                               own EVM window (pqc_evm_window_used)
+                                               └─ DarwinRouter: fee 0.30%, buys each component from
+                                                  the DarwinReserve at oracle prices, mints the shares
 ```
 
-QoreX cannot sign EVM transactions yet, but it signs native ones hybrid. Darwin uses that:
-the trade reaches the EVM through a native cross-VM call, so the user never opens an EVM window
-and every trade carries the user's post-quantum signature. The chain emits
-`pqc_hybrid_verify status=verified` for each one, and the app's activity feed shows it.
+The shares land on the user's own account, and Darwin pays the gas. What the relayer could do
+beyond the user's intents is bounded by the grant (two message types, 24 hours) and the user's
+EVM window (transaction count, value, expiry); the user can revoke the grant at any time. The
+transaction page shows "Relayed for" with the user's address, and re-verifies the relayer's
+hybrid signature in the browser.
 
 ## Architecture
 
@@ -103,7 +123,9 @@ ops/         TypeScript, @qorechain/sdk 0.14, viem
   oracle.ts             signs and relays a price round
   rebalance.ts          curator: plans drift trades, signs them, relays
   amm.ts, refill.ts     buy on the native AMM (QWAKK), refill the reserve
-  crossvm.ts            trade from the native lane, as QoreX users do
+  crossvm.ts            trade from the native lane with the SDK (the keeper and tests)
+  relayer.ts            executes QoreX users' ML-DSA-87 signed intents through their authz grants
+  relay-setup.ts        a test account's one-time setup (EVM window, grants)
   keeper.ts             one loop: scoped window, oracle heartbeat (10 min or a 0.25% move),
                         the weekly rebalance (Mondays 12:00 UTC, curator-signed)
 app/         Next.js 15, React 18, viem: Darwin's mainnet front (same frame, navbar, home, basket
@@ -144,7 +166,7 @@ Each kit does a real job in Darwin:
 | Kit | Where | What it does for Darwin |
 |---|---|---|
 | QoreChain SDK (TS) `@qorechain/sdk`, `@qorechain/evm` | `ops/` | account derivation, canonical ML-DSA-87 keys, hybrid signing (`TxClient`, `EthNativeSigner`), `pqcSign`, PQC key registration with proof of possession, EVM windows |
-| QoreSign `@qorechain/qoresign` | `app/src/lib/qore/verify.ts` | re-checks a trade's committed hybrid signature in the browser (`inspectTransaction`), reads registered keys (`fetchPqKeyStatus`) |
+| QoreSign `@qorechain/qoresign` | `ops/src/relayer.ts`, `app/src/lib/qore/verify.ts` | verifies every trade intent against the user's registered ML-DSA-87 key (`verifyMessageWithChain`) before the relayer acts; re-checks a committed hybrid signature in the browser (`inspectTransaction`); reads EVM windows and keys |
 | qorechain-pqc `@qorechain/pqc` | `app/src/lib/qore/verify.ts` | verifies the oracle reporter's ML-DSA-87 signature in the browser, plus a tamper check |
 | QoreChain React `@qorechain/react` | account menu | `PqcStatusBadge`: is the connected account's ML-DSA-87 key registered |
 | Wallet adapter `@qorechain/wallet-adapter` | `app/src/lib/qore/qorex.ts` | QoreX capability check, request validation, `qorexSignAndBroadcast`, `isQorexRejection` |
@@ -152,8 +174,11 @@ Each kit does a real job in Darwin:
 | MCP + qore CLI `@qorechain/qore-cli`, `@qorechain/mcp` | `ops/src/e2e.ts`, `.mcp.json` | a second opinion in the on-chain suite (tier, layer, proof of possession); AI agents read Darwin's deployment through MCP |
 | QoreScan `@qorechain/qorescan` | `docs/cbom/`, `npm run cbom` | Darwin's CycloneDX 1.6 CBOM, a DORA mapping and a crypto-agility template |
 
-**Network functions:** ML-DSA-87 hybrid transactions (every user trade); PQC key registration
-with proof of possession (every role); EVM window, scoped (the keeper's `allowed_targets`); PQC
+**Network functions:** ML-DSA-87 hybrid transactions (every transaction, the users' grants and
+the relayer's `MsgExec` included); ML-DSA-87 message signatures (every trade intent, QoreX
+`signArbitrary`); PQC key registration with proof of possession (every role); EVM windows,
+scoped (the keeper's `allowed_targets`) and per user (relayed trades are admitted only through the
+user's own window); authz grants with expiry (users to the relayer); PQC
 signature verification in Solidity (`pqcVerify`); PQC key status in Solidity (`pqcKeyStatus`);
 Fest test tokens fUSD, fETH, fBTC with `MsgConvertCoin`/`MsgConvertERC20`; cross-VM calls (native
 to EVM, `MsgCrossVMCall`); AMM pools (QWAKK bought on the native AMM, QWAKK's price replayed from
@@ -167,6 +192,7 @@ its pool); MCP server and qore CLI; QoreScan.
 | `qor1yzq84n9uj6fmgzsh7tk88gr7dhrh60u95gpw8p` | deployer, admin, relayer (`0x20807acc…`): scoped EVM window, ML-DSA-87 admin signatures |
 | `qor1dg5x70vqts47p4jnajrvrjketxph8jewxe3phs` | oracle reporter (`0x6A286f3D…`): signs every price round |
 | `qor1uzauedcmwcgyrvlnqw9numxm8yk0hcmnyvuq5u` | curator (`0xe0BBCcb7…`): signs weights and rebalances |
+| `qor1pzkqj8xadyhlqtpplps8jl5xmccf664s554wvf` | trade relayer (`0x08Ac091C…`): executes QoreX users' signed intents through authz `MsgExec` |
 
 ### Pricing and rebalancing
 
@@ -207,6 +233,7 @@ npm run window -- register all       # ML-DSA-87 keys, with proof of possession
 npm run window -- open deployer      # an EVM window for the deployment
 (cd ../contracts && forge build) && npm run deploy
 npm run keeper                       # oracle rounds, rebalances, scoped window upkeep
+npm run relayer                      # the QoreX trade relayer on :3046 (the app proxies /api/relay)
 npm run trade -- buy BLUEDW 5        # or: tsx src/crossvm.ts buy BLUEDW 5 (native, hybrid)
 npm run rebalance -- plan BALDW
 ```
