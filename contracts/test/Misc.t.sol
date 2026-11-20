@@ -106,7 +106,7 @@ contract OracleFeedsTest is DarwinTest {
     }
 
     function test_unknownFeedInARoundIsRefused() public {
-        vm.warp(block.timestamp + 10);
+        vm.warp(block.timestamp + 60);
         uint16[] memory ids = new uint16[](1);
         uint128[] memory prices = new uint128[](1);
         ids[0] = 77;
@@ -118,7 +118,7 @@ contract OracleFeedsTest is DarwinTest {
     }
 
     function test_zeroPriceIsRefused() public {
-        vm.warp(block.timestamp + 10);
+        vm.warp(block.timestamp + 60);
         (uint64 ts, uint16[] memory ids, uint128[] memory prices,) = _round(1e18, 2_000e18, 60_000e18, 0.05e18);
         prices[0] = 0;
         bytes memory sig = _sign(reporter, oracle.roundMessage(2, ts, ids, prices));
@@ -127,7 +127,7 @@ contract OracleFeedsTest is DarwinTest {
     }
 
     function test_partialRoundsUpdateOnlyTheirFeeds() public {
-        vm.warp(block.timestamp + 10);
+        vm.warp(block.timestamp + 60);
         uint16[] memory ids = new uint16[](1);
         uint128[] memory prices = new uint128[](1);
         ids[0] = ETH;
