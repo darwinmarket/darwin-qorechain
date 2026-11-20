@@ -3,11 +3,11 @@
 ## Build
 
 - [x] 4 baskets live: BLUEDW, BALDW, QOREDW v4, DEGENDW v2 (`deployments/diana.json`).
-- [ ] **v2 redeploy** (after the faucet, needs QOR): oracle, reserve, the four baskets and the router
+- [x] **v2 redeploy** (done 2026-11-20 with 800 faucet QOR): oracle, reserve, the four baskets and the router
       on the fixed contracts (feed ids sorted, 60 s round spacing, ML-DSA-87 algorithm check, one-shot
       seed, `setOracle`); seeds minted to an unspendable address; keeper and app synced; E2E updated
       (`TooSoon` / `FeedsNotSorted` expectations); all suites rerun green.
-- [ ] Refill the reserve's QOR and QWAKK so the QOR baskets can fill more than cents.
+- [x] Reserve refilled: 360 QOR wrapped, 250 QOR of QWAKK; QOREdw fills ~$2, Degen ~$1.2.
 
 ## Only the team can do
 
