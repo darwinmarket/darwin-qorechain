@@ -10,7 +10,7 @@ import { formatUnits, parseUnits, type Address } from "viem";
 import { SKIM_FEE_BPS, basketTicker } from "@/lib/baskets";
 import { useBaskets } from "@/lib/darwin/store";
 import { txUrl } from "@/lib/qore/chain";
-import { signAndBroadcast } from "@/lib/qore/qorex";
+import { isQorexRejection, signAndBroadcast } from "@/lib/qore/qorex";
 import { buildBuy, buildSell, quoteBuy, quoteSell } from "@/lib/qore/trade";
 import { useWallet } from "@/lib/qore/wallet";
 import { TradeCard } from "./TradeCard";
@@ -114,7 +114,7 @@ export function QoreTradePanel({ symbol, name }: { symbol: string; name: string 
       void steps;
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
-      const declined = /reject|denied|declin|cancel/i.test(msg);
+      const declined = isQorexRejection(e) || /denied|declin|cancel/i.test(msg);
       setProgress({ step: 0, tone: "error", label: declined ? "Declined in QoreX" : "Trade failed" });
       toast.push({ type: declined ? "info" : "error", title: declined ? "Trade cancelled" : "Trade failed", message: declined ? undefined : msg.slice(0, 180) });
       setTimeout(() => setProgress(null), 2500);
