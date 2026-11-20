@@ -370,11 +370,11 @@ const skipped = results.filter((r) => r.skip).length;
 console.log(`\n${passed}/${results.length} passed${skipped ? `, ${skipped} skipped` : ""}`);
 // seconds in the name, and a subset run (ONLY=...) never takes a full run's name
 const date = new Date().toISOString().slice(0, 19).replace(/:/g, "");
-const file = `browser-${date}${ONLY ? "-subset" : ""}.md`;
+const reportFile = `browser-${date}${ONLY ? "-subset" : ""}.md`;
 const dir = new URL("../../docs/e2e/", import.meta.url).pathname;
 mkdirSync(dir, { recursive: true });
 writeFileSync(
-  `${dir}${file}`,
+  `${dir}${reportFile}`,
   [
     `# Browser E2E run, ${new Date().toISOString()}`,
     "",
@@ -386,5 +386,5 @@ writeFileSync(
     "",
   ].join("\n"),
 );
-console.log(`report: docs/e2e/${file}`);
+console.log(`report: docs/e2e/${reportFile}`);
 if (passed !== results.length) process.exitCode = 1;
