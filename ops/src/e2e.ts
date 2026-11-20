@@ -320,18 +320,35 @@ async function main() {
     return err;
   });
 
-  await check("curator: weights 55/45 then rebalance then back to 50/50, all ML-DSA-87 signed", async () => {
-    const w1 = await setWeights("BLUEDW", [5500, 4500]);
-    const p = await plan("BLUEDW");
-    assert(p.trades.length > 0, "trades planned");
-    const r1 = await rebalance("BLUEDW", 100);
-    assert(r1, "rebalanced");
-    const [, , , , weights] = await read<[Address[], number[], bigint[], bigint[], number[]]>(blue, basketAbi, "composition");
-    assert(Math.abs(weights[0] - 5500) < 60, `BTC weight ${weights[0]}`);
-    const w2 = await setWeights("BLUEDW", [5000, 5000]);
-    const r2 = await rebalance("BLUEDW", 100);
-    assert(r2, "rebalanced back");
-    return `weights ${w1.transactionHash}, rebalance ${r1!.transactionHash}, back ${w2.transactionHash} + ${r2!.transactionHash}`;
+  await check("curator: shift BLUEDW 5 points, rebalance, then restore its own targets, all ML-DSA-87 signed", async () => {
+    // Read the basket's real targets (70/30 today) and put exactly those back: the check must never
+    // leave a production basket on test weights.
+    const [, original] = await read<[Address[], number[], bigint[], bigint[], number[]]>(blue, basketAbi, "composition");
+    const shifted = [original[0] - 500, original[1] + 500];
+    try {
+      const w1 = await setWeights("BLUEDW", shifted);
+      const p = await plan("BLUEDW");
+      assert(p.trades.length > 0, "trades planned");
+      const r1 = await rebalance("BLUEDW", 100);
+      assert(r1, "rebalanced");
+      const [, , , , weights] = await read<[Address[], number[], bigint[], bigint[], number[]]>(blue, basketAbi, "composition");
+      assert(Math.abs(weights[0] - shifted[0]) < 60, `BTC weight ${weights[0]}`);
+      return `${original.join("/")} -> ${shifted.join("/")}: weights ${w1.transactionHash}, rebalance ${r1!.transactionHash}`;
+    } finally {
+      await setWeights("BLUEDW", [...original]);
+      await rebalance("BLUEDW", 100);
+      const [, back] = await read<[Address[], number[], bigint[], bigint[], number[]]>(blue, basketAbi, "composition");
+      if (back.join() !== original.join()) throw new Error(`BLUEDW targets not restored: ${back.join("/")} vs ${original.join("/")}`);
+    }
+  });
+
+  await check("invariants: every basket's targets are the published ones", async () => {
+    const published: Record<string, number[]> = { BLUEDW: [7000, 3000], BALDW: [3500, 3500, 3000], QOREDW: [6000, 2500, 1500], DEGENDW: [3000, 7000] };
+    for (const [k, w] of Object.entries(published)) {
+      const [, t] = await read<[Address[], number[], bigint[], bigint[], number[]]>(d.baskets[k].address, basketAbi, "composition");
+      assert(t.join() === w.join(), `${k} targets ${t.join("/")}, published ${w.join("/")}`);
+    }
+    return Object.entries(published).map(([k, w]) => `${k} ${w.map((x) => x / 100).join("/")}`).join(", ");
   });
 
   // ------------------------------------------------------------------ invariants
