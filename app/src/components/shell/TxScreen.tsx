@@ -4,7 +4,7 @@
  * A transaction, inside the Darwin frame: status, block, the post-quantum evidence the chain recorded
  * and the Darwin action it carried. Linked from Activity, the Security tab and the trade toasts.
  */
-import type { CSSProperties, ReactNode } from "react";
+import { useState, type CSSProperties, type ReactNode } from "react";
 import { EXPLORER } from "@/lib/qore/chain";
 import { useTx, type DarwinAction, type TxView } from "@/lib/qore/tx";
 import { useBrowserCheck } from "@/lib/qore/verify";
@@ -116,29 +116,93 @@ function BrowserCheckRow({ tx }: { tx: TxView }) {
 /** The chain's own REST API (testnet), for the raw transaction: no network toggle involved. */
 const REST_PUBLIC = "https://api-testnet.qore.host";
 
-/** A transaction hash as a link to the QoreChain explorer, highlighted. */
+/**
+ * The explorer opens on Mainnet and picks its network from its own cookie, which no other site can
+ * set. So the first click explains the one switch to make; once the reader has opened it that way,
+ * links go straight through (remembered in this browser).
+ */
+const EXPLORER_TESTNET_SEEN = "darwin.explorer.testnet";
+
 function HashLink({ hash, small = false }: { hash: string; small?: boolean }) {
+  const [asking, setAsking] = useState(false);
+  const url = `${EXPLORER}/tx/${hash}`;
+  const open = () => {
+    try {
+      localStorage.setItem(EXPLORER_TESTNET_SEEN, "1");
+    } catch {
+      /* private mode: ask again next time */
+    }
+    setAsking(false);
+    window.open(url, "_blank", "noreferrer");
+  };
   return (
-    <a
-      href={`${EXPLORER}/tx/${hash}`}
-      target="_blank"
-      rel="noreferrer"
-      title="Open on the QoreChain explorer"
-      style={{
-        fontFamily: MONO,
-        fontSize: small ? 12 : 13,
-        wordBreak: "break-all",
-        color: "var(--ink)",
-        background: "color-mix(in srgb, var(--orange) 14%, transparent)",
-        borderRadius: 6,
-        padding: "2px 6px",
-        textDecoration: "underline",
-        textDecorationColor: "color-mix(in srgb, var(--orange) 60%, transparent)",
-        textUnderlineOffset: 3,
-      }}
-    >
-      {hash} ↗
-    </a>
+    <span style={{ position: "relative", display: "inline-block" }}>
+      <a
+        href={url}
+        target="_blank"
+        rel="noreferrer"
+        title="Open on the QoreChain explorer"
+        onClick={(e) => {
+          let seen = false;
+          try {
+            seen = localStorage.getItem(EXPLORER_TESTNET_SEEN) === "1";
+          } catch {
+            /* ignore */
+          }
+          if (!seen) {
+            e.preventDefault();
+            setAsking(true);
+          }
+        }}
+        style={{
+          fontFamily: MONO,
+          fontSize: small ? 12 : 13,
+          wordBreak: "break-all",
+          color: "var(--ink)",
+          background: "color-mix(in srgb, var(--orange) 14%, transparent)",
+          borderRadius: 6,
+          padding: "2px 6px",
+          textDecoration: "underline",
+          textDecorationColor: "color-mix(in srgb, var(--orange) 60%, transparent)",
+          textUnderlineOffset: 3,
+        }}
+      >
+        {hash} ↗
+      </a>
+      {asking && (
+        <span
+          role="dialog"
+          style={{
+            position: "absolute",
+            zIndex: 20,
+            top: "calc(100% + 8px)",
+            left: 0,
+            width: 340,
+            padding: 14,
+            borderRadius: 12,
+            background: "var(--paper, #fff)",
+            border: "1px solid var(--rule)",
+            boxShadow: "0 12px 32px rgba(0,0,0,.14)",
+            fontSize: 13,
+            lineHeight: 1.45,
+            color: "var(--ink)",
+            fontFamily: "inherit",
+            wordBreak: "normal",
+          }}
+        >
+          <b>One switch on the explorer.</b> It opens on <b>Mainnet</b>; this transaction is on the testnet. Click{" "}
+          <b>Testnet</b> at the top right of the explorer once: it remembers it, and these links then open directly.
+          <span style={{ display: "flex", gap: 8, marginTop: 12 }}>
+            <button type="button" onClick={open} style={{ border: 0, borderRadius: 8, padding: "7px 12px", background: "var(--ink)", color: "var(--paper, #fff)", fontWeight: 600, cursor: "pointer" }}>
+              Open the explorer
+            </button>
+            <button type="button" onClick={() => setAsking(false)} style={{ border: "1px solid var(--rule)", borderRadius: 8, padding: "7px 12px", background: "transparent", cursor: "pointer" }}>
+              Cancel
+            </button>
+          </span>
+        </span>
+      )}
+    </span>
   );
 }
 
