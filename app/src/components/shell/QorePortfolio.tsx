@@ -6,7 +6,7 @@
  */
 import type { CSSProperties } from "react";
 import { LogoStack } from "../darwin/StockLogo";
-import { basketTicker } from "@/lib/baskets";
+import { BASKET_COLOR, basketTicker } from "@/lib/baskets";
 import { useBaskets } from "@/lib/darwin/store";
 import type { Basket } from "@/lib/darwin/types";
 import { assetColor } from "@/lib/darwin/assetColor";
@@ -23,6 +23,7 @@ const labelStyle: CSSProperties = { fontSize: 11, textTransform: "uppercase", le
 const fmtUsd = (n: number) => `$${n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const stackLegs = (b: Basket) => [...b.legs].sort((x, y) => (y.targetWeight ?? 0) - (x.targetWeight ?? 0)).map((l) => ({ symbol: l.symbol }));
 const basketAccent = (b: Basket) => {
+  if (BASKET_COLOR[b.symbol]) return BASKET_COLOR[b.symbol];
   const dom = [...b.legs].sort((x, y) => (y.targetWeight ?? 0) - (x.targetWeight ?? 0))[0];
   return dom ? assetColor(dom.symbol) : "var(--ink-3)";
 };
