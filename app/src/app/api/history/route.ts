@@ -25,21 +25,58 @@ async function qorSeries(range: string): Promise<Series | null> {
   }
 }
 
+/** A QWAKK/QOR swap on pool 6: when, and the QOR per QWAKK it executed at (fee excluded). */
+type Fill = { t: number; qorPerQwakk: number };
+
 /**
- * QWAKK's only market is the QWAKK/QOR pool of QoreChain's native AMM, and its QOR price there has
- * held steady: its USD history is that ratio times QOR's market history.
+ * Every swap ever made on QWAKK's only market, the QWAKK/QOR pool of QoreChain's native AMM,
+ * read from the chain's tx index. Both tokens have 6 decimals.
+ */
+async function qwakkFills(): Promise<Fill[]> {
+  const fills: Fill[] = [];
+  const q = encodeURIComponent("amm_swap.pool_id='6'");
+  for (let offset = 0; offset < 5000; offset += 100) {
+    const r = await fetch(`${REST}/cosmos/tx/v1beta1/txs?query=${q}&pagination.limit=100&pagination.offset=${offset}&order_by=ORDER_BY_ASC`, {
+      next: { revalidate: 900 },
+    });
+    if (!r.ok) throw new Error(`pool 6 swaps ${r.status}`);
+    const page = (await r.json()) as { tx_responses?: any[]; total?: string };
+    for (const tx of page.tx_responses ?? []) {
+      if (tx.code !== 0) continue;
+      for (const e of tx.events ?? []) {
+        if (e.type !== "amm_swap") continue;
+        const a = Object.fromEntries(e.attributes.map((x: any) => [x.key, x.value]));
+        if (a.pool_id !== "6") continue;
+        const gross = Number(a.amount_in) * (1 - Number(a.fee_bps) / 10_000);
+        const out = Number(a.amount_out);
+        if (!(gross > 0 && out > 0)) continue;
+        const qorPerQwakk = a.denom_in === QWAKK_DENOM ? out / gross : gross / out;
+        fills.push({ t: Math.floor(Date.parse(tx.timestamp) / 1000), qorPerQwakk });
+      }
+    }
+    if (!page.tx_responses?.length || offset + 100 >= Number(page.total ?? 0)) break;
+  }
+  return fills;
+}
+
+/**
+ * QWAKK/USD = its traded QOR price on pool 6 at each moment (the last swap before it) times QOR's
+ * market price. QWAKK only exists since that pool opened (2026-11-18): there is no price before its
+ * first swap, so nothing is drawn there, and a basket holding it charts from that day on.
  */
 async function qwakkSeries(range: string): Promise<Series | null> {
-  const [qor, pools] = await Promise.all([
-    qorSeries(range),
-    fetch(`${REST}/qorechain/amm/v1/pools`, { next: { revalidate: 900 } }).then((r) => r.json()).catch(() => null),
-  ]);
-  const pool = (pools?.pools as any[] | undefined)?.find((p) => p.token_a === QWAKK_DENOM || p.token_b === QWAKK_DENOM);
-  if (!qor || !pool) return null;
-  const qwakk = Number(pool.token_a === QWAKK_DENOM ? pool.reserve_a : pool.reserve_b);
-  const uqor = Number(pool.token_a === QWAKK_DENOM ? pool.reserve_b : pool.reserve_a);
-  const ratio = uqor / qwakk; // both 6 decimals: QOR per QWAKK
-  return { timestamps: qor.timestamps, closes: qor.closes.map((c) => (c == null ? null : c * ratio)) };
+  const [qor, fills] = await Promise.all([qorSeries(range), qwakkFills().catch(() => null)]);
+  if (!qor || !fills?.length) return null;
+  const timestamps: number[] = [];
+  const closes: (number | null)[] = [];
+  let k = -1;
+  qor.timestamps.forEach((t, i) => {
+    while (k + 1 < fills.length && fills[k + 1].t <= t) k++;
+    if (k < 0 || qor.closes[i] == null) return;
+    timestamps.push(t);
+    closes.push(qor.closes[i]! * fills[k].qorPerQwakk);
+  });
+  return { timestamps, closes };
 }
 
 async function fetchSeries(symbol: string, range: string, interval: string): Promise<Series | null> {
