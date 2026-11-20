@@ -3,7 +3,9 @@
  * Activity tab draws. Runs on the server (/api/trades): the raw search results weigh megabytes
  * (every transaction carries its 4.6 kB ML-DSA-87 signature), the summary a few kilobytes.
  */
-import { bytesToHex, decodeFunctionData } from "viem";
+import { bytesToHex, decodeFunctionData, getAddress, parseTransaction, type Hex } from "viem";
+import { parseAddress } from "@qorechain/qoresign";
+import { FACTORY, factoryAbi, accountRouterAbi } from "./account";
 import { routerAbi } from "./abis";
 import { D, ROUTER } from "./chain";
 
@@ -40,7 +42,11 @@ export async function readTrades(REST: string, address: string): Promise<TradeEn
     return r.ok ? (((await r.json()) as { tx_responses?: any[] }).tx_responses ?? []) : [];
   };
   const seen = new Set<string>();
-  const [own, relayed] = await Promise.all([search(`message.sender='${address}'`), search(`crossvm_request.sender='${address}'`)]);
+  const [own, relayed, viaAccount] = await Promise.all([
+    search(`message.sender='${address}'`),
+    search(`crossvm_request.sender='${address}'`),
+    accountTrades(REST, address),
+  ]);
   const txs = [...own, ...relayed].filter((t) =>
     seen.has(t.txhash) ? false : (seen.add(t.txhash), true),
   );
@@ -66,6 +72,52 @@ export async function readTrades(REST: string, address: string): Promise<TradeEn
       }
     }
   }
-  return out.sort((a, b) => b.ts - a.ts);
+  return [...out, ...viaAccount].sort((a, b) => b.ts - a.ts);
+}
+
+/**
+ * Trades through the user's DarwinAccount: EVM transactions from Darwin's relayer to the account
+ * factory. The chain indexes them by recipient only, so the factory's recent transactions are read
+ * and each one decoded (factory.execute(owner, calls, ...)), keeping the user's own.
+ */
+async function accountTrades(REST: string, address: string): Promise<TradeEntry[]> {
+  if (!FACTORY) return [];
+  let owner: string;
+  try {
+    owner = parseAddress(address).hex.toLowerCase();
+  } catch {
+    return [];
+  }
+  const qs = new URLSearchParams({ query: `ethereum_tx.recipient='${getAddress(FACTORY)}'`, order_by: "ORDER_BY_DESC", "pagination.limit": "100" });
+  const r = await fetch(`${REST}/cosmos/tx/v1beta1/txs?${qs}`, { headers: { accept: "application/json", "user-agent": "darwin-qorechain" }, cache: "no-store" }).catch(() => null);
+  if (!r?.ok) return [];
+  const txs = (((await r.json()) as { tx_responses?: any[] }).tx_responses ?? []);
+  const out: TradeEntry[] = [];
+  for (const t of txs) {
+    const m = t.tx?.body?.messages?.[0];
+    if (!m?.raw) continue;
+    try {
+      const tx = parseTransaction(m.raw as Hex);
+      const exec = decodeFunctionData({ abi: factoryAbi, data: tx.data! });
+      if (exec.functionName !== "execute" || String(exec.args[0]).toLowerCase() !== owner) continue;
+      const evmHash = t.events?.find((e: any) => e.type === "ethereum_tx")?.attributes?.find((a: any) => a.key === "ethereumTxHash")?.value;
+      const failed = t.code !== 0 || t.events?.some((e: any) => e.type === "ethereum_tx" && e.attributes.some((a: any) => a.key === "ethereumTxFailed"));
+      for (const c of exec.args[1] as readonly { target: string; data: Hex }[]) {
+        if (!ROUTERS.includes(c.target.toLowerCase())) continue;
+        const call = decodeFunctionData({ abi: accountRouterAbi, data: c.data });
+        const found = basketOf(call.args[0] as string);
+        if (!found) continue;
+        const [symbol, b] = found;
+        const base = { symbol, name: b.name.replace(/^Darwin /, ""), ts: Date.parse(t.timestamp), status: failed ? ("failed" as const) : ("done" as const), tx: evmHash ?? t.txhash, hybrid: true };
+        if (call.functionName === "buy")
+          out.push({ ...base, kind: "buy", amount: (Number(call.args[1]) / 1e6).toFixed(2), unit: "fUSD", received: `${(Number(call.args[2]) / 1e18).toFixed(4)}+ ${b.display}` });
+        else
+          out.push({ ...base, kind: "sell", amount: (Number(call.args[1]) / 1e18).toFixed(4), unit: b.display, received: `${(Number(call.args[2]) / 1e6).toFixed(2)}+ fUSD` });
+      }
+    } catch {
+      /* not a Darwin account trade */
+    }
+  }
+  return out;
 }
 

@@ -3,14 +3,20 @@
 /**
  * Portfolio, as on the mainnet front: total value, one allocation bar, then Holdings (each basket,
  * and Cash, which is the fUSD the account can spend). Values are at the oracle's prices.
+ * Holdings add up the QoreX wallet, its EVM twin and the user's DarwinAccount; fUSD on the
+ * DarwinAccount can be withdrawn back to the QoreX wallet by one signed message.
  */
-import type { CSSProperties } from "react";
+import { useState, type CSSProperties } from "react";
 import { LogoStack } from "../darwin/StockLogo";
 import { BASKET_COLOR, basketTicker } from "@/lib/baskets";
 import { useBaskets } from "@/lib/darwin/store";
 import type { Basket } from "@/lib/darwin/types";
 import { assetColor } from "@/lib/darwin/assetColor";
-import { useWallet } from "@/lib/qore/wallet";
+import { cashOf, sharesOf, useWallet } from "@/lib/qore/wallet";
+import { signAndExecute, withdrawFusdCalls } from "@/lib/qore/accountClient";
+import { isQorexRejection } from "@/lib/qore/qorex";
+import { txUrl } from "@/lib/qore/chain";
+import { useToast } from "./Toast";
 import AnimatedButton from "./AnimatedButton";
 import { SectionHeading } from "./SectionHeading";
 
@@ -36,10 +42,10 @@ export function QorePortfolio({ onOpen, onGoBaskets }: { onOpen: (symbol: string
   const { balances } = useWallet();
   const { data: baskets } = useBaskets();
   const loading = !balances || !baskets;
-  const cash = balances ? Number(balances.fusdBank + balances.fusdErc20) / 1e6 : 0;
-  const held = (baskets ?? []).filter((b) => (balances?.shares[b.symbol] ?? 0n) > 0n);
+  const cash = Number(cashOf(balances)) / 1e6;
+  const held = (baskets ?? []).filter((b) => sharesOf(balances, b.symbol) > 0n);
   const values: Record<string, number> = Object.fromEntries(
-    held.map((b) => [b.symbol, (Number(balances!.shares[b.symbol]) / 1e18) * (b.sharePriceUsd ?? 0)]),
+    held.map((b) => [b.symbol, (Number(sharesOf(balances, b.symbol)) / 1e18) * (b.sharePriceUsd ?? 0)]),
   );
   const total = held.reduce((s, b) => s + values[b.symbol], 0) + cash;
   const slices = [
@@ -119,7 +125,7 @@ export function QorePortfolio({ onOpen, onGoBaskets }: { onOpen: (symbol: string
                   <HoldingRow
                     key={row.basket.symbol}
                     basket={row.basket}
-                    shares={Number(balances!.shares[row.basket.symbol]) / 1e18}
+                    shares={Number(sharesOf(balances, row.basket.symbol)) / 1e18}
                     value={row.value}
                     pct={total > 0 ? (row.value / total) * 100 : null}
                     first={i === 0}
@@ -134,6 +140,42 @@ export function QorePortfolio({ onOpen, onGoBaskets }: { onOpen: (symbol: string
   );
 }
 
+/** fUSD on the DarwinAccount, back to the QoreX wallet: one message signed in QoreX. */
+function WithdrawLink() {
+  const { account, balances, refresh } = useWallet();
+  const toast = useToast();
+  const [busy, setBusy] = useState(false);
+  const acct = balances?.acct;
+  if (!account || !acct || acct.fusd === 0n) return null;
+  const amount = acct.fusd;
+  const label = `${(Number(amount) / 1e6).toFixed(2)} fUSD`;
+  async function go() {
+    setBusy(true);
+    try {
+      const r = await signAndExecute(account!.address, acct!, withdrawFusdCalls(acct!, amount), `Darwin: withdraw ${label} to your QoreX wallet`);
+      toast.push({ type: "success", title: `Withdrew ${label}`, message: "Back in your QoreX wallet.", action: { label: "View transaction", onClick: () => window.open(txUrl(r.txHash), "_blank", "noreferrer") }, duration: 8000 });
+      setTimeout(refresh, 2500);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      const declined = isQorexRejection(e) || /denied|declin|cancel/i.test(msg);
+      toast.push({ type: declined ? "info" : "error", title: declined ? "Withdrawal cancelled" : "Withdrawal failed", message: declined ? undefined : msg.slice(0, 180) });
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <button
+      type="button"
+      onClick={() => void go()}
+      disabled={busy}
+      title="Sign one message in QoreX: your Darwin account returns this fUSD to your wallet"
+      style={{ background: "none", border: 0, padding: 0, cursor: busy ? "wait" : "pointer", color: "var(--accent, var(--ink-2))", fontFamily: MONO, fontSize: 12, textDecoration: "underline", textUnderlineOffset: 3 }}
+    >
+      {busy ? "Withdrawing…" : `Withdraw ${label} to QoreX`}
+    </button>
+  );
+}
+
 function CashRow({ cash, pct, first }: { cash: number; pct: number | null; first?: boolean }) {
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 14, padding: "14px 16px", borderTop: first ? undefined : "1px solid var(--rule)" }}>
@@ -143,7 +185,10 @@ function CashRow({ cash, pct, first }: { cash: number; pct: number | null; first
         </span>
         <div style={{ minWidth: 0 }}>
           <div style={{ fontWeight: 600 }}>Cash</div>
-          <div style={{ fontFamily: MONO, fontSize: 12, color: "var(--ink-3)", letterSpacing: "0.04em" }}>fUSD</div>
+          <div style={{ fontFamily: MONO, fontSize: 12, color: "var(--ink-3)", letterSpacing: "0.04em", display: "flex", gap: 10, flexWrap: "wrap" }}>
+            <span>fUSD</span>
+            <WithdrawLink />
+          </div>
         </div>
       </div>
       <div style={{ textAlign: "right", flexShrink: 0 }}>

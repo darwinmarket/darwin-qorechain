@@ -97,6 +97,19 @@ function BrowserCheckRow({ tx }: { tx: TxView }) {
           </div>
         </>
       )}
+      {data?.kind === "account" && (
+        <>
+          <span data-browser-check={String(data.verified && data.tamperedRejected)} style={ok(data.verified && data.tamperedRejected)}>
+            {data.verified ? "The owner's ML-DSA-87 signature verified" : "Signature does not verify"}
+            {data.tamperedRejected ? ` · rejected for nonce ${data.nonce + 1n}` : " · replay check failed"}
+          </span>
+          <div style={sub}>
+            The text {data.owner} signed in QoreX was rebuilt here from the calldata and the account&apos;s nonce, and its {data.sigBytes}-byte
+            ML-DSA-87 signature verified with @qorechain/pqc against the {data.keyBytes}-byte key it registered on chain
+            {data.proven ? " with proof of possession" : ""}. The same signature fails for the next nonce.
+          </div>
+        </>
+      )}
       {data?.kind === "round" && (
         <>
           <span data-browser-check={String(data.verified && data.tamperedRejected)} style={ok(data.verified && data.tamperedRejected)}>
@@ -227,8 +240,18 @@ export function TxScreen({ hash }: { hash: string }) {
                     </div>
                   </Row>
                 )}
+                {tx.viaAccount && (
+                  <Row label="Signed by" first>
+                    <strong>{tx.viaAccount.owner}</strong>
+                    <div style={sub}>
+                      &ldquo;{tx.viaAccount.summary}&rdquo;, signed in QoreX (secp256k1 + ML-DSA-87). Its Darwin account {tx.viaAccount.account} checked the
+                      ML-DSA-87 signature on chain with pqcVerify (nonce {tx.viaAccount.nonce}) before trading. Darwin&apos;s relayer only paid the gas: no EVM
+                      window or grant of the user was involved.
+                    </div>
+                  </Row>
+                )}
                 {tx.evmWindow && (
-                  <Row label="EVM admission" first={!tx.hybridVerified}>
+                  <Row label="EVM admission" first={!tx.hybridVerified && !tx.viaAccount}>
                     <strong>Admitted by a post-quantum EVM window</strong>
                     <div style={sub}>
                       {tx.evmWindow.address}, transaction {tx.evmWindow.usedTxs} of its window (pqc_evm_window_used)
