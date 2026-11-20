@@ -1,0 +1,50 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1160 430" width="1160" height="430" font-family="Geist, Helvetica Neue, Helvetica, Arial, sans-serif">
+<defs>
+  <marker id="b" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+    <path d="M0,0 L10,5 L0,10 z" fill="#e2c57e"/></marker>
+  <linearGradient id="gold" x1="0" y1="0" x2="1" y2="1">
+    <stop offset="0" stop-color="#a9813f"/><stop offset="0.18" stop-color="#bb9450"/>
+    <stop offset="0.38" stop-color="#cdab6b"/><stop offset="0.58" stop-color="#c09c5b"/>
+    <stop offset="0.80" stop-color="#ae8743"/><stop offset="1" stop-color="#94702f"/>
+  </linearGradient>
+</defs>
+<rect width="1160" height="430" fill="#201e17"/>
+<rect x="22" y="22" width="1116" height="386" fill="none" stroke="#f5f2e8" stroke-opacity="0.10" rx="8"/>
+<text x="56" y="64" fill="#f5f2e8" font-size="21" font-weight="600">One buy, one signature</text>
+<text x="56" y="88" fill="#a69f8c" font-size="13">You sign the intent. The relayer verifies it and the chain executes it as you, inside your grant and your EVM window.</text>
+<rect x="56" y="124" width="235" height="210" rx="12" fill="#201e17" stroke="#e2c57e" stroke-opacity="0.5" stroke-width="1.5"/>
+<circle cx="86" cy="156" r="14" fill="url(#gold)"/><text x="86" y="161" fill="#ffffff" font-size="14" font-weight="700" text-anchor="middle">1</text>
+<text x="110" y="161" fill="#f5f2e8" font-size="14.5" font-weight="700">You sign the intent</text>
+<text x="76" y="196" fill="#a69f8c" font-size="12">In QoreX: action, basket,</text>
+<text x="76" y="216" fill="#a69f8c" font-size="12">fUSD in, minimum shares,</text>
+<text x="76" y="236" fill="#a69f8c" font-size="12">nonce, expiry.</text>
+<text x="76" y="256" fill="#a69f8c" font-size="12">secp256k1 + ML-DSA-87.</text>
+<text x="76" y="300" fill="#e2c57e" font-size="12" font-weight="600">your signature</text>
+<path d="M293 229 L325 229" stroke="#e2c57e" stroke-width="2" marker-end="url(#b)"/>
+<rect x="329" y="124" width="235" height="210" rx="12" fill="#2d2b22" stroke="#474334" stroke-width="1.5"/>
+<circle cx="359" cy="156" r="14" fill="#474334"/><text x="359" y="161" fill="#f5f2e8" font-size="14" font-weight="700" text-anchor="middle">2</text>
+<text x="383" y="161" fill="#f5f2e8" font-size="14.5" font-weight="700">The relayer checks</text>
+<text x="349" y="196" fill="#a69f8c" font-size="12">QoreSign verifies it against</text>
+<text x="349" y="216" fill="#a69f8c" font-size="12">your on-chain ML-DSA-87</text>
+<text x="349" y="236" fill="#a69f8c" font-size="12">key. Fields, expiry, and a</text>
+<text x="349" y="256" fill="#a69f8c" font-size="12">nonce never used before.</text>
+<text x="349" y="300" fill="#a69f8c" font-size="12" font-weight="600">refuses replays</text>
+<path d="M566 229 L598 229" stroke="#e2c57e" stroke-width="2" marker-end="url(#b)"/>
+<rect x="602" y="124" width="235" height="210" rx="12" fill="#2d2b22" stroke="#474334" stroke-width="1.5"/>
+<circle cx="632" cy="156" r="14" fill="#474334"/><text x="632" y="161" fill="#f5f2e8" font-size="14" font-weight="700" text-anchor="middle">3</text>
+<text x="656" y="161" fill="#f5f2e8" font-size="14.5" font-weight="700">The chain executes</text>
+<text x="622" y="196" fill="#a69f8c" font-size="12">MsgExec as you, admitted by</text>
+<text x="622" y="216" fill="#a69f8c" font-size="12">your EVM window. The router</text>
+<text x="622" y="236" fill="#a69f8c" font-size="12">takes 0.30%, buys components</text>
+<text x="622" y="256" fill="#a69f8c" font-size="12">from the reserve, mints.</text>
+<text x="622" y="300" fill="#a69f8c" font-size="12" font-weight="600">router + basket</text>
+<path d="M839 229 L871 229" stroke="#e2c57e" stroke-width="2" marker-end="url(#b)"/>
+<rect x="875" y="124" width="235" height="210" rx="12" fill="#201e17" stroke="#e2c57e" stroke-opacity="0.5" stroke-width="1.5"/>
+<circle cx="905" cy="156" r="14" fill="url(#gold)"/><text x="905" y="161" fill="#ffffff" font-size="14" font-weight="700" text-anchor="middle">4</text>
+<text x="929" y="161" fill="#f5f2e8" font-size="14.5" font-weight="700">The shares are yours</text>
+<text x="895" y="196" fill="#a69f8c" font-size="12">An ERC-20 balance on your</text>
+<text x="895" y="216" fill="#a69f8c" font-size="12">account. Darwin has no key</text>
+<text x="895" y="236" fill="#a69f8c" font-size="12">that moves it. The relayer</text>
+<text x="895" y="256" fill="#a69f8c" font-size="12">paid the gas.</text>
+<text x="895" y="300" fill="#e2c57e" font-size="12" font-weight="600">done</text>
+</svg>
