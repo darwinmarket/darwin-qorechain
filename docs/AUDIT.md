@@ -127,6 +127,16 @@ fUSD for one transaction during a deposit or a withdrawal (a custody of seconds)
 are non-custodial: they are enforced by the account contract. The account accepts a signed message
 from any submitter, so the relayer is not the only way in.
 
+### Under load (multi-user battery)
+
+The relayer is four accounts (`relayer`, `relayer2..4`, indexes 3 to 6), each user served by one
+fixed by its address. Every credit and every return transfers something to the user, so whether it
+happened is found by an indexed search over the user's history, never by a window of the relayer's
+latest transactions (that window credited ten deposits twice under load, see
+[TESTING.md](TESTING.md#what-the-darwinaccount-battery-found-2026-11-20)). `ops/src/reconcile-deposits.ts`
+audits every deposit against its credits; at the last run every relayer's float was zero and
+every deposit credited exactly once since the fix.
+
 ## The original relayer path (shares bought before DarwinAccounts)
 
 Shares bought before DarwinAccounts sit on the user's EVM twin. Selling them keeps the original

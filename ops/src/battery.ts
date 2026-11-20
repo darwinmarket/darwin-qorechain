@@ -133,6 +133,16 @@ async function fund(users: User[]) {
     value: { fromAddress: dep.cosmos, toAddress: u.address, amount: [{ denom: "uqor", amount: "2000000" }] },
   }))], "hybrid", "1500000");
   await sleep(5000);
+  // the deployer draws what it lacks from the reserve (an ML-DSA-87 signed admin withdrawal)
+  const needErc = 15_000_000n * BigInt(users.length);
+  const have = await bal(d.tokens.fUSD, dep.evm as Address);
+  if (have < needErc) {
+    const { adminCall } = await import("./evm.js");
+    const { encodeAbiParameters, parseAbiParameters } = await import("viem");
+    const amount = needErc - have;
+    log(`deployer draws ${Number(amount) / 1e6} fUSD from the reserve`);
+    await adminCall(d.reserve, artifact("DarwinReserve").abi, "withdraw", "withdraw", encodeAbiParameters(parseAbiParameters("address, uint256, address"), [d.tokens.fUSD, amount, dep.evm as Address]), [d.tokens.fUSD, amount, dep.evm]);
+  }
   const bankUsers = users.filter((u) => u.i % 2 === 1);
   const ercUsers = users.filter((u) => u.i % 2 === 0);
   for (const u of ercUsers) await write("deployer", d.tokens.fUSD, erc20, "transfer", [u.twin, 15_000_000n]);
