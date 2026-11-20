@@ -33,7 +33,7 @@ The signed message binds the chain id, the oracle's address, the round number, t
 On demand, so nothing is spent while nobody trades:
 
 - **Before a trade.** The relayer publishes a signed round if the last one is more than 20 minutes old (readers refuse prices older than 30).
-- **Daily.** A cron at 06:00 UTC publishes one round and renews the relayer account's scoped EVM window.
+- **Daily.** A cron at 06:00 UTC publishes one round and renews the deployer's scoped EVM window (the deployer relays rounds and rebalances).
 - **Weekly.** The Monday 12:05 UTC rebalance publishes a fresh round first.
 
 Rounds are at least 60 seconds apart; two callers racing for the same round cannot both land one.
