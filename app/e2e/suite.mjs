@@ -221,13 +221,15 @@ await check("QOR and QWAKK baskets chart market history; QWAKK replayed from its
   return `${h.timestamps.length} hourly bars since ${new Date(h.timestamps[0] * 1000).toISOString().slice(0, 16)}`;
 });
 
-await check("Security tab: oracle feeds, rounds, rules, the keeper's scoped window, contracts", async () => {
+await check("Security tab: oracle feeds, rounds, rules, how Darwin signs (no EVM window), contracts", async () => {
   await page.goto(BASE, { waitUntil: "networkidle" });
   await tab("Security");
   await page.waitForSelector("text=Post-quantum oracle", { timeout: 30000 });
   await page.waitForSelector("text=QWAKK/USD", { timeout: 30000 });
   await page.waitForSelector("text=/^#\\d+$/", { timeout: 30000 });
   await page.waitForSelector("text=Who can do what");
+  await page.waitForSelector("text=How Darwin signs");
+  await page.waitForSelector("text=no EVM window open", { timeout: 30000 });
   await page.waitForSelector("text=DarwinRouter", { timeout: 30000 });
   await page.waitForSelector(`text=${D.router}`, { timeout: 30000 });
   return "all sections";
@@ -238,7 +240,8 @@ await check("a round's link opens Darwin's transaction page with the decoded rou
   const href = await page.locator("a[href*='/tx/']:not([href^='http'])").first().getAttribute("href");
   await page.goto(new URL(href, page.url()).toString(), { waitUntil: "domcontentloaded" });
   await page.waitForSelector("text=/Oracle round #\\d+/", { timeout: 30000 });
-  await page.waitForSelector("text=Admitted by a post-quantum EVM window", { timeout: 10000 });
+  // the keeper's round is a MsgCrossVMCall hybrid-signed by the chain's verdict, with no EVM window
+  await page.waitForSelector("text=secp256k1 + ML-DSA-87, verified", { timeout: 15000 });
   await page.waitForSelector("text=qorechain-diana (testnet)");
   // the reporter's ML-DSA-87 signature, re-verified in the page with @qorechain/pqc
   await page.waitForSelector("[data-browser-check]", { timeout: 60000 });
