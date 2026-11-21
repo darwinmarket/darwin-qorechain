@@ -11,10 +11,12 @@
  *             user's QoreX wallet in bank form.
  * No EVM window, no authz grant, and no gas for a trade.
  */
-import type { Address } from "viem";
+import { hexToBytes, keccak256, type Address } from "viem";
+import { parseAddress } from "@qorechain/qoresign";
 import { withBase } from "@/lib/base";
-import { buyCalls, sellCalls, textFor, withdrawCalls, type Call } from "./account";
-import { COSMOS_CHAIN_ID, D, TOKEN_INFO } from "./chain";
+import { erc20Abi } from "./abis";
+import { accountAbi, buyCalls, factoryAbi, FACTORY, sellCalls, textFor, withdrawCalls, type Call } from "./account";
+import { client, COSMOS_CHAIN_ID, D, ROUTER, TOKEN_INFO, TOKENS } from "./chain";
 import { bankSend } from "./proto";
 import { qorex, signAndBroadcast, withUnlock } from "./qorex";
 
@@ -45,10 +47,38 @@ const api = async (path: string, body?: unknown) => {
 };
 const sleep = (ms: number) => new Promise((res) => setTimeout(res, ms));
 
+const RELAYERS = (D as any).relayers as { cosmos: string; evm: Address }[];
+const BASKETS = Object.entries(D.baskets as Record<string, { address: Address }>);
+
+/**
+ * The user's DarwinAccount, read in the browser from the public EVM RPC (no serverless call: the
+ * balances poll runs this for every connected visitor). The same answer as the server's
+ * /api/relay/account: the relayer serving a user is fixed by its address, as server/accounts.ts
+ * relayerFor() picks it.
+ */
 export async function readAccount(owner: string): Promise<AccountInfo> {
-  const j = await api(`account?account=${owner}`);
-  const big = (o: Record<string, string>) => Object.fromEntries(Object.entries(o).map(([k, v]) => [k, BigInt(v)]));
-  return { account: j.account, exists: j.exists, nonce: BigInt(j.nonce), fusd: BigInt(j.fusd), shares: big(j.shares), allowance: big(j.allowance), relayer: j.relayer };
+  const twin = parseAddress(owner).hex as Address;
+  const relayer = RELAYERS[parseInt(keccak256(hexToBytes(twin)).slice(2, 6), 16) % RELAYERS.length];
+  const account = (await client.readContract({ address: FACTORY, abi: factoryAbi, functionName: "accountOf", args: [twin] })) as Address;
+  const bal = (token: Address) => client.readContract({ address: token, abi: erc20Abi, functionName: "balanceOf", args: [account] }) as Promise<bigint>;
+  const allow = (token: Address) => client.readContract({ address: token, abi: erc20Abi, functionName: "allowance", args: [account, ROUTER] }) as Promise<bigint>;
+  const code = await client.getCode({ address: account });
+  const exists = Boolean(code && code !== "0x");
+  const [nonce, fusd, fusdAllowance, ...rest] = await Promise.all([
+    exists ? (client.readContract({ address: account, abi: accountAbi, functionName: "nonce" }) as Promise<bigint>) : Promise.resolve(0n),
+    bal(TOKENS.fUSD),
+    allow(TOKENS.fUSD),
+    ...BASKETS.flatMap(([, b]) => [bal(b.address), allow(b.address)]),
+  ]);
+  return {
+    account,
+    exists,
+    nonce,
+    fusd,
+    shares: Object.fromEntries(BASKETS.map(([k], i) => [k, rest[2 * i]])),
+    allowance: { fUSD: fusdAllowance, ...Object.fromEntries(BASKETS.map(([k], i) => [k, rest[2 * i + 1]])) },
+    relayer: { cosmos: relayer.cosmos, evm: relayer.evm },
+  };
 }
 
 /** Move `amount` fUSD from the QoreX wallet onto the DarwinAccount. One QoreX approval. */

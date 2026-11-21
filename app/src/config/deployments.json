@@ -50,7 +50,7 @@
           "fETH": 1731.97,
           "fBTC": 61456.6625,
           "WQOR": 0.003292,
-          "QWAKK": 4.814666269587106e-06
+          "QWAKK": 0.000004814666269587106
         }
       }
     },
@@ -84,7 +84,7 @@
           "fETH": 1731.97,
           "fBTC": 61456.6625,
           "WQOR": 0.003292,
-          "QWAKK": 4.814666269587106e-06
+          "QWAKK": 0.000004814666269587106
         }
       }
     },
@@ -115,7 +115,7 @@
         "to": "0x000000000000000000000000000000000000dEaD",
         "prices": {
           "fQOR": 0.003283,
-          "fQWAKK": 4.8251640136121784e-06,
+          "fQWAKK": 0.0000048251640136121784,
           "fETH": 1752.65,
           "fBTC": 61841.615000000005,
           "fUSD": 1
@@ -146,7 +146,7 @@
         "to": "0x000000000000000000000000000000000000dEaD",
         "prices": {
           "fQOR": 0.003283,
-          "fQWAKK": 4.8251640136121784e-06,
+          "fQWAKK": 0.0000048251640136121784,
           "fETH": 1752.65,
           "fBTC": 61841.615000000005,
           "fUSD": 1
@@ -271,7 +271,7 @@
           "fETH": 1743.71,
           "fBTC": 61538.05,
           "WQOR": 0.03468550501483336,
-          "QWAKK": 5.063493322713778e-05
+          "QWAKK": 0.00005063493322713778
         }
       },
       "retired": "2026-11-20T10:55:35.666Z",
@@ -415,7 +415,7 @@
           "fETH": 1731.97,
           "fBTC": 61456.6625,
           "WQOR": 0.003292,
-          "QWAKK": 4.814666269587106e-06
+          "QWAKK": 0.000004814666269587106
         }
       },
       "retired": "2026-11-20T14:02:06.288Z",
@@ -449,7 +449,7 @@
           "fETH": 1731.97,
           "fBTC": 61456.6625,
           "WQOR": 0.003292,
-          "QWAKK": 4.814666269587106e-06
+          "QWAKK": 0.000004814666269587106
         }
       },
       "retired": "2026-11-20T14:02:15.260Z",
@@ -466,5 +466,27 @@
     }
   ],
   "stack": 2,
-  "accountFactory": "0x09891b295bf34c6ed6b364e53bcd68e06fc2bd12"
+  "accountFactory": "0x09891b295bf34c6ed6b364e53bcd68e06fc2bd12",
+  "relayers": [
+    {
+      "role": "relayer",
+      "cosmos": "qor1pzkqj8xadyhlqtpplps8jl5xmccf664s554wvf",
+      "evm": "0x08Ac091Cdd692ff02C21F860797e86DE309D6ab0"
+    },
+    {
+      "role": "relayer2",
+      "cosmos": "qor1cuvn9meqz0ysflpkc3fql52nq7lrmvgnj3u4zg",
+      "evm": "0xC71932ef2013C904fC36C4520fd15307be3Db113"
+    },
+    {
+      "role": "relayer3",
+      "cosmos": "qor1rsp00u4r2vpd96hkcuwxl8w7ch3lfxj2z2tzjf",
+      "evm": "0x1C02F7f2a35302D2EAF6C71c6f9DDeC5E3F49a4A"
+    },
+    {
+      "role": "relayer4",
+      "cosmos": "qor1ljnamh3un2jyt5hq2kf832gt4wugf77v2yku3f",
+      "evm": "0xFCa7dDde3C9Aa445d2e0559278A90bAbb884FbcC"
+    }
+  ]
 }

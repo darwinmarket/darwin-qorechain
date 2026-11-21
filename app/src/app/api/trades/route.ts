@@ -11,5 +11,5 @@ export async function GET(req: NextRequest) {
   const account = req.nextUrl.searchParams.get("account") ?? "";
   if (!/^qor1[02-9ac-hj-np-z]{38}$/.test(account)) return NextResponse.json({ error: "account" }, { status: 400 });
   const trades = await readTrades(UPSTREAM, account);
-  return NextResponse.json(trades, { headers: { "cache-control": "private, max-age=5" } });
+  return NextResponse.json(trades, { headers: { "cache-control": "public, max-age=0, s-maxage=5" } });
 }

@@ -16,5 +16,5 @@ async function readHistory(address: string): Promise<TradeEntry[]> {
 }
 
 export function useTradeHistory(address: string | null | undefined) {
-  return useQuery({ queryKey: ["trade-history", address], queryFn: () => readHistory(address!), enabled: Boolean(address), refetchInterval: 60_000 });
+  return useQuery({ queryKey: ["trade-history", address], queryFn: () => readHistory(address!), enabled: Boolean(address), refetchInterval: 300_000 }); // a trade refreshes it at once (wallet refresh())
 }

@@ -121,7 +121,9 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   const refresh = useCallback(() => {
     void qc.invalidateQueries({ queryKey: ["balances"] });
     void qc.invalidateQueries({ queryKey: ["chain-state"] });
-    void qc.invalidateQueries({ queryKey: ["activity"] });
+    // the trade list (a serverless search) is polled slowly: refresh it now and once the indexer caught up
+    void qc.invalidateQueries({ queryKey: ["trade-history"] });
+    setTimeout(() => void qc.invalidateQueries({ queryKey: ["trade-history"] }), 8000);
   }, [qc]);
 
   const value = useMemo(
