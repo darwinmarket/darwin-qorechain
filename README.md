@@ -1,5 +1,7 @@
 # Darwin on QoreChain
 
+[![Built on QoreChain](https://build.qorechain.io/badge/darwin.svg)](https://build.qorechain.io/p/darwin)
+
 > One token, a whole crypto portfolio, and not a single key a quantum computer could break.
 
 Darwin sells crypto baskets: buy Blue Chip, Balanced, Qore Ecosystem or Degen and you hold one
