@@ -1,0 +1,50 @@
+# Darwin on QoreChain
+
+> Crypto baskets (one ERC-20 token = a whole portfolio) on the QoreChain testnet qorechain-diana, where every price round, rebalance, admin action, user trade and operator transaction is signed with ML-DSA-87 (FIPS 204) and verified by the chain or by contracts through the pqcVerify precompile. Built for the QoreChain "Build Before Q-Day" fest, category Post-Quantum dApp. MIT licence.
+
+Live app: https://darwin.market/qorechain (QoreX wallet, testnet)
+Docs: https://docs.darwin.market/qorechain
+Repository: https://github.com/darwinmarket/darwin-qorechain
+
+## Evidence (measured on 2026-11-21, reproducible without a key)
+
+- Signing audit (ops/src/pq-audit.ts): 413/413 transactions of Darwin's five accounts (deployer + 4 relayers) since 2026-11-21T09:12Z carry a hybrid secp256k1 + ML-DSA-87 signature the chain verified (pqc_hybrid_verify status=verified).
+- EVM windows: none open on Darwin's accounts; the chain refuses an ECDSA-only EVM transaction from them ("has no open EVM authorisation window").
+- Explorer check (app/e2e/explorer.mjs): 10/10 kinds of Darwin transaction show "quantum-safe, verified on-chain, ML-DSA-87" on explore.qore.network (testnet); an old ECDSA-only control shows "not quantum-safe".
+- Contracts: 110/110 Foundry tests (unit, fuzz, invariant). On-chain E2E: 28/28 against the real precompiles.
+- Production battery (ops/src/account-battery.ts): 6 users in parallel, 45/45 operations, 36/36 attacks refused, two messages signed for one nonce sent at once 4/4 times executed once with no failed transaction, 37/37 owner signatures re-verified off chain, 0 failures.
+- Gas, native lane, medians: account trade 1.74M, oracle round 652k, rebalance 980k, deposit credit 466k, withdrawal return 435k. ML-DSA-87 signature 4,627 bytes, public key 2,592 bytes.
+
+## QoreChain functions used
+
+- pqcVerify precompile (0x...0A01) and pqcKeyStatus (0x...0A02) from Solidity: oracle rounds, rebalances, target weights, every admin power (PqcAdmin), every user account (DarwinAccount).
+- PQC key registration with proof of possession (every role; an account is created only for an owner with a proven key).
+- Hybrid signed native transactions (secp256k1 + ML-DSA-87): MsgCrossVMCall for every contract call Darwin sends, MsgConvertCoin / MsgConvertERC20 for deposits and withdrawals, MsgSend.
+- QoreX signArbitrary (plain text, both halves) for user trades, verified with QoreSign verifyMessageWithChain and on chain.
+- EVM windows: closed; used only during deployment. Authz grants: only for shares bought before DarwinAccounts.
+- Kits: @qorechain/sdk, evm, qoresign, pqc, react, wallet-adapter, qorex-wallet-mock, qore-cli, mcp, qorescan.
+
+## Key files
+
+- contracts/src/account/DarwinAccount.sol, DarwinAccountFactory.sol: per-user account obeying the owner's ML-DSA-87 key.
+- contracts/src/pqc/PqcAuth.sol, PqcAdmin.sol: on-chain ML-DSA-87 checks; admin by signature.
+- contracts/src/DarwinOracle.sol, DarwinBasket.sol, DarwinRouter.sol, DarwinReserve.sol.
+- app/src/server/accounts.ts: the relayer (verification, idempotent execution, deposits, withdrawals).
+- app/src/server/chain.ts: writeNative / sendNative (hybrid MsgCrossVMCall).
+- app/src/server/keeper.ts: price rounds and rebalances.
+- app/src/lib/qore/verify.ts: in-browser re-verification of ML-DSA-87 signatures.
+- ops/src/pq-audit.ts, ops/src/e2e.ts, ops/src/account-battery.ts, app/e2e/suite.mjs, app/e2e/explorer.mjs: verification.
+- docs/AUDIT.md (threat model), docs/TESTING.md (findings), deployments/diana.json (addresses).
+
+## Addresses (qorechain-diana, EVM chain id 9800)
+
+- DarwinAccountFactory 0x09891b295bf34c6ed6b364e53bcd68e06fc2bd12
+- DarwinOracle 0xabe07a51e1974d36970b40d3c1c84da37364685f
+- DarwinRouter 0xf402f3ce6505be9ba382ddf0bc53c27c1bd1d018
+- DarwinReserve 0x3a87144e2193db059228f5b982ffb2bdf65bc264
+- Baskets: BLUEdw 0xc35a0eb298693a011d26132eb7f4b8aca8112f92, BALdw 0xfe862c4947626bc9c86bcee12d82153f8286df9a, QOREdw 0x86514e17c50265c9ea90d2001bd879b6b724e575, DEGENdw 0x112d76f9bd9e421228f4b326d13e2ea160e92b74
+- Deployer/keeper qor1yzq84n9uj6fmgzsh7tk88gr7dhrh60u95gpw8p; relayers in deployments/diana.json
+
+## Scope
+
+Testnet only; test tokens without value. Prices from off-chain markets signed by one reporter key, bounded by the oracle's checks. The relayer is trusted for liveness, not for funds. Contract creation and calls carrying QOR still need the EVM lane (deployment only). The QCAI audit is to be run by the team.

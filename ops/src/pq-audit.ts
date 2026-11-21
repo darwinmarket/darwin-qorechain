@@ -5,10 +5,13 @@
  *
  *   tsx src/pq-audit.ts [since=2026-11-21T09:00:00Z]
  *
- * Accounts: the deployer (keeper: rounds, rebalances, admin), the four relayers. The one expected
- * exception is a contract creation (a cross-VM call cannot create one): none since the date.
+ * Accounts: the deployer (keeper: rounds, rebalances, admin), the four relayers, all public, from
+ * deployments/diana.json: no key or mnemonic needed. The one expected exception is a contract
+ * creation (a cross-VM call cannot create one): none since the date.
  */
-import { evmAccount, RELAYERS, type Role } from "./accounts.js";
+import { addressFromBytes } from "@qorechain/qoresign";
+import { hexToBytes } from "viem";
+import { loadDeployments } from "./evm.js";
 import { REST } from "./net.js";
 
 const SINCE = Date.parse(process.argv[2] ?? "2026-11-21T09:00:00Z");
@@ -27,9 +30,13 @@ async function txsOf(sender: string) {
 
 let bad = 0;
 let total = 0;
-for (const role of ["deployer", ...RELAYERS] as Role[]) {
-  const a = await evmAccount(role);
-  const txs = (await txsOf(a.cosmos)).filter((t) => t.code === 0);
+const d = loadDeployments() as any;
+const accounts: [string, string][] = [
+  ["deployer", addressFromBytes(hexToBytes(d.roles.admin)).bech32],
+  ...(d.relayers as { role: string; cosmos: string }[]).map((r) => [r.role, r.cosmos] as [string, string]),
+];
+for (const [role, cosmos] of accounts) {
+  const txs = (await txsOf(cosmos)).filter((t) => t.code === 0);
   const kinds = new Map<string, number>();
   const notHybrid: string[] = [];
   for (const t of txs) {
