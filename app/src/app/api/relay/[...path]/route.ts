@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { status, trade } from "@/server/relayer";
 import { deposit, execute, info } from "@/server/accounts";
+import { freshRound } from "@/server/keeper";
 
 /**
  * Darwin's trade relayer (src/server/relayer.ts), in this app's server: the setup status of an
@@ -24,7 +25,15 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ path
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ path: string[] }> }) {
   const path = (await params).path.join("/");
-  if (!["trade", "execute", "deposit"].includes(path)) return fail("not found", 404);
+  if (!["trade", "execute", "deposit", "refresh"].includes(path)) return fail("not found", 404);
+  // a visitor saw stale prices: publish a round, only if the last one is over 20 minutes old
+  if (path === "refresh") {
+    try {
+      return NextResponse.json({ done: await freshRound() });
+    } catch (e) {
+      return fail(e, 502);
+    }
+  }
   const body = await req.text();
   if (body.length > 64_000) return fail("too large", 413);
   try {

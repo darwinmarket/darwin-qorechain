@@ -9,6 +9,7 @@ import type { Address } from "viem";
 import { basketAbi, oracleAbi, reserveAbi } from "@/lib/qore/abis";
 import { client, D, ORACLE, RESERVE, TOKEN_INFO, tokenKeyOf } from "@/lib/qore/chain";
 import type { Basket, Leg } from "./types";
+import { withBase } from "@/lib/base";
 
 export type OracleFeed = { feed: number; tracks: string; price: number; updatedAt: number; round: number };
 export type OracleState = { round: number; lastTimestamp: number; feeds: OracleFeed[]; reporter: Address; maxAge: number };
@@ -95,7 +96,28 @@ async function readBasket(key: string, prices: Record<string, number>, inventory
   };
 }
 
+/**
+ * Prices are published on demand, not on a timer: with no trade for 30 minutes the last round is
+ * stale and the contracts refuse to value a basket (PriceStale). The visitor's app then asks the
+ * server for a fresh round, which it publishes only if the last one is over 20 minutes old: at most
+ * three rounds an hour, and only while someone is looking.
+ */
+let refreshing: Promise<unknown> | null = null;
+const isStale = (e: unknown) => /PriceStale|0xa7a7cac6/.test(String((e as Error)?.message ?? e));
 async function readAll(): Promise<{ baskets: Basket[]; oracle: OracleState }> {
+  try {
+    return await readAllOnce();
+  } catch (e) {
+    if (!isStale(e)) throw e;
+    refreshing ??= fetch(withBase("/api/relay/refresh"), { method: "POST" })
+      .catch(() => null)
+      .finally(() => setTimeout(() => (refreshing = null), 30_000));
+    await refreshing;
+    return readAllOnce();
+  }
+}
+
+async function readAllOnce(): Promise<{ baskets: Basket[]; oracle: OracleState }> {
   const [oracle, inv] = await Promise.all([
     readOracle(),
     client.readContract({ address: RESERVE, abi: reserveAbi, functionName: "inventory" }),
