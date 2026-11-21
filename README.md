@@ -23,7 +23,7 @@ fest.
 
 - **4 baskets live** (Blue Chip, Balanced, Qore Ecosystem, Degen): one ERC-20 token each, bought
   and sold for fUSD in one signed message from QoreX.
-- **413/413 Darwin transactions** since 2026-11-21 09:12 UTC carry a hybrid secp256k1 + ML-DSA-87
+- **519/519 Darwin transactions** since 2026-11-21 09:12 UTC carry a hybrid secp256k1 + ML-DSA-87
   signature the chain verified (`ops/src/pq-audit.ts`, no key needed to rerun it).
 - **0 EVM windows open** on Darwin's five accounts: the chain refuses an ECDSA-only transaction from
   them (on-chain suite, 28/28).
@@ -32,7 +32,7 @@ fest.
   36/36 attacks refused, 37/37 signatures re-verified off chain, 0 failures.
 - **The QoreChain explorer** shows every kind of Darwin transaction *quantum-safe, verified
   on-chain* (10/10 kinds), and an old ECDSA-only transaction *not quantum-safe*
-  ([report](docs/e2e/explorer-2026-11-21T132959.md)).
+  ([report](docs/e2e/explorer-2026-11-21T141555.md)).
 
 <table>
 <tr>
@@ -170,9 +170,9 @@ next round number.
 | Suite | What it checks | Latest result |
 |---|---|---|
 | Contracts (`forge test`) | unit, fuzz, two invariant campaigns (256 runs × 500 calls), 11 DarwinAccount tests | **110/110** |
-| On-chain E2E (`ops/src/e2e.ts`) | forged, tampered, replayed, stale signatures refused against the real precompiles; admin, guardian, router, redemption, rebalances; no EVM window on any Darwin account and an ECDSA-only transaction refused; NAV recomputed from holdings | **28/28** ([report](docs/e2e/2026-11-21T0917.md)) |
-| Signing audit (`ops/src/pq-audit.ts`) | every transaction of the deployer and the 4 relayers since the windows were closed | **413/413** hybrid-verified |
-| Explorer (`app/e2e/explorer.mjs`) | the explorer's verdict on each kind of transaction, plus an ECDSA-only control | **11/11** as expected ([report](docs/e2e/explorer-2026-11-21T132959.md)) |
+| On-chain E2E (`ops/src/e2e.ts`) | forged, tampered, replayed, stale signatures refused against the real precompiles; admin, guardian, router, redemption, rebalances; no EVM window on any Darwin account and an ECDSA-only transaction refused; NAV recomputed from holdings | **28/28** ([report](docs/e2e/2026-11-21T1413.md)) |
+| Signing audit (`ops/src/pq-audit.ts`) | every transaction of the deployer and the 4 relayers since the windows were closed | **519/519** hybrid-verified |
+| Explorer (`app/e2e/explorer.mjs`) | the explorer's verdict on each kind of transaction, plus an ECDSA-only control | **11/11** as expected ([report](docs/e2e/explorer-2026-11-21T141555.md)) |
 | DarwinAccount battery (`ops/src/account-battery.ts`) | fresh users on production in parallel: deposits, trades, withdrawals, attacks, double clicks, off-chain re-verification, invariants | **6 users, 45/45 operations, 36/36 attacks refused, 4/4 double clicks sent once, 37/37 signatures re-verified, 0 failures** ([report](docs/e2e/account-battery-2026-11-21T133530.md)); earlier 16 users, 168/168 ([report](docs/e2e/account-battery-2026-11-21T092613.md)) |
 | Account path (`ops/src/account-check.ts`) | deposit, buy, sell, withdraw; replay, changed calls, another key, a foreign target, a forged call sent on chain directly | **9/9** |
 | Native battery (`ops/src/battery.ts`) | 6 users, cross-VM trades, solvency and NAV invariants | **32/32** ([report](docs/e2e/battery-2026-11-21T0927.md)) |

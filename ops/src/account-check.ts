@@ -7,7 +7,7 @@
  *   2. buy a basket by signing one message (QoreSign signMessage = what QoreX signArbitrary signs)
  *   3. sell half of it, same way
  *   4. withdraw fUSD back to the wallet's bank balance
- *   5. refusals: the same signature replayed, calls changed after signing, another key, a target
+ *   5. refusals: the same signature replayed (answered with its own transaction, nothing sent), calls changed after signing, another key, a target
  *      outside Darwin; and the forged call submitted on chain directly, refused by the account
  *
  *   tsx src/account-check.ts [BASKET=BLUEDW] [usd=2]
@@ -116,11 +116,20 @@ await check(`buy ${key} by one signed message (no window, no grant)`, async () =
 });
 
 // 5. refusals (before selling, while there is something to protect)
-await check("the same signature replayed is refused", async () => {
+await check("the same signature replayed executes nothing (answered with its own transaction)", async () => {
   const calls: Call[] = [{ target: d.tokens.fUSD, data: encodeFunctionData({ abi: erc20, functionName: "transfer", args: [info.relayer.evm, 1n] }) }];
   const req = await signed(calls, "Withdraw 0.000001 fUSD");
   const ok = await api("execute", req);
-  return `first ${ok.txHash.slice(0, 10)}…, replay: ${await refused(() => api("execute", req))}`;
+  await new Promise((r) => setTimeout(r, 4000));
+  const n0 = (await api(`account?account=${address}`)).nonce;
+  // the relayer is idempotent: a replay (or a retry after a cut answer) gets the transaction that
+  // already carried the message, and nothing is sent again; the account's nonce does not move
+  const again = await api("execute", req).catch((e: Error) => ({ error: e.message }));
+  const n1 = (await api(`account?account=${address}`)).nonce;
+  if (n1 !== n0) throw new Error(`the replay executed: nonce ${n0} -> ${n1}`);
+  if ("error" in again) return `first ${ok.txHash.slice(0, 10)}…, replay refused: ${again.error}`;
+  if (!again.already || again.txHash !== ok.txHash) throw new Error(`replay answered ${JSON.stringify(again).slice(0, 160)}`);
+  return `first ${ok.txHash.slice(0, 10)}…, replay answered with the same transaction, nonce unchanged (${n1})`;
 });
 await check("calls changed after signing are refused", async () => {
   const signedCalls: Call[] = [{ target: d.tokens.fUSD, data: encodeFunctionData({ abi: erc20, functionName: "transfer", args: [info.relayer.evm, 1n] }) }];

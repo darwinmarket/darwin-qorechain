@@ -8,7 +8,7 @@ Repository: https://github.com/darwinmarket/darwin-qorechain
 
 ## Evidence (measured on 2026-11-21, reproducible without a key)
 
-- Signing audit (ops/src/pq-audit.ts): 413/413 transactions of Darwin's five accounts (deployer + 4 relayers) since 2026-11-21T09:12Z carry a hybrid secp256k1 + ML-DSA-87 signature the chain verified (pqc_hybrid_verify status=verified).
+- Signing audit (ops/src/pq-audit.ts): 519/519 transactions of Darwin's five accounts (deployer + 4 relayers) since 2026-11-21T09:12Z carry a hybrid secp256k1 + ML-DSA-87 signature the chain verified (pqc_hybrid_verify status=verified).
 - EVM windows: none open on Darwin's accounts; the chain refuses an ECDSA-only EVM transaction from them ("has no open EVM authorisation window").
 - Explorer check (app/e2e/explorer.mjs): 10/10 kinds of Darwin transaction show "quantum-safe, verified on-chain, ML-DSA-87" on explore.qore.network (testnet); an old ECDSA-only control shows "not quantum-safe".
 - Contracts: 110/110 Foundry tests (unit, fuzz, invariant). On-chain E2E: 28/28 against the real precompiles.
