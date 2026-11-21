@@ -226,9 +226,12 @@ export function TxScreen({ hash }: { hash: string }) {
               </div>
               <div style={box}>
                 {tx.hybridVerified && (
-                  <Row label="Signature" first>
+                  <Row label={tx.viaAccount ? "Transaction signature" : "Signature"} first>
                     <strong>secp256k1 + ML-DSA-87, verified</strong>
-                    <div style={sub}>pqc_hybrid_verify recorded by the chain for {tx.signer}</div>
+                    <div style={sub}>
+                      pqc_hybrid_verify recorded by the chain for {tx.signer}
+                      {tx.viaAccount ? ", Darwin's relayer, which sent the owner's signed message as a hybrid-signed MsgCrossVMCall" : ""}
+                    </div>
                   </Row>
                 )}
                 {tx.relayedFor && (
@@ -241,12 +244,12 @@ export function TxScreen({ hash }: { hash: string }) {
                   </Row>
                 )}
                 {tx.viaAccount && (
-                  <Row label="Signed by" first>
+                  <Row label="Signed by" first={!tx.hybridVerified}>
                     <strong>{tx.viaAccount.owner}</strong>
                     <div style={sub}>
                       &ldquo;{tx.viaAccount.summary}&rdquo;, signed in QoreX (secp256k1 + ML-DSA-87). Its Darwin account {tx.viaAccount.account} checked the
-                      ML-DSA-87 signature on chain with pqcVerify (nonce {tx.viaAccount.nonce}) before trading. Darwin&apos;s relayer only paid the gas: no EVM
-                      window or grant of the user was involved.
+                      ML-DSA-87 signature on chain with pqcVerify{tx.viaAccount.nonce != null ? ` (nonce ${tx.viaAccount.nonce})` : ""} before trading. Darwin&apos;s relayer only paid
+                      the gas: no EVM window or grant of the user was involved{tx.viaAccount.native ? ", and no ECDSA-only transaction: both signatures are post-quantum" : ""}.
                     </div>
                   </Row>
                 )}

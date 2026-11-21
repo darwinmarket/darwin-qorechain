@@ -89,7 +89,7 @@ export async function signAndExecute(owner: string, info: AccountInfo, calls: Ca
       const now = await readAccount(owner).catch(() => null);
       if (now && now.nonce > fresh.nonce) {
         const t = await fetch(withBase(`/api/trades?account=${owner}`)).then((x) => x.json()).catch(() => []);
-        const tx = (Array.isArray(t) ? t : []).find((x: { tx: string }) => /^0x/.test(x.tx))?.tx ?? "";
+        const tx = (Array.isArray(t) ? t : []).find((x: { tx: string; account?: boolean }) => x.account)?.tx ?? "";
         return { txHash: tx, account: info.account, kind: "unknown" };
       }
       if (BigInt(Math.floor(Date.now() / 1000)) > deadline) break;

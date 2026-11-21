@@ -15,7 +15,7 @@ A stolen secp256k1 key alone cannot open a window: that needs the account's ML-D
 
 - **The keeper's window is scoped** to Darwin's contracts and tokens (`allowed_targets`). A contract creation is refused in a scoped window, so deployments open an unscoped one, closed again by the keeper's scoped window.
 - **The value cap is real.** Each window caps the QOR it admits. Funding the reserve with wrapped QOR needed a window with a raised cap (`WINDOW_MAX_QOR` in `ops/src/window.ts`), replaced by the keeper's scoped window right after.
-- **The relayer's window is scoped to the factory.** Darwin's relayer submits users' signed messages to `DarwinAccountFactory` and nothing else, so its window lists that one contract. It renews it itself (17,280 blocks, 1,000 transactions) when it runs low.
+- **Darwin's relayers need none either.** They submit users' signed messages to `DarwinAccountFactory` as hybrid-signed `MsgCrossVMCall`s on the native lane: no EVM window, and no ECDSA-only transaction. Only the deployer, which relays price rounds and rebalances, keeps a window, scoped to Darwin's contracts.
 
 ## Users need none
 

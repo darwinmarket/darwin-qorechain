@@ -108,21 +108,25 @@ async function acctInfo() {
 
 /**
  * The newest DarwinAccount trade for the user since `since` (ms), from the app's Activity API, then
- * checked on chain: an EVM transaction from Darwin's relayer to the account factory, admitted by
- * the relayer's own EVM window (never the user's), whose receipt carries the account's Executed.
+ * checked on chain: a MsgCrossVMCall to the account factory, executed, hybrid-signed (secp256k1 +
+ * ML-DSA-87, verified by the chain) by one of Darwin's relayers, never by the user.
  */
 async function accountTx(since) {
   for (let i = 0; i < 20; i++) {
     const r = await fetch(`${BASE}/api/trades?account=${me.native}`);
     const list = r.ok ? await r.json() : [];
-    const t = (Array.isArray(list) ? list : list.trades ?? []).find((x) => x.ts >= since && /^0x/.test(x.tx));
+    const t = (Array.isArray(list) ? list : list.trades ?? []).find((x) => x.ts >= since && x.account);
     if (t) {
-      const q = encodeURIComponent(`ethereum_tx.ethereumTxHash='${t.tx}'`);
-      const c = (await (await fetch(`${REST}/cosmos/tx/v1beta1/txs?query=${q}`)).json()).tx_responses?.[0];
+      const c = (await (await fetch(`${REST}/cosmos/tx/v1beta1/txs/${t.tx}`)).json()).tx_response;
       assert(c && c.code === 0, `${t.tx} committed`);
-      const recipient = c.events.find((e) => e.type === "ethereum_tx" && e.attributes.some((a) => a.key === "recipient"))?.attributes.find((a) => a.key === "recipient")?.value;
-      const window = c.events.find((e) => e.type === "pqc_evm_window_used")?.attributes.find((a) => a.key === "address")?.value;
-      return { hash: t.tx, recipient, window, status: t.status };
+      const attr = (type, key) => c.events.find((e) => e.type === type && e.attributes.some((a) => a.key === key))?.attributes.find((a) => a.key === key)?.value;
+      return {
+        hash: t.tx,
+        recipient: attr("crossvm_request", "target_contract"),
+        executed: attr("crossvm_response", "status") === "executed",
+        hybridSigner: c.events.find((e) => e.type === "pqc_hybrid_verify" && e.attributes.some((a) => a.key === "status" && a.value === "verified"))?.attributes.find((a) => a.key === "address")?.value,
+        window: attr("pqc_evm_window_used", "address"),
+      };
     }
     await sleep(2000);
   }
@@ -176,7 +180,9 @@ async function trade({ display, key, side, amount }) {
   assert(signed > 0, "the message was signed in QoreX");
   const tx = await accountTx(t0);
   assert(tx.recipient?.toLowerCase() === D.accountFactory.toLowerCase(), `sent to the account factory (${tx.recipient})`);
-  assert(tx.window && tx.window !== me.native, `admitted by the relayer's window, not the user's (${tx.window})`);
+  assert(tx.executed, "the cross-VM call executed");
+  assert(tx.hybridSigner && tx.hybridSigner !== me.native, `hybrid-signed (ML-DSA-87) by a relayer, not the user (${tx.hybridSigner})`);
+  assert(!tx.window, "no EVM window involved");
   return { hash: tx.hash, types: ["DarwinAccountFactory.execute"] };
 }
 
@@ -310,7 +316,7 @@ for (const [display, key, target] of [["BLUEdw", "BLUEDW", 1], ["BALdw", "BALDW"
     const r = await trade({ display, key, side: "buy", amount: usd });
     const s1 = await bal(D.baskets[key].address, acct);
     assert(s1 > s0, `shares ${s0} -> ${s1}`);
-    return `${usd} fUSD (vault capacity ${cap === Infinity ? "above the balance" : `$${cap}`}) -> +${(Number(s1 - s0) / 1e18).toFixed(4)} ${display} on the Darwin account, one message signed in QoreX, ML-DSA-87 checked on chain, no window, tx ${r.hash}`;
+    return `${usd} fUSD (vault capacity ${cap === Infinity ? "above the balance" : `$${cap}`}) -> +${(Number(s1 - s0) / 1e18).toFixed(4)} ${display} on the Darwin account, one message signed in QoreX, ML-DSA-87 checked on chain, the transaction hybrid-signed by the relayer, no window, tx ${r.hash}`;
   });
 }
 
@@ -330,9 +336,9 @@ await check("sell half of BALdw for fUSD", async () => {
 });
 
 await check("a trade's page re-verifies the user's ML-DSA-87 signature in the browser", async () => {
-  const last = results.filter((x) => x.ok && /tx 0x[0-9a-f]{64}$/.test(x.detail)).at(-1);
+  const last = results.filter((x) => x.ok && /tx (0x[0-9a-f]{64}|[0-9A-F]{64})$/.test(x.detail)).at(-1);
   assert(last, "a trade hash from an earlier check");
-  const hash = last.detail.match(/tx (0x[0-9a-f]{64})$/)[1];
+  const hash = last.detail.match(/tx (0x[0-9a-f]{64}|[0-9A-F]{64})$/)[1];
   await page.goto(`${BASE}/tx/${hash}`, { waitUntil: "networkidle" });
   await page.waitForSelector("[data-browser-check]", { timeout: 60000 });
   const text = await page.locator("[data-browser-check]").innerText();

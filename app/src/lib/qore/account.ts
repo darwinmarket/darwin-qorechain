@@ -5,7 +5,7 @@
  * ML-DSA-87 signature on chain with pqcVerify before calling the router. No EVM window, no grant, no
  * gas for the user. Shared by the browser (building and signing) and the server (checking).
  */
-import { encodeAbiParameters, encodeFunctionData, keccak256, maxUint256, parseAbi, type Address, type Hex } from "viem";
+import { bytesToHex, decodeFunctionData, encodeAbiParameters, encodeFunctionData, keccak256, maxUint256, parseAbi, parseTransaction, type Address, type Hex } from "viem";
 import { D, ROUTER, TOKENS } from "./chain";
 
 export type Call = { target: Address; data: Hex };
@@ -57,3 +57,37 @@ export function withdrawCalls(relayerEvm: Address, amount: bigint): Call[] {
 }
 
 export { router as accountRouterAbi, erc20 as accountErc20Abi };
+
+export type Execution = { owner: Hex; calls: Call[]; summary: string; deadline: bigint; signature: Hex; data: Hex; native: boolean };
+
+/**
+ * The factory.execute a committed transaction carries: a relayer's MsgCrossVMCall (the native lane,
+ * hybrid-signed) or, for executions before it, an EVM transaction. Null for anything else.
+ */
+export function executionOf(tx: { body?: { messages?: any[] } } | undefined): Execution | null {
+  for (const m of tx?.body?.messages ?? []) {
+    let data: Hex | undefined;
+    let native = false;
+    if (m["@type"] === "/qorechain.crossvm.v1.MsgCrossVMCall" && String(m.target_contract).toLowerCase() === FACTORY?.toLowerCase() && m.payload) {
+      data = bytesToHex(Uint8Array.from(atob(m.payload), (c) => c.charCodeAt(0)));
+      native = true;
+    } else if (m["@type"] === "/cosmos.evm.vm.v1.MsgEthereumTx" && m.raw) {
+      try {
+        const t = parseTransaction(m.raw as Hex);
+        if (t.to?.toLowerCase() === FACTORY?.toLowerCase()) data = t.data;
+      } catch {
+        /* not an EVM tx we read */
+      }
+    }
+    if (!data) continue;
+    try {
+      const call = decodeFunctionData({ abi: factoryAbi, data });
+      if (call.functionName !== "execute") continue;
+      const [owner, calls, summary, deadline, signature] = call.args;
+      return { owner: owner as Hex, calls: calls as Call[], summary, deadline, signature: signature as Hex, data, native };
+    } catch {
+      /* not an execution */
+    }
+  }
+  return null;
+}

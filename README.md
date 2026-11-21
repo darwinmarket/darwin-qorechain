@@ -119,13 +119,13 @@ withdraw (Portfolio, Cash row: "Withdraw X fUSD to QoreX")
 
 No EVM window, no authz grant and no gas for the user's trades: the first buy is a deposit approval
 plus one signature, later buys one signature. The relayer cannot change a call (the signature fails
-on chain) nor replay one (the nonce), and its own EVM window is scoped to the factory. Trades are
+on chain) nor replay one (the nonce). It submits the message as a `MsgCrossVMCall` it hybrid-signs (secp256k1 + ML-DSA-87): the transaction itself is post-quantum, and needs no EVM window, so the QoreChain explorer shows every trade as quantum-safe. Trades are
 non-custodial; deposits and withdrawals pass through the relayer for one transaction each way, a
 custody of seconds. If a serverless call is cut between the two steps of a withdrawal,
 `settleWithdrawals()` completes it before the next withdrawal and in the daily cron (tested on chain
 with a withdrawal cut halfway). The transaction page shows "Signed by" with the owner and the signed
 summary, and re-verifies the owner's ML-DSA-87 signature in the browser. Activity reads account
-trades from the factory's EVM transactions. Details: [docs.darwin.market/qorechain/chain/accounts](https://docs.darwin.market/qorechain/chain/accounts).
+trades from the relayers' cross-VM calls to the factory. Details: [docs.darwin.market/qorechain/chain/accounts](https://docs.darwin.market/qorechain/chain/accounts).
 
 **Shares bought before DarwinAccounts** sit on the user's EVM twin, and selling them keeps the
 original path (`app/src/server/relayer.ts`, `app/src/lib/qore/relay.ts`): the user opens an EVM
@@ -164,7 +164,7 @@ ops/         TypeScript, @qorechain/sdk 0.14, viem
   relayer.ts            the original relayer: signed intents through authz grants (shares bought
                         before DarwinAccounts)
   relay-setup.ts        a test account's one-time setup for that path (EVM window, grants)
-  deploy-accounts.ts    deploys DarwinAccountFactory; scopes the relayer's window to it
+  deploy-accounts.ts    deploys DarwinAccountFactory
   account-check.ts      the account path end to end on the testnet, through the app's API
   keeper.ts             the always-on keeper for local runs: scoped window, oracle heartbeat,
                         the weekly rebalance (in production these run on demand, see below)
@@ -280,7 +280,7 @@ npm run window -- open deployer      # an EVM window for the deployment
 (cd ../contracts && forge build) && npm run deploy
 npm run keeper                       # local only: oracle rounds, rebalances, window upkeep
 npm run relayer                      # the original intent relayer on :3046 (production runs it in the app)
-npx tsx src/deploy-accounts.ts       # DarwinAccountFactory; the relayer's window scoped to it
+npx tsx src/deploy-accounts.ts       # DarwinAccountFactory
 APP=http://localhost:3032 npx tsx src/account-check.ts   # the account path, 9 checks
 npm run trade -- buy BLUEDW 5        # or: tsx src/crossvm.ts buy BLUEDW 5 (native, hybrid)
 npm run rebalance -- plan BALDW
@@ -313,7 +313,7 @@ does the keeper's work on demand, so nothing runs while nobody trades:
 - **Weekly cron** (Mondays 12:05 UTC): the curator-signed rebalance of every basket that drifted.
 - **Relayer:** routes of the app (`/api/relay/*`), so it runs in the app's server on Vercel.
   `app/src/server/accounts.ts` checks both halves of a user's signed message with QoreSign, then
-  submits it to `DarwinAccountFactory` and pays the gas; its EVM window is scoped to the factory
+  submits it to `DarwinAccountFactory` as a `MsgCrossVMCall` it hybrid-signs (secp256k1 + ML-DSA-87): the transaction itself is post-quantum, and needs no EVM window, and pays the gas
   and renewed by the relayer itself. Deposits and withdrawals are credited once through the
   relayer's own on-chain memos (`darwin deposit <txhash>`, `darwin withdraw <evm hash>`), so they
   survive serverless restarts. `app/src/server/relayer.ts` keeps the original intent path for
