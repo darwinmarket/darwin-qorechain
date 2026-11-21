@@ -282,13 +282,53 @@ async function bankFusd(address: string): Promise<bigint> {
 }
 
 // ---- attacks -----------------------------------------------------------------------------------
+const raceDetails: string[] = [];
+/** The relayer's latest transactions whose memo starts with `prefix`: executed and failed. */
+async function relayerTxs(relayer: string, prefix: string) {
+  const qs = new URLSearchParams({ query: `message.sender='${relayer}'`, order_by: "ORDER_BY_DESC", "pagination.limit": "50" });
+  const j: any = await (await fetch(`${REST}/cosmos/tx/v1beta1/txs?${qs}`)).json();
+  const mine = (j.tx_responses ?? []).filter((t: any) => String(t.tx?.body?.memo ?? "").startsWith(prefix));
+  const executed = mine.filter((t: any) => t.code === 0 && t.events.some((e: any) => e.type === "crossvm_response" && e.attributes.some((a: any) => a.key === "status" && a.value === "executed"))).length;
+  return { executed, failed: mine.length - executed };
+}
+
 async function attacksBy(u: User, victim: User) {
   const transfer = (to: Address, amount: bigint): Call[] => [{ target: d.tokens.fUSD, data: encodeFunctionData({ abi: erc20, functionName: "transfer", args: [to, amount] }) }];
   const rel = (await info(u)).relayer.evm as Address;
   await attack(u, "sign for another user's account (owner = victim)", async () => api("execute", await signed(u, transfer(rel, 1n), "Darwin: withdraw", { owner: victim })));
   await attack(u, "replay its own last executed message", async () => {
     if (!u.lastSigned) throw new Error("nothing executed yet");
-    return api("execute", u.lastSigned);
+    const n0 = BigInt((await info(u)).nonce);
+    const r = await api("execute", u.lastSigned);
+    // idempotent: the relayer answers with the transaction that already carried it, sends nothing
+    if (r.already && BigInt((await info(u)).nonce) === n0) throw new Error(`refused: already executed in ${r.txHash}, nothing sent`);
+    return r;
+  });
+  await attack(u, "two messages signed for the same nonce, sent at once (a double click)", async () => {
+    const acc = await info(u);
+    const n0 = BigInt(acc.nonce);
+    const basket = d.baskets.BLUEDW.address as Address;
+    const one = (usd: bigint): Call[] => [
+      ...(BigInt(acc.allowance.fUSD) < usd ? [{ target: d.tokens.fUSD, data: encodeFunctionData({ abi: erc20, functionName: "approve", args: [d.router, maxUint256] }) }] : []),
+      { target: d.router, data: encodeFunctionData({ abi: routerAbi, functionName: "buy", args: [basket, usd, 0n, acc.account] }) },
+    ];
+    if (BigInt(acc.fusd) < 300_000n) await deposit(u, 1_000_000n);
+    const [a, b] = await Promise.all([signed(u, one(100_000n), "Darwin: Buy 0.10 fUSD of BLUEDW"), signed(u, one(110_000n), "Darwin: Buy 0.11 fUSD of BLUEDW")]);
+    const res = await Promise.allSettled([api("execute", a), api("execute", b)]);
+    const ok = res.filter((r) => r.status === "fulfilled") as PromiseFulfilledResult<any>[];
+    const no = res.filter((r) => r.status === "rejected") as PromiseRejectedResult[];
+    await sleep(4000);
+    const n1 = BigInt((await info(u)).nonce);
+    const memoPrefix = `darwin execute ${String(acc.account).toLowerCase()} ${n0} `;
+    const sent = await relayerTxs(acc.relayer.cosmos, memoPrefix);
+    const detail = `${ok.length} executed, ${no.length} refused (${no.map((r) => String(r.reason?.message ?? r.reason).slice(0, 80)).join("; ")}); nonce ${n0} -> ${n1}; relayer txs for nonce ${n0}: ${sent.executed} executed, ${sent.failed} failed`;
+    raceDetails.push(detail);
+    if (ok.length === 1 && no.length === 1 && n1 === n0 + 1n && sent.executed === 1 && sent.failed === 0 && /previous action was still being confirmed/i.test(String(no[0].reason?.message))) {
+      u.executed++;
+      throw new Error(`refused cleanly: ${detail}`);
+    }
+    failures.push(`user ${u.i} double click: ${detail}`);
+    throw new Error(`UNEXPECTED ${detail}`);
   });
   await attack(u, "a message that already expired", async () => api("execute", await signed(u, transfer(rel, 1n), "Darwin: withdraw", { deadlineIn: -5 })));
   await attack(u, "a message valid for more than 15 minutes", async () => api("execute", await signed(u, transfer(rel, 1n), "Darwin: withdraw", { deadlineIn: 3600 })));
@@ -486,6 +526,7 @@ const pct = (p: number) => (lat.length ? (lat[Math.min(lat.length - 1, Math.floo
 const summary = [
   `users ${USERS}, rounds ${ROUNDS}, operations ${ops.length} (${okOps.length} ok), trades ${tradeOps.length}, deposits ${okOps.filter((o) => o.action.startsWith("deposit")).length}, withdrawals ${okOps.filter((o) => o.action.startsWith("withdraw")).length}`,
   `attacks ${attacks.length}, refused ${attacks.filter((a) => a.refused).length}`,
+  ...raceDetails.map((r) => `double click (two messages for one nonce): ${r}`),
   `calls cut before their answer and resolved from the account's nonce: ${resolvedAfterCut}`,
   sigs,
   `trade latency (sign -> confirmed on chain, through the API): p50 ${pct(0.5)} s, p90 ${pct(0.9)} s, max ${pct(1)} s`,

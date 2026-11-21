@@ -27,7 +27,7 @@
 import { verifyMessageWithChain } from "@qorechain/qoresign/network";
 import { addressFromBytes, parseAddress, type MessageSignature } from "@qorechain/qoresign";
 import {
-  BaseError, bytesToHex, decodeErrorResult, decodeFunctionData, encodeFunctionData, getAddress, hexToBytes, keccak256, parseAbi, parseTransaction,
+  BaseError, bytesToHex, decodeErrorResult, decodeFunctionData, encodeAbiParameters, encodeFunctionData, getAddress, hexToBytes, keccak256, parseAbi, parseTransaction,
   type Address, type Hex,
 } from "viem";
 import { accountAbi, accountErc20Abi, accountRouterAbi, factoryAbi, FACTORY, textFor, type Call } from "@/lib/qore/account";
@@ -35,7 +35,7 @@ import { erc20Abi } from "@/lib/qore/abis";
 import { ROUTER, TOKEN_INFO, TOKENS } from "@/lib/qore/chain";
 import { convertCoin, convertErc20 } from "@/lib/qore/proto";
 import { account, RELAYERS, type Role } from "./keys";
-import { CHAIN_ID, client, crossVmMsg, D, json, REST, sendNative } from "./chain";
+import { CHAIN_ID, client, crossVmMsg, D, findExecuted, json, REST, sendNative } from "./chain";
 import { freshRound } from "./keeper";
 
 const ADDR = /^qor1[02-9ac-hj-np-z]{38}$/;
@@ -352,6 +352,10 @@ function classify(calls: Call[], acc: Address, relayerEvm: Address): { kind: "bu
 }
 
 
+const PREVIOUS = "Your previous action was still being confirmed. Nothing was sent: try again.";
+const callsType = [{ type: "tuple[]", components: [{ name: "target", type: "address" }, { name: "data", type: "bytes" }] }] as const;
+const callsHash = (calls: Call[]) => keccak256(encodeAbiParameters(callsType, [calls.map((c) => ({ target: c.target as Address, data: c.data as Hex }))]));
+
 export async function execute(req: ExecuteRequest) {
   const { owner, calls, summary } = req ?? ({} as ExecuteRequest);
   if (!ADDR.test(owner)) throw new Error("bad account");
@@ -368,17 +372,37 @@ export async function execute(req: ExecuteRequest) {
   const rel = await account(role);
   const acc = await accountOf(owner);
   const what = classify(calls, acc, rel.evm as Address);
-  const nonce = await nonceOf(acc);
-  const text = textFor(acc, calls, summary, nonce, deadline);
+  const current = await nonceOf(acc);
+  const verify = (n: bigint) =>
+    verifyMessageWithChain({ rest: REST, chainId: CHAIN_ID, signer: owner, data: textFor(acc, calls, summary, n, deadline), signature: req.signature, requirePq: true }).then(
+      () => null,
+      (e: unknown) => e,
+    );
   // both halves, against the owner's keys on chain, before the relayer spends anything
-  await verifyMessageWithChain({ rest: REST, chainId: CHAIN_ID, signer: owner, data: text, signature: req.signature, requirePq: true });
+  let nonce = current;
+  const refused = await verify(current);
+  if (refused) {
+    // signed for the nonce just before? that nonce is spent, by this very message or by another
+    if (current === 0n || (await verify(current - 1n))) throw refused;
+    nonce = current - 1n;
+  }
+  // one memo per message: two messages signed for the same nonce never share it
+  const memo = `darwin execute ${acc.toLowerCase()} ${nonce} ${callsHash(calls).slice(2, 14)}`;
+  // did this message already go through? (a cut response, a retry, a resend after a race)
+  const wentThrough = async () => ((await nonceOf(acc)) > nonce ? findExecuted(role, memo) : null);
+  const settled = async () => {
+    const hash = await wentThrough().catch(() => null);
+    if (hash) return { txHash: hash, account: acc, kind: what.kind, returned: undefined as string | undefined, gasUsed: "0", already: true };
+    throw new Error(PREVIOUS);
+  };
+  if (nonce < current) return settled();
 
   // the price round is shared: prepare it outside the relayer's queue
   if (what.kind !== "withdraw") await freshRound();
   if (what.kind === "withdraw") await settleWithdrawals().catch(() => []);
 
   return serial(role, async () => {
-    if ((await nonceOf(acc)) !== nonce) throw new Error("this message was already executed");
+    if ((await nonceOf(acc)) !== nonce) return settled();
     const pqSignature = ("0x" + Buffer.from(req.signature.pq!.signature, "base64").toString("hex")) as Hex;
     const args = [twinOf(owner), calls, summary, deadline, pqSignature] as const;
     // simulate first, from the relayer's EVM address: a refusal is named before anything is spent
@@ -386,6 +410,8 @@ export async function execute(req: ExecuteRequest) {
     try {
       evmGas = await client.estimateContractGas({ address: FACTORY, abi: factoryAbi, functionName: "execute", args, account: rel.evm as Address } as any);
     } catch (e) {
+      // another instance spent the nonce meanwhile
+      if ((await nonceOf(acc)) !== nonce) return settled();
       const reason = revertReason(e);
       throw new Error(reason ? `refused before sending: ${humane(reason)}` : String((e as Error)?.message ?? e).split("\n")[0]);
     }
@@ -398,10 +424,16 @@ export async function execute(req: ExecuteRequest) {
     let hash: string | undefined;
     for (let attempt = 0; !hash; attempt++) {
       try {
-        hash = await sendNative(role, [crossVmMsg(rel.cosmos, FACTORY, data)], gas, `darwin execute ${acc.toLowerCase()} ${nonce}`);
+        hash = await sendNative(role, [crossVmMsg(rel.cosmos, FACTORY, data)], gas, memo, wentThrough);
       } catch (e) {
-        // a cut broadcast may still have landed: the account's nonce tells
-        if ((await nonceOf(acc)) !== nonce) throw new Error("this message was already executed");
+        // a cut broadcast may still have landed: then this is a success, not an error
+        await new Promise((r) => setTimeout(r, 2000));
+        const landed = await wentThrough().catch(() => null);
+        if (landed) {
+          hash = landed;
+          break;
+        }
+        if ((await nonceOf(acc)) !== nonce) throw new Error(PREVIOUS);
         // out of gas reverts the whole call, nonce included: send again with more
         if (attempt < 2 && /out of gas/i.test(String((e as Error)?.message ?? e))) {
           gas = Math.ceil(gas * 1.6);
