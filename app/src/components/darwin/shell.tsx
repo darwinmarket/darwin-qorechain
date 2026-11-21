@@ -34,7 +34,7 @@ export function HeroActions() {
       <button type="button" className="btn btn-lg btn-ink" onClick={scrollToExplore}>
         Explore baskets
       </button>
-      <a className={`btn btn-lg ${heroSecondary}`} href="https://docs.darwin.market" target="_blank" rel="noreferrer">
+      <a className={`btn btn-lg ${heroSecondary}`} href="https://docs.darwin.market/qorechain" target="_blank" rel="noreferrer">
         Documentation
       </a>
     </>
