@@ -35,7 +35,7 @@ async function readRounds(): Promise<OracleRound[]> {
 }
 
 export function useOracleRounds() {
-  return useQuery({ queryKey: ["oracle-rounds"], queryFn: readRounds, refetchInterval: 30_000 });
+  return useQuery({ queryKey: ["oracle-rounds"], queryFn: readRounds, refetchInterval: 120_000 });
 }
 
 /** Gas and calldata size of one round, from its receipt. */

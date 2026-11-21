@@ -36,9 +36,18 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ path
   }
   const res = await fetch(`${UPSTREAM}/${path}`, { headers: { accept: "application/json" }, cache: "no-store" });
   const body = await res.text();
+  // Vercel's CDN answers repeated reads without running this function: a committed transaction
+  // never changes; chain-wide reads change slowly; an account's reads are shared for a few seconds
+  const cacheControl = !res.ok
+    ? "no-store"
+    : /^cosmos\/tx\/v1beta1\/txs\//.test(path)
+      ? "public, max-age=3600, s-maxage=86400, immutable"
+      : /qor1/.test(path)
+        ? "public, max-age=0, s-maxage=3"
+        : "public, max-age=10, s-maxage=30, stale-while-revalidate=60";
   return new NextResponse(body, {
     status: res.status,
-    headers: { "content-type": "application/json", "cache-control": "no-store" },
+    headers: { "content-type": "application/json", "cache-control": cacheControl },
   });
 }
 

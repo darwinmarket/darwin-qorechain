@@ -26,7 +26,7 @@ export function useRelayStatus(account: string | null | undefined) {
   return useQuery({
     queryKey: ["relay-status", account],
     enabled: Boolean(account),
-    refetchInterval: 15_000,
+    refetchInterval: 60_000,
     queryFn: async (): Promise<RelayStatus> => {
       const r = await fetch(withBase(`/api/relay/status?account=${account}`), { cache: "no-store" });
       const j = await r.json();

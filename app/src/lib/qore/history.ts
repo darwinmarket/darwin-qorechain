@@ -16,5 +16,5 @@ async function readHistory(address: string): Promise<TradeEntry[]> {
 }
 
 export function useTradeHistory(address: string | null | undefined) {
-  return useQuery({ queryKey: ["trade-history", address], queryFn: () => readHistory(address!), enabled: Boolean(address), refetchInterval: 15_000 });
+  return useQuery({ queryKey: ["trade-history", address], queryFn: () => readHistory(address!), enabled: Boolean(address), refetchInterval: 60_000 });
 }

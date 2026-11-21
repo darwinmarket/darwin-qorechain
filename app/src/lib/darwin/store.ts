@@ -108,7 +108,7 @@ async function readAll(): Promise<{ baskets: Basket[]; oracle: OracleState }> {
 }
 
 export function useChainState() {
-  return useQuery({ queryKey: ["chain-state"], queryFn: readAll, refetchInterval: 15_000, staleTime: 10_000 });
+  return useQuery({ queryKey: ["chain-state"], queryFn: readAll, refetchInterval: 60_000, staleTime: 30_000 });
 }
 
 export function useBaskets() {
