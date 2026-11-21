@@ -35,7 +35,7 @@ import { erc20Abi } from "@/lib/qore/abis";
 import { ROUTER, TOKEN_INFO, TOKENS } from "@/lib/qore/chain";
 import { convertCoin, convertErc20 } from "@/lib/qore/proto";
 import { account, RELAYERS, type Role } from "./keys";
-import { CHAIN_ID, client, crossVmMsg, D, findExecuted, json, REST, sendNative } from "./chain";
+import { Abort, CHAIN_ID, client, crossVmMsg, D, findExecuted, inMempool, json, REST, sendNative } from "./chain";
 import { freshRound } from "./keeper";
 
 const ADDR = /^qor1[02-9ac-hj-np-z]{38}$/;
@@ -387,9 +387,26 @@ export async function execute(req: ExecuteRequest) {
     nonce = current - 1n;
   }
   // one memo per message: two messages signed for the same nonce never share it
-  const memo = `darwin execute ${acc.toLowerCase()} ${nonce} ${callsHash(calls).slice(2, 14)}`;
-  // did this message already go through? (a cut response, a retry, a resend after a race)
-  const wentThrough = async () => ((await nonceOf(acc)) > nonce ? findExecuted(role, memo) : null);
+  const forNonce = `darwin execute ${acc.toLowerCase()} ${nonce} `;
+  const memo = `${forNonce}${callsHash(calls).slice(2, 14)}`;
+  /**
+   * Did this message already go through (a cut response, a retry, a resend after a race)? Its
+   * transaction's hash if so; an Abort if the nonce went to another message, or another message
+   * for this nonce waits in the mempool (two instances, a double click): sending would only fail
+   * on chain and cost gas; null if it may be sent.
+   */
+  const wentThrough = async (): Promise<string | null> => {
+    for (let i = 0; i < 12; i++) {
+      if ((await nonceOf(acc)) > nonce) {
+        const hash = await findExecuted(role, memo);
+        if (hash) return hash;
+        throw new Abort(PREVIOUS);
+      }
+      if (!(await inMempool(forNonce))) return null;
+      await new Promise((r) => setTimeout(r, 1500)); // in flight: wait for its block
+    }
+    throw new Abort(PREVIOUS);
+  };
   const settled = async () => {
     const hash = await wentThrough().catch(() => null);
     if (hash) return { txHash: hash, account: acc, kind: what.kind, returned: undefined as string | undefined, gasUsed: "0", already: true };
@@ -402,7 +419,8 @@ export async function execute(req: ExecuteRequest) {
   if (what.kind === "withdraw") await settleWithdrawals().catch(() => []);
 
   return serial(role, async () => {
-    if ((await nonceOf(acc)) !== nonce) return settled();
+    // spent, or another message for this nonce in flight from another instance: never send twice
+    if ((await nonceOf(acc)) !== nonce || (await inMempool(forNonce))) return settled();
     const pqSignature = ("0x" + Buffer.from(req.signature.pq!.signature, "base64").toString("hex")) as Hex;
     const args = [twinOf(owner), calls, summary, deadline, pqSignature] as const;
     // simulate first, from the relayer's EVM address: a refusal is named before anything is spent
@@ -421,11 +439,13 @@ export async function execute(req: ExecuteRequest) {
     const data = encodeFunctionData({ abi: factoryAbi, functionName: "execute", args });
     // a cross-VM call meters the EVM execution in native gas, at about 2.5x the EVM estimate
     let gas = Math.max(1_200_000, Math.ceil(Number(evmGas) * 2.8) + 400_000);
+    if (await inMempool(forNonce)) return settled();
     let hash: string | undefined;
     for (let attempt = 0; !hash; attempt++) {
       try {
         hash = await sendNative(role, [crossVmMsg(rel.cosmos, FACTORY, data)], gas, memo, wentThrough);
       } catch (e) {
+        if (e instanceof Abort) throw new Error(e.message);
         // a cut broadcast may still have landed: then this is a success, not an error
         await new Promise((r) => setTimeout(r, 2000));
         const landed = await wentThrough().catch(() => null);

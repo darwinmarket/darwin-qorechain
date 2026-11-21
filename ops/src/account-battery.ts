@@ -483,6 +483,8 @@ await sleep(6000);
 log("funded; registering keys");
 await Promise.all(users.map((u) => register(u).catch((e) => failures.push(`user ${u.i} register: ${String(e).slice(0, 200)}`))));
 
+// as a visitor's page does: a price older than the router's limit gets a fresh round first
+await fetch(`${APP}/api/relay/refresh`, { method: "POST" }).then((r) => r.text()).then((t) => log(`price refresh: ${t.slice(0, 120)}`)).catch(() => {});
 log("users trade in parallel");
 await Promise.all(users.map(async (u) => {
   await deposit(u, 4_000_000n);

@@ -30,8 +30,20 @@ async function sequence(address: string) {
   return { accountNumber: BigInt(acc.account_number ?? "0"), sequence: BigInt(acc.sequence ?? "0") };
 }
 
-/** Whether a message already went through: the hash of the transaction that carried it, or null. */
+/**
+ * Whether a message already went through: the hash of the transaction that carried it, or null to
+ * send it (again). Throwing an `Abort` stops the send: the message must not go out at all.
+ */
 export type Done = () => Promise<string | null>;
+export class Abort extends Error {}
+
+/** Whether a transaction waiting in the mempool carries `text` (a memo, verbatim in its bytes). */
+export async function inMempool(text: string): Promise<boolean> {
+  const r = await fetch(`${RPC}/unconfirmed_txs?limit=100`, { cache: "no-store" }).catch(() => null);
+  if (!r?.ok) return false;
+  const txs = (((await r.json()) as any).result?.txs ?? []) as string[];
+  return txs.some((b64) => Buffer.from(b64, "base64").toString("latin1").includes(text));
+}
 
 /**
  * The relayer's committed transaction that executed with exactly this memo, among its latest ones
@@ -69,7 +81,12 @@ export async function sendNative(role: Role, messages: EncodeObject[], gas: numb
       // at least a block (~1.4 s): the REST sequence lags one, and the racing call must land
       await new Promise((r) => setTimeout(r, 1500 + Math.random() * 2000));
       // the mismatch may be our own earlier attempt, committed after all: never send it twice
-      const landed = done ? await done().catch(() => null) : null;
+      const landed = done
+        ? await done().catch((x) => {
+            if (x instanceof Abort) throw x;
+            return null;
+          })
+        : null;
       if (landed) return landed;
     }
   }
@@ -136,7 +153,11 @@ export async function writeNative(role: Role, address: Address, abi: Abi, functi
     } catch (e) {
       // a cut broadcast may have landed: then it is a success, and is never sent again
       await new Promise((r) => setTimeout(r, 2000));
-      const hash = await landed().catch(() => null);
+      if (e instanceof Abort) throw e;
+      const hash = await landed().catch((x) => {
+        if (x instanceof Abort) throw x;
+        return null;
+      });
       if (hash) return { transactionHash: hash, gasUsed: 0 };
       if (attempt < 2 && /out of gas/i.test(String((e as Error)?.message ?? e))) {
         gas = Math.ceil(gas * 1.6);

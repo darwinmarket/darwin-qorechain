@@ -78,7 +78,43 @@ page.on("pageerror", (e) => consoleErrors.push(`pageerror: ${e.message.slice(0, 
 await page.addInitScript({ content: mock.initScript() });
 
 let me = null;
-const tab = (name) => page.getByRole("button", { name, exact: true }).first().click();
+/** Connected for the checks that follow (null when signed out on purpose). */
+let connected = false;
+const tab = (name) => page.getByRole("button", { name, exact: true }).first().click({ timeout: 15000 });
+
+/**
+ * After a goto or a reload the wallet does not always reconnect by itself: click the visible
+ * Connect button (short timeout, never failing the check), then wait until the navbar shows the
+ * account rather than Connect. Up to three times.
+ */
+async function ensureConnected() {
+  if (!connected || !me) return;
+  const pill = page.getByText(me.native.slice(0, 8)).first();
+  for (let i = 0; i < 3; i++) {
+    if (await pill.isVisible().catch(() => false)) return;
+    const connect = page.getByRole("button", { name: "Connect wallet" });
+    for (const b of await connect.all().catch(() => [])) {
+      if (await b.isVisible().catch(() => false)) {
+        await b.click({ timeout: 3000 }).catch(() => {});
+        break;
+      }
+    }
+    if (await pill.waitFor({ timeout: 10000 }).then(() => true, () => false)) return;
+  }
+  throw new Error("the wallet did not reconnect after three tries");
+}
+
+/** Poll `read` until `ok(value)` (the RPC is load-balanced: a read can lag a block). */
+async function until(read, ok, what, timeout = 45000) {
+  const t0 = Date.now();
+  let v;
+  while (Date.now() - t0 < timeout) {
+    v = await read().catch(() => undefined);
+    if (v !== undefined && ok(v)) return v;
+    await sleep(1500);
+  }
+  throw new Error(`timed out waiting for ${what} (last ${v})`);
+}
 
 async function lastBroadcast() {
   const reqs = await page.evaluate(() => window.__qorexMock.requests.filter((r) => r.method.endsWith("signAndBroadcast") && r.outcome === "ok"));
@@ -160,19 +196,20 @@ async function openBasket(display) {
   // the page keeps polling balances and prices: "networkidle" may never come
   await page.goto(`${BASE}/${display}`, { waitUntil: "domcontentloaded", timeout: 60000 });
   await page.waitForSelector("text=Your position", { timeout: 45000 });
+  await ensureConnected();
 }
 
 async function trade({ display, key, side, amount }) {
   await openBasket(display);
   await page.waitForSelector("text=/^Available /", { timeout: 30000 });
-  if (side === "sell") await page.getByRole("button", { name: "Sell", exact: true }).click();
+  if (side === "sell") await page.getByRole("button", { name: "Sell", exact: true }).click({ timeout: 15000 });
   await page.getByLabel(side === "buy" ? "You spend" : "You sell").fill(String(amount));
   const cta = page.getByRole("button", { name: `${side === "buy" ? "Buy" : "Sell"} ${NAME[key]}`, exact: true });
   await cta.waitFor({ timeout: 30000 });
   for (let i = 0; i < 40 && (await cta.isDisabled()); i++) await sleep(500); // quote arrives
   assert(!(await cta.isDisabled()), "CTA enabled after the quote");
   const t0 = Date.now() - 5000;
-  await cta.click();
+  await cta.click({ timeout: 15000 });
   await page.waitForSelector(`text=${side === "buy" ? "Bought" : "Sold"} ${NAME[key]}`, { timeout: 150000 });
   await page.screenshot({ path: `${SHOTS}${display}-${side}.png` });
   // the user signed one message (signArbitrary); the account checked it on chain and traded
@@ -200,7 +237,7 @@ await check("home: the mainnet frame, four tabs, every basket with its index", a
 await check("a basket URL opens its screen with the pre-connect trade card", async () => {
   await openBasket("BLUEdw");
   await page.waitForSelector("text=Index base 100 at launch", { timeout: 30000 });
-  await page.getByRole("button", { name: "$50" }).click();
+  await page.getByRole("button", { name: "$50" }).click({ timeout: 15000 });
   await page.waitForSelector("text=/≈ \\$49\\.85/", { timeout: 10000 });
   await page.getByRole("button", { name: "Connect wallet" }).last().waitFor();
   return "$50 -> ≈ $49.85 after the 0.30% fee";
@@ -266,17 +303,17 @@ await check("unknown basket URL is a 404", async () => {
 // ------------------------------------------------------------------------------- connect
 await check("Connect wallet connects QoreX; the account shows in the navbar", async () => {
   await page.goto(BASE, { waitUntil: "networkidle" });
-  await page.getByRole("button", { name: "Connect wallet" }).first().click();
   const addrs = await page.evaluate(() => window.__qorexMock.addresses());
-  await page.waitForSelector(`text=${addrs.native.slice(0, 8)}`, { timeout: 30000 });
   me = { native: addrs.native };
+  connected = true;
+  await ensureConnected();
   await tab("Portfolio");
   await page.waitForSelector("text=Portfolio value", { timeout: 30000 });
   return addrs.native;
 });
 
 await check("the account menu shows the account's registered ML-DSA-87 key (@qorechain/react)", async () => {
-  await page.locator(".account-menu > button").first().click();
+  await page.locator(".account-menu > button").first().click({ timeout: 15000 });
   await page.waitForSelector("[data-pqc-badge=true]", { timeout: 30000 });
   const text = await page.locator("[data-pqc-badge]").innerText();
   await page.keyboard.press("Escape");
@@ -317,8 +354,7 @@ for (const [display, key, target] of [["BLUEdw", "BLUEDW", 1], ["BALdw", "BALDW"
     if (usd < 0.002) throw new Skip(`the vault can fill only $${cap} of ${display}: refill the reserve (ops/src/refill.ts)`);
     const s0 = await bal(D.baskets[key].address, acct);
     const r = await trade({ display, key, side: "buy", amount: usd });
-    const s1 = await bal(D.baskets[key].address, acct);
-    assert(s1 > s0, `shares ${s0} -> ${s1}`);
+    const s1 = await until(() => bal(D.baskets[key].address, acct), (v) => v > s0, `${display} shares above ${s0}`);
     return `${usd} fUSD (vault capacity ${cap === Infinity ? "above the balance" : `$${cap}`}) -> +${(Number(s1 - s0) / 1e18).toFixed(4)} ${display} on the Darwin account, one message signed in QoreX, ML-DSA-87 checked on chain, the transaction hybrid-signed by the relayer, no window, tx ${r.hash}`;
   });
 }
@@ -333,8 +369,7 @@ await check("sell half of BALdw for fUSD", async () => {
   const shares = await bal(D.baskets.BALDW.address, acct);
   const u0 = await bal(D.tokens.fUSD, acct);
   const r = await trade({ display: "BALdw", key: "BALDW", side: "sell", amount: (Math.floor(Number(shares) / 1e18 / 2 * 1e6) / 1e6).toFixed(6) });
-  const u1 = await bal(D.tokens.fUSD, acct);
-  assert(u1 > u0, `fUSD ${u0} -> ${u1}`);
+  const u1 = await until(() => bal(D.tokens.fUSD, acct), (v) => v > u0, `fUSD above ${u0}`);
   return `+${(Number(u1 - u0) / 1e6).toFixed(3)} fUSD on the Darwin account, tx ${r.hash}`;
 });
 
@@ -342,7 +377,7 @@ await check("a trade's page re-verifies the user's ML-DSA-87 signature in the br
   const last = results.filter((x) => x.ok && /tx (0x[0-9a-f]{64}|[0-9A-F]{64})$/.test(x.detail)).at(-1);
   assert(last, "a trade hash from an earlier check");
   const hash = last.detail.match(/tx (0x[0-9a-f]{64}|[0-9A-F]{64})$/)[1];
-  await page.goto(`${BASE}/tx/${hash}`, { waitUntil: "networkidle" });
+  await page.goto(`${BASE}/tx/${hash}`, { waitUntil: "domcontentloaded" });
   await page.waitForSelector("[data-browser-check]", { timeout: 60000 });
   const text = await page.locator("[data-browser-check]").innerText();
   assert((await page.locator("[data-browser-check]").getAttribute("data-browser-check")) === "true", text);
@@ -367,14 +402,13 @@ await check("Portfolio withdraws the account's fUSD back to QoreX with one signe
   await tab("Portfolio");
   const link = page.getByRole("button", { name: /^Withdraw .* fUSD to QoreX$/ });
   await link.waitFor({ timeout: 30000 });
-  await link.click();
+  await link.click({ timeout: 15000 });
   await page.waitForSelector("text=/^(Withdrew |Withdrawal failed)/", { timeout: 120000 });
   if (await page.getByText("Withdrawal failed").count()) {
     await page.screenshot({ path: `${SHOTS}withdraw-failed.png` });
     throw new Error(`withdrawal failed: ${(await page.locator("text=Withdrawal failed").locator("..").innerText()).slice(0, 300)}`);
   }
-  const after = await acctInfo();
-  assert(BigInt(after.fusd) === 0n, `account fUSD ${after.fusd}`);
+  await until(async () => BigInt((await acctInfo()).fusd), (v) => v === 0n, "the account's fUSD at 0");
   return `${(Number(info.fusd) / 1e6).toFixed(2)} fUSD back in the QoreX wallet`;
 });
 
@@ -402,20 +436,27 @@ await check("a buy above the vault's liquidity is refused before signing", async
 await check("a signature declined in QoreX shows a toast and sends nothing", async () => {
   await openBasket("BALdw");
   await page.waitForSelector("text=/^Available /", { timeout: 30000 });
+  const before = await acctInfo();
   await page.evaluate(() => window.__qorexMock.rejectNext());
   await page.getByLabel("You spend").fill("0.5");
   const cta = page.getByRole("button", { name: `Buy ${NAME.BALDW}`, exact: true });
   for (let i = 0; i < 40 && (await cta.isDisabled()); i++) await sleep(500);
-  await cta.click();
+  await cta.click({ timeout: 15000 });
   await page.waitForSelector("text=/Trade cancelled|Trade failed/", { timeout: 30000 });
   const last = await page.evaluate(() => window.__qorexMock.requests.at(-1));
   assert(last.outcome !== "ok", `outcome ${last.outcome}`);
-  return `outcome ${last.outcome}`;
+  // nothing sent: the account's nonce and balances are what they were before (not "zero":
+  // the test wallet's account holds funds from earlier runs)
+  await sleep(6000);
+  const after = await acctInfo();
+  assert(after.nonce === before.nonce && after.fusd === before.fusd && after.shares.BALDW === before.shares.BALDW, `account unchanged (nonce ${before.nonce} -> ${after.nonce}, fUSD ${before.fusd} -> ${after.fusd})`);
+  return `outcome ${last.outcome}; nonce ${after.nonce} and balances unchanged`;
 });
 
 await check("Activity lists the account's trades from the chain", async () => {
   await sleep(8000);
   await page.goto(BASE, { waitUntil: "domcontentloaded" });
+  await ensureConnected();
   await tab("Activity");
   await page.waitForSelector("text=/^(Buy|Sell)$/", { timeout: 45000 });
   const n = await page.locator("text=/^(Buy|Sell)$/").count();
@@ -439,8 +480,10 @@ await check("Recent activity shows on the Baskets tab once connected", async () 
 });
 
 await check("disconnect from the account menu", async () => {
-  await page.getByRole("button", { name: new RegExp(me.native.slice(0, 8)) }).click();
-  await page.getByRole("menuitem", { name: "Disconnect" }).click();
+  await ensureConnected();
+  await page.getByRole("button", { name: new RegExp(me.native.slice(0, 8)) }).first().click({ timeout: 15000 });
+  await page.getByRole("menuitem", { name: "Disconnect" }).click({ timeout: 15000 });
+  connected = false;
   await page.getByRole("button", { name: "Connect wallet" }).first().waitFor({ timeout: 10000 });
   return "back to Connect wallet";
 });
