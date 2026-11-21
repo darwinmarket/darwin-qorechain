@@ -459,14 +459,51 @@ async function main() {
   });
 
   // ------------------------------------------------------------------ invariants
-  await check("invariants: every basket's NAV per share stays within 5% of its 10 USD seed", async () => {
+  await check("invariants: every basket's NAV per share is its holdings at the oracle's prices, per share", async () => {
+    // Recomputed here, independently of nav(): each component's balance held by the basket, valued
+    // by the reserve at the oracle's price, summed, divided by the supply. (A band around the 10 USD
+    // seed measured the market, not the accounting: BTC's moves took BLUEDW out of it.)
+    const reserveAbi = artifact("DarwinReserve").abi;
+    const erc20 = artifact("WQOR").abi;
     const out: string[] = [];
     for (const [k, b] of Object.entries(d.baskets) as [string, any][]) {
+      const comps = await read<readonly Address[]>(b.address, basketAbi, "components");
+      let total = 0n;
+      for (const c of comps) {
+        const held = await read<bigint>(c, erc20, "balanceOf", [b.address]);
+        total += await read<bigint>(d.reserve, reserveAbi, "valueOf", [c, held]);
+      }
+      const supply = await read<bigint>(b.address, basketAbi, "totalSupply");
+      const mine = Number((total * 10n ** 18n) / supply) / 1e18;
       const nps = Number(await read<bigint>(b.address, basketAbi, "navPerShare")) / 1e18;
-      assert(nps > 9.5 && nps < 10.5, `${k} NAV per share ${nps}`);
-      out.push(`${k} ${nps.toFixed(4)}`);
+      assert(Math.abs(mine - nps) / nps < 1e-6, `${k}: navPerShare ${nps}, recomputed ${mine}`);
+      assert(nps > 2 && nps < 50, `${k}: NAV per share ${nps} is implausible`);
+      out.push(`${k} ${nps.toFixed(4)} (recomputed ${mine.toFixed(4)})`);
     }
     return out.join(", ");
+  });
+
+  await check("signing: no Darwin account holds an EVM window, and the chain refuses an ECDSA-only EVM transaction from the deployer", async () => {
+    // Every Darwin transaction goes out as a hybrid-signed MsgCrossVMCall (writeNative, write);
+    // with no EVM window, a leaked secp256k1 key alone gets nothing past the chain.
+    const { fetchEvmWindow } = await import("@qorechain/qoresign/network");
+    const { RELAYERS } = await import("./accounts.js");
+    const { writeEvm } = await import("./evm.js");
+    const open: string[] = [];
+    for (const role of ["deployer", ...RELAYERS] as const) {
+      const a = await evmAccount(role as any);
+      const w: any = await fetchEvmWindow({ rest: REST, address: a.cosmos }).catch(() => null);
+      if (w?.live) open.push(role);
+    }
+    assert(open.length === 0, `EVM windows open: ${open.join(", ")}`);
+    let refusal = "";
+    try {
+      await writeEvm("deployer", d.tokens.fUSD, artifact("WQOR").abi, "approve", [d.router, 0n]);
+    } catch (e: any) {
+      refusal = String(e?.details ?? e?.shortMessage ?? e?.message).split("\n")[0];
+    }
+    assert(/no open EVM authori[sz]ation window/i.test(refusal), `ECDSA-only transaction not refused: ${refusal || "accepted"}`);
+    return `no window on deployer or the 4 relayers; refused: ${refusal.slice(0, 110)}`;
   });
 
   void qore;

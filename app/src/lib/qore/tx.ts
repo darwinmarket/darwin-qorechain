@@ -10,12 +10,13 @@ import { bytesToHex, decodeEventLog, decodeFunctionData, parseAbiItem, type Hex 
 import { basketAbi, oracleAbi, routerAbi } from "./abis";
 import { client, D, REST } from "./chain";
 import { accountRouterAbi, executionOf, FACTORY, factoryAbi } from "./account";
+import { crossVmCalldata, nativeRound, rebalanceAbi } from "./nativeCalls";
 
 export type DarwinAction =
   | { kind: "round"; round: number; prices: Record<string, number> }
   | { kind: "buy"; basket: string; usdIn: number; shares?: number }
   | { kind: "sell"; basket: string; shares: number; usdOut?: number }
-  | { kind: "rebalance"; basket: string; trades: number; navBefore: number; navAfter: number }
+  | { kind: "rebalance"; basket: string; trades: number; navBefore?: number; navAfter?: number }
   | { kind: "other"; label: string };
 
 export type TxView = {
@@ -35,6 +36,8 @@ export type TxView = {
   relayedFor?: string;
   /** Set when this is a DarwinAccount execution: the owner's ML-DSA-87 signed message, checked on chain. */
   viaAccount?: { owner: string; account: string; nonce?: number; summary: string; data: Hex; native: boolean };
+  /** A price round sent on the native lane: its calldata and round number, for the browser check. */
+  roundCall?: { data: Hex; round: number };
   actions: DarwinAction[];
   log?: string;
 };
@@ -145,6 +148,26 @@ async function readTx(input: string): Promise<TxView> {
     }
     if (!actions.length && native.calls.length === 1) actions.push({ kind: "other", label: "Withdrawal of fUSD to the owner's QoreX wallet" });
   }
+  // the keeper's calls on the native lane: a price round, or a curator-signed rebalance
+  let roundCall: TxView["roundCall"];
+  const committed = { ...t, tx };
+  const round = nativeRound(committed, D.oracle);
+  if (round) {
+    const prices: Record<string, number> = {};
+    round.ids.forEach((id, i) => (prices[FEED[id]] = Number(round.prices[i]) / 1e18));
+    actions.unshift({ kind: "round", round: round.round, prices });
+    roundCall = { data: round.data, round: round.round };
+  }
+  for (const [, b] of ALL_BASKETS) {
+    const data = crossVmCalldata(committed, b.address);
+    if (!data) continue;
+    try {
+      const call = decodeFunctionData({ abi: rebalanceAbi, data });
+      actions.push({ kind: "rebalance", basket: basketName(b.address), trades: call.args[0].length });
+    } catch {
+      /* another call */
+    }
+  }
   if (!actions.length) actions.push({ kind: "other", label: tx.body.messages.map((m: any) => m["@type"].split(".").at(-1)).join(", ") });
 
   return {
@@ -160,6 +183,7 @@ async function readTx(input: string): Promise<TxView> {
     evmWindow: win ? { address: attr(win, "address"), usedTxs: attr(win, "used_txs") } : undefined,
     relayedFor,
     viaAccount,
+    roundCall,
     actions,
     log: t.code === 0 ? undefined : t.raw_log,
   };

@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 import { createPublicClient, http, parseAbiItem } from "viem";
 import deployments from "@/config/deployments.json";
+import { nativeRound, searchAll } from "@/lib/qore/nativeCalls";
+
+const REST = process.env.QORE_REST_UPSTREAM ?? "https://api-testnet.qore.host";
 
 /**
  * GET /api/oracle-history
@@ -39,6 +42,13 @@ async function build() {
     ]);
     for (const l of r) roundTime.set(l.args.round!, Number(l.args.timestamp));
     for (const l of p) prices.push({ round: l.args.round!, feed: Number(l.args.feedId), price: Number(l.args.price) / 1e18 });
+  }
+  // rounds on the native lane (hybrid-signed MsgCrossVMCall) leave no logs: read their calldata
+  for (const t of await searchAll(REST, `crossvm_request.target_contract='${ORACLE.toLowerCase()}'`)) {
+    const n = nativeRound(t, ORACLE);
+    if (!n || roundTime.has(BigInt(n.round))) continue;
+    roundTime.set(BigInt(n.round), n.timestamp);
+    n.ids.forEach((id, i) => prices.push({ round: BigInt(n.round), feed: id, price: Number(n.prices[i]) / 1e18 }));
   }
   // hourly buckets, last value wins; carry every feed forward so all series align
   const byHour = new Map<number, Record<string, number>>();
