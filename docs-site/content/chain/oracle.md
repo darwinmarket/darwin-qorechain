@@ -32,6 +32,7 @@ The signed message binds the chain id, the oracle's address, the round number, t
 
 On demand, so nothing is spent while nobody trades:
 
+- **When a visitor finds them stale.** With no trade for 30 minutes the contracts refuse to value a basket (`PriceStale`); the app then asks the server for a round, published only if the last one is over 20 minutes old: at most three an hour, and only while someone is looking.
 - **Before a trade.** The relayer publishes a signed round if the last one is more than 20 minutes old (readers refuse prices older than 30).
 - **Daily.** A cron at 06:00 UTC publishes one round and renews the deployer's scoped EVM window (the deployer relays rounds and rebalances).
 - **Weekly.** The Monday 12:05 UTC rebalance publishes a fresh round first.

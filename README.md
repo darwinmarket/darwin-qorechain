@@ -305,6 +305,9 @@ does the keeper's work on demand, so nothing runs while nobody trades:
 - **Prices:** before executing a trade, the relayer publishes a signed round if the last one is more
   than 20 minutes old (the router refuses prices older than 30). QWAKK's price is the median of its
   pool's last 30 minutes of swaps, read from the chain, so no state is kept between calls.
+- **Stale prices:** a visitor whose app finds the round older than 30 minutes asks the server for
+  one, published only if the last is over 20 minutes old (at most three an hour, none while nobody
+  visits).
 - **Daily cron** (06:00 UTC): renews the deployer's scoped EVM window, publishes a round, and
   completes any withdrawal left halfway (`settleWithdrawals()`).
 - **Weekly cron** (Mondays 12:05 UTC): the curator-signed rebalance of every basket that drifted.
