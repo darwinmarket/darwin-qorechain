@@ -19,12 +19,13 @@ Jurors in a hurry: [the numbers](#the-numbers), then [check our claims](#check-o
 1. [The numbers](#the-numbers)
 2. [Five keys, five ways to lose a basket](#five-keys-five-ways-to-lose-a-basket)
 3. [A trade, from click to chain](#a-trade-from-click-to-chain)
-4. [Check our claims](#check-our-claims)
-5. [What post-quantum costs here](#what-post-quantum-costs-here)
-6. [Deployment](#deployment)
-7. [The code](#the-code)
-8. [Limits](#limits)
-9. [More](#more)
+4. [The proof, on screen](#the-proof-on-screen)
+5. [Check our claims](#check-our-claims)
+6. [What post-quantum costs here](#what-post-quantum-costs-here)
+7. [Deployment](#deployment)
+8. [The code](#the-code)
+9. [Limits](#limits)
+10. [More](#more)
 
 ## The numbers
 
@@ -121,6 +122,80 @@ A cross-VM call leaves no EVM log, so each Darwin transaction names itself in it
 (`darwin round <n>`, `darwin rebalance …`, `darwin execute …`) and the app decodes the calldata,
 re-verifying the signature for that number. Full design: [docs/AUDIT.md](docs/AUDIT.md) and
 [docs.darwin.market/qorechain](https://docs.darwin.market/qorechain).
+
+## The proof, on screen
+
+The app does not ask to be trusted: it shows where each signature is, who made it, and checks it
+again in your browser. Below, the Security tab, then one real price round, then one real trade
+([`26B978E8…`](https://darwin.market/qorechain/tx/26B978E8CC71556015E2801A3D2BFA839538FC11E2D17BACDDAF9585C7F0989C)),
+first as Darwin shows it, then as QoreChain's own explorer shows it. All taken on production on
+2026-11-21 by [`app/e2e/readme-shots.mjs`](app/e2e/readme-shots.mjs).
+
+### The Security tab: what the prices are, and who signed them
+
+<img src="docs/img/security-oracle.png" alt="Security tab: the oracle's five feeds and its recent rounds" width="100%">
+
+Every price the baskets use, read from `DarwinOracle` on chain, with the round it came from. Each
+round carries a 4,627-byte ML-DSA-87 signature of the reporter, checked by `pqcVerify` before a
+single price is stored (652k gas for the latest one). The list below it is the oracle's history,
+each row linking to its transaction page.
+
+<img src="docs/img/security-rules.png" alt="Security tab: who can do what, and how Darwin signs" width="100%">
+
+*Who can do what* is the whole permission model on one screen: each power, the key it needs, and
+what the contract checks. *How Darwin signs* is read live from the chain: the keeper and the
+relayers send `MsgCrossVMCall` with a hybrid signature, and the keeper's EVM window is **none**, so
+a secp256k1 key alone cannot send anything for Darwin.
+
+### A price round, verified again in your browser
+
+<img src="docs/img/round-evidence.png" alt="Oracle round #74: the chain verified the hybrid signature, and the browser re-verified the reporter's ML-DSA-87 signature, rejected for round #75" width="100%">
+
+Round #74, opened from the Security tab. The page decodes the prices from the calldata (a
+cross-VM call leaves no EVM log), shows the hybrid signature the chain recorded for the keeper's
+transaction, then rebuilds the exact message `DarwinOracle` checks and verifies the reporter's
+ML-DSA-87 signature with `@qorechain/pqc`, against the key the reporter registered on chain. It
+then checks the same signature against round #75 and shows it fails: the signature is bound to
+this round and no other.
+
+### One real trade, as Darwin shows it
+
+<img src="docs/img/tx-what.png" alt="A trade's page: buy DEGENdw with 10.00 fUSD, success" width="100%">
+
+<img src="docs/img/tx-evidence.png" alt="Post-quantum evidence of the trade: the relayer's hybrid signature, the owner's signed message, the browser's re-verification" width="100%">
+
+A buy of 10 fUSD of Degen. The three lines of *Post-quantum evidence* are the three layers of the
+trade:
+
+1. **Transaction signature**: the relayer sent it as a hybrid-signed `MsgCrossVMCall`; the chain
+   recorded `pqc_hybrid_verify` for that account.
+2. **Signed by**: the user, whose words are quoted ("Darwin: Buy 10.00 fUSD of DEGENdw, for at
+   least 0.930945 DEGENdw"), signed in QoreX with secp256k1 and ML-DSA-87. The user's Darwin
+   account checked the ML-DSA-87 half on chain with `pqcVerify` before trading; the relayer only
+   paid the gas.
+3. **Checked in this browser**: the page rebuilt that text from the calldata and the account's
+   nonce, verified the 4,627-byte signature against the user's 2,592-byte registered key, and
+   showed it fails for the next nonce (160): it authorises this trade once.
+
+### The same trade, as QoreChain's explorer shows it
+
+<img src="docs/img/explorer-summary.png" alt="Explorer: the trade's hash, block, fee, gas and memo" width="100%">
+
+The chain's view, independent of Darwin. The memo names the message: the user's account, its nonce
+(159) and the first 12 hex digits of the calls' hash, which is how the relayer makes sure it never
+sends a message twice.
+
+<img src="docs/img/explorer-message.png" alt="Explorer: one MsgCrossVMCall from the relayer to DarwinAccountFactory" width="100%">
+
+One message: a `MsgCrossVMCall` from Darwin's relayer to `0x09891b29…` (`DarwinAccountFactory`),
+whose payload is `execute(owner, calls, summary, deadline, pqSignature)`: the user's signed calls
+and their ML-DSA-87 signature.
+
+<img src="docs/img/explorer-signature.png" alt="Explorer: signature security quantum-safe, verified on-chain, ML-DSA-87" width="100%">
+
+*Signature security: quantum-safe, verified on-chain.* ML-DSA-87 (FIPS 204, NIST category 5),
+4,627 bytes, on top of the secp256k1 layer; the chain's policy requires the hybrid. Every kind of
+Darwin transaction reads the same way ([report](docs/e2e/explorer-2026-11-21T141555.md)).
 
 ## Check our claims
 
