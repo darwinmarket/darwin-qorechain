@@ -36,7 +36,7 @@ So they hold **fQOR and fQWAKK**: Darwin test tokens priced by the same QOR and 
 
 ## Keys
 
-The deployer's secp256k1 key relays transactions and holds the guardian role, which can only pause new mints. It cannot change a price, a weight, a trade or a parameter, or move the reserve's funds. Each EVM window also caps the value it admits. The relayer's key can submit only to the account factory (its window is scoped to it), where every call needs the owner's ML-DSA-87 signature.
+A secp256k1 key of Darwin's alone can send nothing. Every Darwin transaction is a native `MsgCrossVMCall` hybrid-signed with secp256k1 + ML-DSA-87, and none of Darwin's accounts holds an EVM window, so the chain refuses an ECDSA-only transaction from them. The deployer holds the guardian role, which can only pause new mints; that pause too now needs a hybrid transaction. With both its keys, the deployer still cannot change a price, a weight, a trade or a parameter, or move the reserve's funds. A relayer, with both its keys, can submit to the account factory, where every call needs the owner's ML-DSA-87 signature.
 
 ## Known limitations
 

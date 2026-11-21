@@ -81,12 +81,24 @@ signature, used by the account factory. Every privileged path goes through them:
 | `DarwinAccountFactory.create` (`DarwinAccountFactory.sol:40`, `isQuantumSafe`) | none (key status) | no account for an owner without a proven ML-DSA-87 key | `test_noAccountForAnOwnerWithoutAProvenKey` | — |
 | `PqcAdmin._authorizeAdmin` (`PqcAdmin.sol:46`), used by 16 admin functions, plus the account factory's `setTarget`: oracle `addFeed`, `setTokenFeed`, `setReporter`, `setParams`; reserve `listToken`, `setSpread`, `setSpreadExempt`, `withdraw`, `setOracle`; basket `setMintPaused`, `setCurator`, `setGuardian`, `setReserve`, `setMaxRebalanceLoss`, `setOracle`; `setAdmin` on each | admin | every power over the protocol and its funds | `test_adminActionsNeedTheAdminsPqcSignature`, `test_adminSignatureWorksOnce`, `test_adminSignatureExpires`, `test_withdrawNeedsTheAdminsPqcSignature`, `test_setOracleNeedsTheAdminsPqcSignature`, `test_guardianCanOnlyPause` | curator-signed withdrawal refused; expired signature refused; spread change signed and restored |
 
-What a leaked secp256k1 key can still do: the deployer's key relays transactions and holds the
-guardian role, which can only pause new mints (never selling, never in-kind redemption). It cannot
-change a price, a weight, a trade or any parameter, and cannot move the reserve's funds. The trade
-relayer's key can submit only to the account factory (its EVM window is scoped to it), where every
-call needs the owner's ML-DSA-87 signature. A user's leaked secp256k1 key cannot move the user's
+What a leaked secp256k1 key can still do: nothing on its own. Every transaction Darwin sends (the
+keeper's rounds and rebalances from the deployer, the relayers' account executions) is a native
+`MsgCrossVMCall` hybrid-signed with secp256k1 + ML-DSA-87 and verified by the chain
+(`pqc_hybrid_verify status=verified`). None of Darwin's accounts (the deployer and the four
+relayers) holds an EVM window, so the chain refuses an ECDSA-only EVM transaction from them:
+"account … has no open EVM authorisation window; open one with MsgOpenEVMWindow, signed on the
+Cosmos lane with the account's post-quantum key". Opening a window needs that ML-DSA-87 key too.
+The guardian's pause, the only function checked by `msg.sender`, therefore also needs a hybrid
+transaction now; it can only pause new mints (never selling, never in-kind redemption). The
+deployer's key cannot change a price, a weight, a trade or any parameter, and cannot move the
+reserve's funds, with either key alone. A user's leaked secp256k1 key cannot move the user's
 DarwinAccount at all: the account checks only the ML-DSA-87 half.
+
+Two EVM exceptions remain, used only at deployment: a contract creation and a call carrying QOR
+value (a cross-VM call can do neither). Each needs a window opened with the account's ML-DSA-87
+key, closed again afterwards. None has happened since the switch on 2026-11-21:
+`ops/src/pq-audit.ts` found 230/230 transactions of the deployer and the four relayers
+hybrid-verified since 2026-11-21T09:12Z.
 
 The same signatures can be checked without trusting the chain: the app's transaction page
 re-verifies an oracle round's ML-DSA-87 signature and an account trade's owner signature in the
@@ -119,7 +131,7 @@ keccak256(abi.encode(calls))`. See the README's "How a trade works".
 | Custody during a deposit | the user's `MsgSend` of fUSD to the relayer is converted, in one transaction, onto the account (`MsgConvertCoin`, receiver = the account); the relayer checks sender, recipient, denom and amount, and credits once (memo `darwin deposit <txhash>`, read back from the chain) | on chain: deposit credited once |
 | Custody during a withdrawal | the account transfers fUSD to the relayer; the relayer returns it in one transaction (`MsgConvertERC20`, receiver = the user, memo `darwin withdraw <evm hash>`) | on chain: withdraw back to the QoreX wallet |
 | A withdrawal cut between its two transactions (serverless timeout) | `settleWithdrawals()` reads the factory's recent transactions and completes every successful withdrawal without its memo, before each withdrawal and in the daily cron; a second return of the same withdrawal would fail for lack of balance | tested on chain with a withdrawal deliberately cut halfway |
-| The relayer's own key | a dedicated coin-60 account with its own ML-DSA-87 key (registered with proof of possession); it submits executions as a `MsgCrossVMCall` it hybrid-signs (secp256k1 + ML-DSA-87): the transaction itself is post-quantum, and needs no EVM window; four such relayers share the load | `ops/src/deploy-accounts.ts` |
+| The relayer's own key | a dedicated coin-60 account with its own ML-DSA-87 key (registered with proof of possession); it submits executions as a `MsgCrossVMCall` it hybrid-signs (secp256k1 + ML-DSA-87), memo `darwin execute <account> <nonce>`: the transaction itself is post-quantum; no relayer holds an EVM window, so its secp256k1 key alone can send nothing; four such relayers share the load | `ops/src/deploy-accounts.ts`; `ops/src/e2e.ts` (no window on the 4 relayers); `ops/src/pq-audit.ts` |
 | Slippage | the signed calls carry the user's minimum (shares or fUSD), enforced by the router | router tests |
 
 What remains trusted: the relayer can refuse or delay a message (liveness), and it holds a user's

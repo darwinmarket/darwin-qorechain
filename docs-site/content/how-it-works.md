@@ -49,7 +49,7 @@ The last line is the hash of the exact calls: an fUSD approval of the router if 
 
 ### 2. The relayer checks it
 
-The relayer (`app/src/server/accounts.ts`) verifies both halves with QoreSign's `verifyMessageWithChain` against the keys your account registered on chain, and checks that the calls are a trade paying your account. Then it submits `factory.execute(owner, calls, summary, deadline, pqSignature)` and pays the gas.
+The relayer (`app/src/server/accounts.ts`) verifies both halves with QoreSign's `verifyMessageWithChain` against the keys your account registered on chain, and checks that the calls are a trade paying your account. Then it submits `factory.execute(owner, calls, summary, deadline, pqSignature)` and pays the gas. The transaction is a `MsgCrossVMCall` the relayer hybrid-signs (secp256k1 + ML-DSA-87), so the chain verifies it too. Every transaction Darwin sends, rounds and rebalances included, goes out this way; none of Darwin's accounts holds an EVM window.
 
 ### 3. Your account checks it on chain
 
@@ -78,7 +78,7 @@ Portfolio's Cash row has **Withdraw X fUSD to QoreX**: one signed message. Your 
 | The reporter (oracle key) | Sign price rounds | Move a price more than 15% in one round, or publish rounds less than 60 s apart |
 | The curator | Sign target weights and rebalance trades | Trade components that are not in the basket; lose more than 1% of NAV in a rebalance |
 | The admin | Sign the 16 admin actions; change the accounts' allowed targets | Act with a secp256k1 key alone |
-| The guardian | Pause new mints | Unpause, rebalance, or block selling and redeeming |
+| The guardian | Pause new mints, with a hybrid-signed transaction | Unpause, rebalance, or block selling and redeeming; pause with a secp256k1 key alone |
 
 ## Where the trust sits
 

@@ -44,7 +44,7 @@ No EVM window, no authz grant, no gas for the user's trades. The deposit `MsgSen
 
 ## What it sends
 
-- For a trade or a withdrawal: one EVM transaction to the factory, which creates the account on its first action and calls it. The relayer pays the gas. Before a trade it publishes a fresh oracle round if the last is more than 20 minutes old.
+- For a trade or a withdrawal: one call to the factory, which creates the account on its first action and calls it. It is a `MsgCrossVMCall` the relayer hybrid-signs (secp256k1 + ML-DSA-87), memo `darwin execute <account> <nonce>`; no relayer holds an EVM window. The relayer pays the gas. Before a trade it publishes a fresh oracle round if the last is more than 20 minutes old.
 - For a deposit: one native `MsgConvertCoin` (2M gas).
 - After a withdrawal: one native `MsgConvertERC20` (2M gas). `settleWithdrawals()` completes any withdrawal cut halfway, before the next withdrawal and in the daily cron.
 

@@ -4,8 +4,11 @@
 it is signed with ML-DSA-87 and checked on chain by `pqcVerify`, every rebalance needs the curator's
 post-quantum signature, and every trade you make from QoreX is hybrid-signed (secp256k1 +
 ML-DSA-87) and checked on chain by your own Darwin account, which obeys your ML-DSA-87 key only.
-No ECDSA key alone can change a price, a weight, a trade or a parameter, or move
-the reserve's funds (what one still can do is listed under [Known limitations](#known-limitations)).
+Every transaction Darwin itself sends (price rounds, rebalances, trade executions) is also
+hybrid-signed and verified by the chain, and none of Darwin's accounts holds an EVM window, so the
+chain refuses an ECDSA-only transaction from them. No ECDSA key alone can change a price, a
+weight, a trade or a parameter, pause a basket, or move the reserve's funds (what remains is
+listed under [Known limitations](#known-limitations)).
 
 Built for **Build Before Q-Day**, the QoreChain Developer Fest, on the `qorechain-diana` testnet.
 Category: **Post-Quantum dApp**. Darwin is already live on Miden mainnet at
@@ -56,8 +59,8 @@ precompiles against keys registered on chain:
 | Every admin action | admin's ML-DSA-87 key | `PqcAdmin`: no function checks `msg.sender` for admin powers |
 | User buy, sell and withdraw | the user's ML-DSA-87 + secp256k1 signed text (QoreX `signArbitrary`) | the relayer's QoreSign check of both halves, then the user's `DarwinAccount`: `pqcVerify` against the user's key, single-use nonce, Darwin's contracts only |
 | Accounts' allowed targets | admin's ML-DSA-87 key | `DarwinAccountFactory.setTarget` (`PqcAdmin`) |
-| Keeper relaying | scoped EVM window | `allowed_targets` = Darwin's contracts and tokens only |
-| Pause new mints | guardian (classical key) | the only classical power, and it can never cost a holder anything |
+| Every Darwin transaction (keeper, relayers) | hybrid secp256k1 + ML-DSA-87 | the chain (`pqc_hybrid_verify status=verified`); a `MsgCrossVMCall`, no EVM window open |
+| Pause new mints | guardian, hybrid-signed | checked by `msg.sender`, the only such power; it can never cost a holder anything |
 | Sell the basket token for fUSD | the user's QoreX keys, hybrid | always open, even when buying is paused |
 
 Signatures are domain-separated (tag, chain id, contract, nonce, deadline) and the contracts
@@ -69,9 +72,32 @@ re-verifies the signatures itself with `@qorechain/pqc`: a trade by rebuilding t
 its owner signed (from the calldata and the account's nonce in the `Executed` event) and verifying
 the owner's ML-DSA-87 signature, then checking that the same signature fails for nonce + 1; an
 oracle round by rebuilding `roundMessage` from the calldata and verifying the reporter's 4,627-byte
-ML-DSA-87 signature, then checking that it fails for the next round number. Hybrid transaction
+ML-DSA-87 signature, then checking that it fails for the next round number ("Round #72 signature
+verified · rejected for round #73"). Hybrid transaction
 signatures are re-checked with QoreSign (`@qorechain/qoresign`, both layers, against the keys the
 signer registered).
+
+**Every transaction Darwin sends is hybrid-signed.** The keeper (rounds, rebalances) and the
+relayers (account executions) call Darwin's contracts with `MsgCrossVMCall` (`qorechain.crossvm.v1`)
+from their own accounts, signed secp256k1 + ML-DSA-87 and verified by the chain
+(`pqc_hybrid_verify status=verified`); the QoreChain explorer shows each one "quantum-safe ·
+verified on-chain" (ML-DSA-87, FIPS 204, NIST category 5). Code: `writeNative` in
+`app/src/server/chain.ts`, `write()` in `ops/src/evm.ts`. Each call is simulated first (an
+`eth_estimateGas` from the role's 0x address), so a refusal is named before anything is sent. A
+cross-VM call meters the EVM work at about 2.5x its EVM gas: the gas limit is max(1.2M, 2.8 x
+estimate + 400k), retried at x1.6 when out of gas. No Darwin account holds an EVM window, and the
+chain refuses an ECDSA-only EVM transaction from them ("account … has no open EVM authorisation
+window; open one with MsgOpenEVMWindow, signed on the Cosmos lane with the account's post-quantum
+key"). Only a call carrying QOR value and a contract creation still need an EVM transaction (a
+cross-VM call can do neither); they are used at deployment only, and none happened since the
+switch (2026-11-21).
+
+Native calls leave no EVM logs, so each carries a memo: `darwin round <n>`, `darwin rebalance
+<basket> <nonce>`, `darwin execute <account> <nonce>`. The Security tab, the oracle history (the
+charts) and the transaction page decode the `submit` calldata from the committed transaction
+(`app/src/lib/qore/nativeCalls.ts`) and take the round number from the memo, never trusted alone:
+the browser re-verifies the reporter's signature for that number. Older EVM-lane rounds and trades
+are still read from logs.
 
 ## How a trade works
 
@@ -136,7 +162,9 @@ then each trade is a JSON intent signed with `signArbitrary`, executed by the re
 **Found while building:** an EVM window can be opened for at most 17,280 blocks (~7 h at 1.43 s
 blocks); `MsgConvertCoin`/`MsgConvertERC20` sent by the relayer need ~2M gas (below it the chain
 reports a misleading "failed to retrieve balance: EVM call unexpected error"); `MsgConvertERC20`'s
-`sender` must be bech32 (`qor1…`), not `0x`.
+`sender` must be bech32 (`qor1…`), not `0x`; `closeEvmWindowMsg` takes the sender's address
+string, not `{ sender }` (our `window.ts` passed an object, so every close failed with "invalid
+sender: decoding bech32 failed"; fixed).
 
 ## Architecture
 
@@ -154,7 +182,9 @@ contracts/   Solidity 0.8.28, Foundry, OpenZeppelin 5.4
 ops/         TypeScript, @qorechain/sdk 0.14, viem
   accounts.ts           treasury (coin 118) + deployer/reporter/curator (coin 60) from one mnemonic
   nativeClient.ts       hybrid-signed native txs (TxClient + EthNativeSigner)
-  window.ts             PQC key registration (proof of possession) and scoped EVM windows
+  window.ts             PQC key registration (proof of possession); opens and closes EVM windows
+                        (deployment only: no Darwin account holds one)
+  evm.ts                contract reads and writes; write() sends a hybrid MsgCrossVMCall
   deploy.ts             idempotent deployment and seeding, recorded in deployments/diana.json
   prices.ts             BTC/ETH median of 4 spot APIs; QOR from CoinGecko + MEXC; QWAKK from its AMM pool
   oracle.ts             signs and relays a price round
@@ -166,11 +196,16 @@ ops/         TypeScript, @qorechain/sdk 0.14, viem
   relay-setup.ts        a test account's one-time setup for that path (EVM window, grants)
   deploy-accounts.ts    deploys DarwinAccountFactory
   account-check.ts      the account path end to end on the testnet, through the app's API
-  keeper.ts             the always-on keeper for local runs: scoped window, oracle heartbeat,
-                        the weekly rebalance (in production these run on demand, see below)
+  pq-audit.ts           every transaction of the deployer and the 4 relayers since a date must
+                        carry a verified hybrid signature
+  keeper.ts             the always-on keeper for local runs: oracle heartbeat, the weekly
+                        rebalance (in production these run on demand, see below); every call
+                        hybrid-signed, no EVM window
 app/         Next.js 15, React 18, viem: Darwin's mainnet front (same frame, navbar, home, basket
              screen and trade card) on QoreChain, with QoreX; tabs Baskets, Portfolio, Activity, Security
   src/server/accounts.ts  the relayer for DarwinAccounts: deposits, signed trades, withdrawals
+  src/server/keeper.ts    rounds and rebalances, sent with writeNative (src/server/chain.ts)
+  src/lib/qore/nativeCalls.ts  decodes native calls (calldata, memo) for readers: no EVM logs
   src/server/relayer.ts   the original relayer (intents through authz), for older holdings
 deployments/diana.json  every address, role and seed
 ```
@@ -188,10 +223,10 @@ Oracle `0xabe07a51e1974d36970b40d3c1c84da37364685f`, reserve
 WQOR `0xa140f05ff3fec2d757ae758cddc064e2e386b749` (v2 stack), DarwinAccountFactory
 `0x09891b295bf34c6ed6b364e53bcd68e06fc2bd12` (`accountFactory`; see `deployments/diana.json`).
 
-Each EVM window also caps the **value** it admits (0.75 QOR per allowed transaction): a stolen
-secp256k1 key cannot drain more QOR through the EVM than the window allows, and opening a new one
-needs the account's ML-DSA-87 signature. We hit it ourselves funding the reserve, and had to wrap
-QOR in pieces.
+No role holds an EVM window: the chain refuses an ECDSA-only EVM transaction from any of Darwin's
+accounts, and opening a window needs the account's ML-DSA-87 signature. During deployment a window
+was opened when needed; each caps the **value** it admits (0.75 QOR per allowed transaction). We
+hit that cap ourselves funding the reserve, and had to wrap QOR in pieces.
 
 ### Measured on qorechain-diana
 
@@ -201,6 +236,9 @@ QOR in pieces.
 | Rebalance, 2 trades, curator signature verified | ~389k |
 | Buy through the router (EVM lane) | ~323k |
 | Buy from QoreX before DarwinAccounts (native tx, cross-VM call, hybrid verification included) | ~1.05M |
+
+These are EVM gas figures. Sent as a cross-VM call, as Darwin now sends every transaction, the
+same work is metered at about 2.5x.
 
 ## Kits and network functions used
 
@@ -221,7 +259,8 @@ Each kit does a real job in Darwin:
 deposits and the relayer's conversions included); ML-DSA-87 message signatures (every trade and
 withdrawal, QoreX `signArbitrary`, verified on chain by the user's DarwinAccount); PQC key
 registration with proof of possession (every role; a DarwinAccount only for a proven key); EVM
-windows, scoped (the keeper's to Darwin's contracts, the relayer's to the account factory); authz
+windows: none open, every Darwin transaction is hybrid (the chain refuses an ECDSA-only one from
+Darwin's accounts; windows were used during deployment only); authz
 grants with expiry (only for selling shares bought before DarwinAccounts); PQC signature
 verification in Solidity (`pqcVerify`: oracle, baskets, admin, every user account); PQC key status
 in Solidity (`pqcKeyStatus`);
@@ -234,7 +273,7 @@ its pool); MCP server and qore CLI; QoreScan.
 | Address | Role |
 |---|---|
 | `qor1h92yt25my24uwl8tkju7h0yl6gez6zpcyen9q5` | treasury and test trader (QoreX, coin 118): hybrid-signed cross-VM trades |
-| `qor1yzq84n9uj6fmgzsh7tk88gr7dhrh60u95gpw8p` | deployer, admin, relayer (`0x20807acc…`): scoped EVM window, ML-DSA-87 admin signatures |
+| `qor1yzq84n9uj6fmgzsh7tk88gr7dhrh60u95gpw8p` | deployer, admin, keeper (`0x20807acc…`): hybrid `MsgCrossVMCall` rounds and rebalances, no EVM window, ML-DSA-87 admin signatures |
 | `qor1dg5x70vqts47p4jnajrvrjketxph8jewxe3phs` | oracle reporter (`0x6A286f3D…`): signs every price round |
 | `qor1uzauedcmwcgyrvlnqw9numxm8yk0hcmnyvuq5u` | curator (`0xe0BBCcb7…`): signs weights and rebalances |
 | `qor1pzkqj8xadyhlqtpplps8jl5xmccf664s554wvf` | trade relayer (`0x08Ac091C…`): submits QoreX users' signed messages to `DarwinAccountFactory`, converts fUSD deposits and withdrawals |
@@ -272,16 +311,19 @@ Operating your own deployment (testnet-only mnemonic in `QORE_MNEMONIC` or
 
 ```bash
 cd ops && npm install
-npm run status                       # keys, windows, balances of every role
+npm run status                       # keys, windows (none open), balances of every role
 npm run fund -- qor 60 2 2           # treasury -> deployer, reporter, curator (hybrid-signed)
 npm run fund -- tokens               # faucet fUSD/fETH/fBTC -> ERC-20 on the deployer
 npm run window -- register all       # ML-DSA-87 keys, with proof of possession
-npm run window -- open deployer      # an EVM window for the deployment
+npm run window -- open deployer      # an EVM window for the deployment (contract creation)
 (cd ../contracts && forge build) && npm run deploy
-npm run keeper                       # local only: oracle rounds, rebalances, window upkeep
+npm run window -- close deployer     # close it again: Darwin's accounts hold no window
+npm run keeper                       # local only: oracle rounds, rebalances
 npm run relayer                      # the original intent relayer on :3046 (production runs it in the app)
 npx tsx src/deploy-accounts.ts       # DarwinAccountFactory
 APP=http://localhost:3032 npx tsx src/account-check.ts   # the account path, 9 checks
+npm run e2e                          # the on-chain suite, 28 checks
+npx tsx src/pq-audit.ts 2026-11-21T09:12:00Z   # every Darwin transaction since then hybrid-verified
 npm run trade -- buy BLUEDW 5        # or: tsx src/crossvm.ts buy BLUEDW 5 (native, hybrid)
 npm run rebalance -- plan BALDW
 ```
@@ -308,13 +350,17 @@ does the keeper's work on demand, so nothing runs while nobody trades:
 - **Stale prices:** a visitor whose app finds the round older than 30 minutes asks the server for
   one, published only if the last is over 20 minutes old (at most three an hour, none while nobody
   visits).
-- **Daily cron** (06:00 UTC): renews the deployer's scoped EVM window, publishes a round, and
-  completes any withdrawal left halfway (`settleWithdrawals()`).
+- **Daily cron** (06:00 UTC): publishes a round (a hybrid `MsgCrossVMCall`, memo `darwin round
+  <n>`) and completes any withdrawal left halfway (`settleWithdrawals()`). It opens no window.
+- **Keeper:** `app/src/server/keeper.ts` sends rounds and rebalances with `writeNative`
+  (`app/src/server/chain.ts`), from the deployer's account, hybrid-signed. None of Darwin's
+  accounts holds an EVM window.
 - **Weekly cron** (Mondays 12:05 UTC): the curator-signed rebalance of every basket that drifted.
 - **Relayer:** routes of the app (`/api/relay/*`), so it runs in the app's server on Vercel.
   `app/src/server/accounts.ts` checks both halves of a user's signed message with QoreSign, then
-  submits it to `DarwinAccountFactory` as a `MsgCrossVMCall` it hybrid-signs (secp256k1 + ML-DSA-87): the transaction itself is post-quantum, and needs no EVM window, and pays the gas
-  and renewed by the relayer itself. Deposits and withdrawals are credited once through the
+  submits it to `DarwinAccountFactory` as a `MsgCrossVMCall` it hybrid-signs (secp256k1 +
+  ML-DSA-87), with memo `darwin execute <account> <nonce>`, and pays the gas. The transaction
+  itself is post-quantum and needs no EVM window. Deposits and withdrawals are credited once through the
   relayer's own on-chain memos (`darwin deposit <txhash>`, `darwin withdraw <evm hash>`), so they
   survive serverless restarts. `app/src/server/relayer.ts` keeps the original intent path for
   shares bought before DarwinAccounts.
@@ -342,10 +388,16 @@ If none of it runs, the app still displays, and in-kind redemption never needs a
 - Cryptographic inventory: [docs/cbom](docs/cbom) (QoreScan CBOM; QoreChain's endpoints already
   negotiate the hybrid post-quantum key exchange X25519MLKEM768).
 - Tests, on the v2 stack: 110 unit, fuzz and invariant tests (11 for DarwinAccount); on-chain E2E
-  26/26 (`docs/e2e/2026-11-20T1334.md`); the account path on chain 9/9 (`ops/src/account-check.ts`:
+  28/28 (`docs/e2e/2026-11-21T0917.md`), including "no Darwin account holds an EVM window, and the
+  chain refuses an ECDSA-only EVM transaction from the deployer" and each basket's NAV per share
+  recomputed from its holdings at the oracle's prices; `ops/src/pq-audit.ts`: 230/230 transactions
+  of the deployer and the four relayers hybrid-verified since 2026-11-21T09:12Z, when the windows
+  were closed; the account path on chain 9/9 (`ops/src/account-check.ts`:
   deposit credited once, buy, sell, withdraw; replay, changed calls, another key, a target outside
-  Darwin and a forged call sent on chain directly, all refused); an 8-user parallel battery, 32/32
-  trades with a verified hybrid signature (`battery-2026-11-20T1335.md`); browser E2E 24/26 locally
+  Darwin and a forged call sent on chain directly, all refused); a 16-user DarwinAccount battery
+  on production, 168/168 operations, 32/32 attacks refused, 138/138 relayer transactions
+  hybrid-signed (`account-battery-2026-11-21T092613.md`); a 6-user native battery, 32/32 trades
+  with a verified hybrid signature (`battery-2026-11-21T0927.md`); browser E2E 24/26 locally
   with one skip and one timeout that passed on rerun (`browser-2026-11-20T221356.md`), and 7/7 on
   production; see [docs/TESTING.md](docs/TESTING.md).
 - Testnet only: the tokens have no value and the mnemonic used here must never touch mainnet.
@@ -362,6 +414,7 @@ tested, and live on the v2 stack the same day:
 | A basket emptied by redemptions could be re-seeded by the classical seeder key | **fixed and live (v2)**: one-shot seed (`test_aBasketIsSeededOnceEvenIfEmptiedLater`) |
 | The oracle address was fixed in the reserve and baskets | **fixed and live (v2)**: `setOracle`, ML-DSA-87 admin only |
 | The seed shares sat on the deployer, whose secp256k1 key relays through the keeper's EVM window: a stolen key could sell them | **fixed and live (v2)**: every seed minted to `0x…dEaD`, checked by the on-chain suite |
+| The keeper sent rounds and rebalances as EVM transactions (ECDSA alone) through a scoped window: the explorer labelled them *not quantum-safe*, and a stolen secp256k1 key could pause minting or send calls within the window | **fixed and live (2026-11-21)**: every Darwin transaction is a hybrid `MsgCrossVMCall`; every window closed; the chain refuses an ECDSA-only transaction (on-chain suite, `pq-audit.ts` 230/230) |
 | QWAKK's only market is a thin pool, whose spot could be pumped | **fixed**: the oracle uses the pool's 30-minute median; QOR needs two of three quotes, else QOR and QWAKK sit out the round |
 | The reserve trades at the oracle price with a 0.30% spread, which arbitrage can farm around updates | accepted on testnet; a staleness-dependent spread is the mainnet answer |
 | The QOR baskets were bounded by the real QOR and QWAKK on the testnet (QWAKK's whole market is about $330): ~$66 and ~$36 a buy | **moved to fQOR/fQWAKK** (same feeds, ML-DSA-87 minting); the real assets went back to the public pools ([PRICING](docs/PRICING.md#capacity-and-why-the-qor-baskets-hold-fqor-and-fqwakk)) |

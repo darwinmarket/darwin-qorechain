@@ -65,7 +65,7 @@ QoreX's ML-DSA-87 half signs exactly `"qorechain-msg-v1|qorechain-diana|" + text
 - what the calls do: a buy or sell that pays the account itself, optionally preceded by router approvals; or a withdrawal of fUSD;
 - the deadline, and that the nonce has not moved since signing.
 
-Then it submits `factory.execute(owner, calls, summary, deadline, pqSignature)` and pays the gas, on the native lane: a `MsgCrossVMCall` the relayer hybrid-signs (secp256k1 + ML-DSA-87). The transaction itself is therefore post-quantum (the QoreChain explorer shows it *quantum-safe, verified on-chain*), and no EVM window is involved. An EVM transaction would carry ECDSA alone, which is how the first executions went out. Four relayers share the load, each user served by one fixed by its address.
+Then it submits `factory.execute(owner, calls, summary, deadline, pqSignature)` and pays the gas, on the native lane: a `MsgCrossVMCall` the relayer hybrid-signs (secp256k1 + ML-DSA-87). The transaction itself is therefore post-quantum (the QoreChain explorer shows it *quantum-safe, verified on-chain*), and no EVM window is involved: none of the relayers holds one, so the chain would refuse an ECDSA-only transaction from them. An EVM transaction would carry ECDSA alone, which is how the first executions went out. Each execution carries the memo `darwin execute <account> <nonce>`. Four relayers share the load, each user served by one fixed by its address.
 
 **2. The account** checks again, on chain:
 
