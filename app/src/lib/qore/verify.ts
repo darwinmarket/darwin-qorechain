@@ -80,10 +80,8 @@ export async function verifyRound(evmHash: Hex): Promise<BrowserCheck> {
  * verified with @qorechain/pqc against the owner's registered key. The same signature must fail for
  * the next nonce (a replay).
  */
-export async function verifyAccount(evmHash: Hex, account: string, nonce: number): Promise<BrowserCheck> {
-  const tx = await client.getTransaction({ hash: evmHash });
-  if (tx.to?.toLowerCase() !== FACTORY.toLowerCase()) return { kind: "none" };
-  const call = decodeFunctionData({ abi: factoryAbi, data: tx.input });
+export async function verifyAccount(data: Hex, account: string, knownNonce?: number): Promise<BrowserCheck> {
+  const call = decodeFunctionData({ abi: factoryAbi, data });
   if (call.functionName !== "execute") return { kind: "none" };
   const [ownerHex, calls, summary, deadline, sig] = call.args;
   const owner = addressFromBytes(hexToBytes(ownerHex as Hex)).bech32;
@@ -92,6 +90,14 @@ export async function verifyAccount(evmHash: Hex, account: string, nonce: number
   const signed = (n: bigint) =>
     new TextEncoder().encode(`qorechain-msg-v1|${COSMOS_CHAIN_ID}|` + textFor(account as Hex, calls as any, summary, n, deadline));
   const signature = hexToBytes(sig as Hex);
+  // A native-lane execution has no EVM log naming its nonce: the account's nonce has moved past it,
+  // so the nonce the signature verifies for is found below the current one (and only that one).
+  let nonce = knownNonce;
+  if (nonce == null) {
+    const now = Number((await client.readContract({ address: account as Hex, abi: parseAbi(["function nonce() view returns (uint256)"]), functionName: "nonce" })) as bigint);
+    for (let n = now - 1; n >= Math.max(0, now - 300) && nonce == null; n--) if (mldsa87.verify(key.publicKey, signed(BigInt(n)), signature)) nonce = n;
+    nonce ??= now - 1;
+  }
   return {
     kind: "account",
     verified: mldsa87.verify(key.publicKey, signed(BigInt(nonce)), signature),
@@ -120,7 +126,7 @@ export async function verifyNative(cosmosHash: string): Promise<BrowserCheck> {
 }
 
 export function useBrowserCheck(
-  tx: { cosmosHash: string; evmHash?: string; hybridVerified: boolean; actions: { kind: string }[]; viaAccount?: { account: string; nonce: number } } | undefined,
+  tx: { cosmosHash: string; evmHash?: string; hybridVerified: boolean; actions: { kind: string }[]; viaAccount?: { account: string; nonce?: number; data: Hex } } | undefined,
 ) {
   return useQuery({
     queryKey: ["browser-check", tx?.cosmosHash],
@@ -129,8 +135,8 @@ export function useBrowserCheck(
     retry: 1,
     queryFn: async (): Promise<BrowserCheck> => {
       if (!tx) return { kind: "none" };
+      if (tx.viaAccount) return verifyAccount(tx.viaAccount.data, tx.viaAccount.account, tx.viaAccount.nonce);
       if (tx.hybridVerified) return verifyNative(tx.cosmosHash);
-      if (tx.evmHash && tx.viaAccount) return verifyAccount(tx.evmHash as Hex, tx.viaAccount.account, tx.viaAccount.nonce);
       if (tx.evmHash && tx.actions.some((a) => a.kind === "round")) return verifyRound(tx.evmHash as Hex);
       return { kind: "none" };
     },

@@ -13,7 +13,7 @@ import { useBaskets } from "@/lib/darwin/store";
 import type { Basket } from "@/lib/darwin/types";
 import { assetColor } from "@/lib/darwin/assetColor";
 import { cashOf, sharesOf, useWallet } from "@/lib/qore/wallet";
-import { signAndExecute, withdrawFusdCalls } from "@/lib/qore/accountClient";
+import { readAccount, signAndExecute, withdrawFusdCalls } from "@/lib/qore/accountClient";
 import { isQorexRejection } from "@/lib/qore/qorex";
 import { txUrl } from "@/lib/qore/chain";
 import { useToast } from "./Toast";
@@ -152,8 +152,12 @@ function WithdrawLink() {
   async function go() {
     setBusy(true);
     try {
-      const r = await signAndExecute(account!.address, acct!, withdrawFusdCalls(acct!, amount), `Darwin: withdraw ${label} to your QoreX wallet`);
-      toast.push({ type: "success", title: `Withdrew ${label}`, message: "Back in your QoreX wallet.", action: { label: "View transaction", onClick: () => window.open(txUrl(r.txHash), "_blank", "noreferrer") }, duration: 8000 });
+      // the balance as it is now, not as the last poll saw it (a trade may have just spent it)
+      const fresh = await readAccount(account!.address);
+      if (fresh.fusd === 0n) throw new Error("no fUSD left on your Darwin account");
+      const now = `${(Number(fresh.fusd) / 1e6).toFixed(2)} fUSD`;
+      const r = await signAndExecute(account!.address, fresh, withdrawFusdCalls(fresh, fresh.fusd), `Darwin: withdraw ${now} to your QoreX wallet`);
+      toast.push({ type: "success", title: `Withdrew ${now}`, message: "Back in your QoreX wallet.", action: { label: "View transaction", onClick: () => window.open(txUrl(r.txHash), "_blank", "noreferrer") }, duration: 8000 });
       setTimeout(refresh, 2500);
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);

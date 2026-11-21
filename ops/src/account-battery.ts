@@ -313,37 +313,36 @@ async function attacksBy(u: User, victim: User) {
 }
 
 // ---- verification -----------------------------------------------------------------------------
-/** Re-verify every account trade off chain, as the transaction page does in the browser. */
+/**
+ * Re-verify every account trade off chain, as the transaction page does in the browser: the
+ * relayer's transaction must carry a verified hybrid signature (the native lane), and the owner's
+ * ML-DSA-87 signature must verify over the text rebuilt from the calldata, for exactly one nonce.
+ */
 async function reverify(users: User[]) {
-  let verified = 0, total = 0;
-  const pubkeys = new Map<string, Uint8Array>();
-  const owners = new Map(users.map((u) => [u.address, u]));
-  for (const o of ops.filter((x) => x.ok && x.tx?.startsWith("0x"))) {
+  let verified = 0, total = 0, hybrid = 0;
+  for (const o of ops.filter((x) => x.ok && x.tx && /^[0-9A-F]{64}$/.test(x.tx) && /^(buy|sell|exit|withdraw)/.test(x.action))) {
     total++;
     try {
-      const [tx, receipt] = await Promise.all([publicClient.getTransaction({ hash: o.tx as Hex }), publicClient.getTransactionReceipt({ hash: o.tx as Hex })]);
-      const call = decodeFunctionData({ abi: factoryAbi, data: tx.input });
+      const j: any = await (await fetch(`${REST}/cosmos/tx/v1beta1/txs/${o.tx}`)).json();
+      const t = j.tx_response;
+      if (t.events.some((e: any) => e.type === "pqc_hybrid_verify" && e.attributes.some((a: any) => a.key === "status" && a.value === "verified"))) hybrid++;
+      const m = j.tx.body.messages.find((x: any) => x["@type"] === "/qorechain.crossvm.v1.MsgCrossVMCall");
+      const call = decodeFunctionData({ abi: factoryAbi, data: ("0x" + Buffer.from(m.payload, "base64").toString("hex")) as Hex });
       const [ownerHex, calls, summary, deadline, sig] = call.args as [Hex, Call[], string, bigint, Hex];
-      let nonce: bigint | null = null, account: Address | null = null;
-      for (const l of receipt.logs) {
-        try {
-          const ev = decodeEventLog({ abi: accountAbi, data: l.data, topics: l.topics as any });
-          if (ev.eventName === "Executed") ((nonce = (ev.args as any).nonce), (account = l.address));
-        } catch { /* other events */ }
-      }
-      if (nonce == null || !account) throw new Error("no Executed event");
       const u = users.find((x) => x.i === o.user)!;
-      if (!pubkeys.has(u.address)) pubkeys.set(u.address, u.pqKey.publicKey);
-      const msg = (n: bigint) => new TextEncoder().encode(`qorechain-msg-v1|${CHAIN_ID}|${summary}\n\nDarwin account ${account!.toLowerCase()}\nnonce ${n}\nvalid until ${deadline}\ncalls ${keccak256(encodeAbiParameters(callsType, [calls]))}`);
-      const ok = mldsa87.verify(pubkeys.get(u.address)!, msg(nonce), hexToBytes(sig));
-      const replayRefused = !mldsa87.verify(pubkeys.get(u.address)!, msg(nonce + 1n), hexToBytes(sig));
-      if (ok && replayRefused && owners.has(u.address) && ownerHex.toLowerCase() === (await evmOf(u.address)).toLowerCase()) verified++;
-      else failures.push(`user ${o.user} ${o.action}: signature re-verification failed (${o.tx})`);
+      const account = (await publicClient.readContract({ address: d.accountFactory, abi: factoryAbi, functionName: "accountOf", args: [ownerHex] })) as Address;
+      const msg = (n: bigint) => new TextEncoder().encode(`qorechain-msg-v1|${CHAIN_ID}|${summary}\n\nDarwin account ${account.toLowerCase()}\nnonce ${n}\nvalid until ${deadline}\ncalls ${keccak256(encodeAbiParameters(callsType, [calls]))}`);
+      const nonce = Number((await publicClient.readContract({ address: account, abi: accountAbi, functionName: "nonce" })) as bigint);
+      const matching: number[] = [];
+      for (let n = 0; n < nonce; n++) if (mldsa87.verify(u.pqKey.publicKey, msg(BigInt(n)), hexToBytes(sig))) matching.push(n);
+      if (matching.length === 1 && ownerHex.toLowerCase() === (await evmOf(u.address)).toLowerCase()) verified++;
+      else failures.push(`user ${o.user} ${o.action}: signature re-verification failed (${o.tx}, nonces ${matching.join(",")})`);
     } catch (e: any) {
       failures.push(`user ${o.user} ${o.action}: re-verification error ${String(e?.message ?? e).slice(0, 100)}`);
     }
   }
-  return `${verified}/${total} account transactions: the owner's ML-DSA-87 signature verifies over the rebuilt text and fails for nonce + 1`;
+  if (hybrid !== total) failures.push(`${total - hybrid} account transactions without a verified hybrid signature`);
+  return `${verified}/${total} account transactions: the owner's ML-DSA-87 signature verifies over the rebuilt text for exactly one nonce; ${hybrid}/${total} hybrid-signed (ML-DSA-87) by the relayer`;
 }
 const evmOf = async (qor1: string) => (await import("@qorechain/qoresign")).parseAddress(qor1).hex;
 
@@ -399,7 +398,7 @@ async function invariants(users: User[], relBefore: Record<string, { bank: bigin
   for (const u of users) {
     const r = await fetch(`${APP}/api/trades?account=${u.address}`);
     const list: any[] = r.ok ? await r.json() : [];
-    const n = (Array.isArray(list) ? list : []).filter((t) => String(t.tx).startsWith("0x")).length;
+    const n = (Array.isArray(list) ? list : []).filter((t) => t.account).length;
     listed += Math.min(n, u.trades);
     expected += u.trades;
     if (n < u.trades) failures.push(`user ${u.i}: Activity lists ${n} account trades, made ${u.trades}`);

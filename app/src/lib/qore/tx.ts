@@ -9,7 +9,7 @@ import { useQuery } from "@tanstack/react-query";
 import { bytesToHex, decodeEventLog, decodeFunctionData, parseAbiItem, type Hex } from "viem";
 import { basketAbi, oracleAbi, routerAbi } from "./abis";
 import { client, D, REST } from "./chain";
-import { FACTORY, factoryAbi } from "./account";
+import { accountRouterAbi, executionOf, FACTORY, factoryAbi } from "./account";
 
 export type DarwinAction =
   | { kind: "round"; round: number; prices: Record<string, number> }
@@ -34,7 +34,7 @@ export type TxView = {
   /** Set when Darwin's relayer executed this trade for a QoreX user (authz MsgExec). */
   relayedFor?: string;
   /** Set when this is a DarwinAccount execution: the owner's ML-DSA-87 signed message, checked on chain. */
-  viaAccount?: { owner: string; account: string; nonce: number; summary: string };
+  viaAccount?: { owner: string; account: string; nonce?: number; summary: string; data: Hex; native: boolean };
   actions: DarwinAction[];
   log?: string;
 };
@@ -117,17 +117,33 @@ async function readTx(input: string): Promise<TxView> {
       }
     }
     if (round != null) actions.unshift({ kind: "round", round, prices });
-    if (executed && FACTORY) {
-      const etx = await client.getTransaction({ hash: evmHash as Hex }).catch(() => null);
-      if (etx?.to?.toLowerCase() === FACTORY.toLowerCase()) {
-        const call = decodeFunctionData({ abi: factoryAbi, data: etx.input });
-        if (call.functionName === "execute") {
-          const { addressFromBytes } = await import("@qorechain/qoresign");
-          const { hexToBytes } = await import("viem");
-          viaAccount = { owner: addressFromBytes(hexToBytes(call.args[0] as Hex)).bech32, account: (executed as any).account, nonce: (executed as any).nonce, summary: call.args[2] as string };
-        }
+    const exec = executionOf(tx);
+    if (executed && exec) {
+      const { addressFromBytes } = await import("@qorechain/qoresign");
+      const { hexToBytes } = await import("viem");
+      viaAccount = { owner: addressFromBytes(hexToBytes(exec.owner)).bech32, account: (executed as any).account, nonce: (executed as any).nonce, summary: exec.summary, data: exec.data, native: false };
+    }
+  }
+
+  // A DarwinAccount execution on the native lane: the relayer's hybrid-signed MsgCrossVMCall. No EVM
+  // logs here: the account is the factory's, the trades are read from the calls the owner signed.
+  const native = !viaAccount ? executionOf(tx) : null;
+  if (native?.native) {
+    const { addressFromBytes } = await import("@qorechain/qoresign");
+    const { hexToBytes } = await import("viem");
+    const account = (await client.readContract({ address: FACTORY, abi: factoryAbi, functionName: "accountOf", args: [native.owner] })) as string;
+    viaAccount = { owner: addressFromBytes(hexToBytes(native.owner)).bech32, account, summary: native.summary, data: native.data, native: true };
+    for (const c of native.calls) {
+      if (!ROUTERS.includes(c.target.toLowerCase())) continue;
+      try {
+        const call = decodeFunctionData({ abi: accountRouterAbi, data: c.data });
+        if (call.functionName === "buy") actions.push({ kind: "buy", basket: basketName(call.args[0] as string), usdIn: Number(call.args[1]) / 1e6 });
+        if (call.functionName === "sell") actions.push({ kind: "sell", basket: basketName(call.args[0] as string), shares: Number(call.args[1]) / 1e18 });
+      } catch {
+        /* an approval */
       }
     }
+    if (!actions.length && native.calls.length === 1) actions.push({ kind: "other", label: "Withdrawal of fUSD to the owner's QoreX wallet" });
   }
   if (!actions.length) actions.push({ kind: "other", label: tx.body.messages.map((m: any) => m["@type"].split(".").at(-1)).join(", ") });
 

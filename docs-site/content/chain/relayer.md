@@ -25,7 +25,7 @@ What QoreX does sign is enough: a `MsgSend` to deposit fUSD, and plain text (`si
 | Credit the deposit to the account | the relayer | hybrid `MsgConvertCoin`, receiver = the account, memo `darwin deposit <txhash>` |
 | Sign a trade | the user, in QoreX | `signArbitrary`: secp256k1 + ML-DSA-87 over the [exact text](/chain/accounts#the-exact-signed-text) |
 | Check it | the relayer | QoreSign `verifyMessageWithChain`, both halves, against the user's on-chain keys |
-| Submit it | the relayer | `factory.execute(owner, calls, summary, deadline, pqSignature)`, through its window scoped to the factory |
+| Submit it | the relayer | `factory.execute(owner, calls, summary, deadline, pqSignature)` in a `MsgCrossVMCall` it hybrid-signs (secp256k1 + ML-DSA-87) |
 | Execute it | the user's DarwinAccount | `pqcVerify` against the user's ML-DSA-87 key, nonce, allowed targets |
 | Withdraw fUSD | the user signs; the relayer returns it | the account transfers fUSD to the relayer; `MsgConvertERC20`, receiver = the user, memo `darwin withdraw <evm hash>` |
 

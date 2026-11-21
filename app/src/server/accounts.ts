@@ -20,22 +20,19 @@
  * Single use: the account's nonce for trades; for deposits and withdrawals, the relayer's own memos
  * (`darwin deposit <tx>`, `darwin withdraw <tx>`), read back from the chain, so it survives restarts.
  * settleDeposits() and settleWithdrawals() finish any deposit or withdrawal a cut call left
- * halfway. Each relayer's EVM window is scoped to the factory, the only contract it calls (the
- * conversions need no target of their own, but 2M gas: below it the chain reports "failed to
- * retrieve balance").
+ * halfway. Executions go out on the native lane, as MsgCrossVMCall hybrid-signed by the relayer
+ * (secp256k1 + ML-DSA-87): no EVM window, and no ECDSA-only transaction. The conversions need 2M gas
+ * (below it the chain reports "failed to retrieve balance").
  */
-import { fetchEvmWindow, verifyMessageWithChain } from "@qorechain/qoresign/network";
+import { verifyMessageWithChain } from "@qorechain/qoresign/network";
 import { addressFromBytes, parseAddress, type MessageSignature } from "@qorechain/qoresign";
-import { openEvmWindowMsg } from "@qorechain/sdk";
-import { evmWindowCost } from "@qorechain/evm";
 import {
-  BaseError, createWalletClient, decodeErrorResult, decodeFunctionData, getAddress, hexToBytes, http, keccak256, parseAbi, parseTransaction,
+  BaseError, bytesToHex, decodeErrorResult, decodeFunctionData, encodeFunctionData, getAddress, hexToBytes, keccak256, parseAbi, parseTransaction,
   type Address, type Hex,
 } from "viem";
-import { privateKeyToAccount } from "viem/accounts";
 import { accountAbi, accountErc20Abi, accountRouterAbi, factoryAbi, FACTORY, textFor, type Call } from "@/lib/qore/account";
 import { erc20Abi } from "@/lib/qore/abis";
-import { diana, EVM_RPC, ROUTER, TOKEN_INFO, TOKENS } from "@/lib/qore/chain";
+import { ROUTER, TOKEN_INFO, TOKENS } from "@/lib/qore/chain";
 import { convertCoin, convertErc20 } from "@/lib/qore/proto";
 import { account, RELAYERS, type Role } from "./keys";
 import { CHAIN_ID, client, D, json, REST, sendNative } from "./chain";
@@ -265,30 +262,7 @@ export async function settleDeposits(): Promise<string[]> {
   return out;
 }
 
-// ---- the relayers' EVM side -------------------------------------------------------------------
-const windowOk = new Map<Role, number>();
-async function ensureRelayerWindow(role: Role) {
-  if ((windowOk.get(role) ?? 0) > Date.now()) return;
-  const rel = await account(role);
-  const w: any = await fetchEvmWindow({ rest: REST, address: rel.cosmos }).catch(() => null);
-  const scoped = (w?.allowedTargets ?? []).map((a: string) => a.toLowerCase());
-  if (w?.live && Number(w.remainingBlocks) > 600 && Number(w.remainingTxs) > 20 && scoped.includes(FACTORY.toLowerCase())) {
-    windowOk.set(role, Date.now() + 120_000);
-    return;
-  }
-  const maxTxs = 1_000n;
-  const msg = openEvmWindowMsg({
-    sender: rel.cosmos,
-    blocks: 17_280n,
-    maxTxs,
-    maxValue: evmWindowCost({ gas: 8_000_000n, maxFeePerGas: 250_000_000_000n }) * maxTxs,
-    allowedTargets: [FACTORY.toLowerCase()],
-  } as any);
-  await sendNative(role, [msg as any], 500_000);
-  await new Promise((r) => setTimeout(r, 6000));
-  windowOk.set(role, Date.now() + 120_000);
-}
-
+// ---- withdrawals ---------------------------------------------------------------------------------
 /**
  * Finish withdrawals left halfway: a withdrawal is two transactions (the account hands fUSD to the
  * relayer, then the relayer returns it to the owner's wallet), and a serverless call can be cut
@@ -299,19 +273,19 @@ async function ensureRelayerWindow(role: Role) {
  */
 export async function settleWithdrawals(): Promise<string[]> {
   const relayers = await pool();
-  const qs = new URLSearchParams({ query: `ethereum_tx.recipient='${getAddress(FACTORY)}'`, order_by: "ORDER_BY_DESC", "pagination.limit": "50" });
-  const r = await json(`${REST}/cosmos/tx/v1beta1/txs?${qs}`).catch(() => ({ tx_responses: [] }));
+  const recent = async (query: string) =>
+    ((await json(`${REST}/cosmos/tx/v1beta1/txs?${new URLSearchParams({ query, order_by: "ORDER_BY_DESC", "pagination.limit": "50" })}`).catch(() => ({ tx_responses: [] }))).tx_responses ?? []) as any[];
+  const [evmTxs, nativeTxs] = await Promise.all([recent(`ethereum_tx.recipient='${getAddress(FACTORY)}'`), recent(`crossvm_request.target_contract='${FACTORY.toLowerCase()}'`)]);
   const out: string[] = [];
-  for (const t of r.tx_responses ?? []) {
+  for (const t of [...evmTxs, ...nativeTxs]) {
     if (Date.now() - Date.parse(t.timestamp) > 48 * 3600_000) continue;
     // a withdrawal younger than two minutes may still be finishing in its own call
     if (Date.now() - Date.parse(t.timestamp) < 120_000) continue;
-    if (t.code !== 0 || t.events?.some((e: any) => e.type === "ethereum_tx" && e.attributes.some((a: any) => a.key === "ethereumTxFailed"))) continue;
-    const raw = t.tx?.body?.messages?.[0]?.raw;
-    const hash = t.events?.find((e: any) => e.type === "ethereum_tx")?.attributes?.find((a: any) => a.key === "ethereumTxHash")?.value;
-    if (!raw || !hash) continue;
+    const input = executionInput(t);
+    if (!input) continue;
+    const hash = input.hash;
     try {
-      const exec = decodeFunctionData({ abi: factoryAbi, data: parseTransaction(raw as Hex).data! });
+      const exec = decodeFunctionData({ abi: factoryAbi, data: input.data });
       if (exec.functionName !== "execute") continue;
       const calls = exec.args[1] as readonly Call[];
       if (calls.length !== 1 || calls[0].target.toLowerCase() !== TOKENS.fUSD.toLowerCase()) continue;
@@ -336,6 +310,27 @@ export async function settleWithdrawals(): Promise<string[]> {
   return out;
 }
 
+/**
+ * The factory.execute calldata of a transaction, and its hash as Darwin names it: an EVM
+ * transaction (before the native lane: its 0x hash) or a relayer's MsgCrossVMCall (its tx hash).
+ */
+function executionInput(t: any): { data: Hex; hash: string } | null {
+  if (t.code !== 0) return null;
+  for (const m of t.tx?.body?.messages ?? []) {
+    if (m["@type"] === "/cosmos.evm.vm.v1.MsgEthereumTx" && m.raw) {
+      if (t.events?.some((e: any) => e.type === "ethereum_tx" && e.attributes.some((a: any) => a.key === "ethereumTxFailed"))) return null;
+      const hash = t.events?.find((e: any) => e.type === "ethereum_tx")?.attributes?.find((a: any) => a.key === "ethereumTxHash")?.value;
+      const data = parseTransaction(m.raw as Hex).data;
+      return hash && data ? { data, hash } : null;
+    }
+    if (m["@type"] === "/qorechain.crossvm.v1.MsgCrossVMCall" && String(m.target_contract).toLowerCase() === FACTORY.toLowerCase() && m.payload) {
+      const ok = t.events?.some((e: any) => e.type === "crossvm_response" && e.attributes.some((a: any) => a.key === "status" && a.value === "executed"));
+      return ok ? { data: bytesToHex(Uint8Array.from(Buffer.from(m.payload, "base64"))), hash: t.txhash } : null;
+    }
+  }
+  return null;
+}
+
 export type ExecuteRequest = { owner: string; calls: Call[]; summary: string; deadline: string; signature: MessageSignature };
 
 /** What the calls do, checked before anything is spent; withdrawals are recognised to finish them. */
@@ -356,7 +351,6 @@ function classify(calls: Call[], acc: Address, relayerEvm: Address): { kind: "bu
   throw new Error("Darwin relays trades and fUSD withdrawals only");
 }
 
-const nonceRace = (e: unknown) => /nonce too low|invalid nonce|nonce.*already|sequence mismatch|incorrect account sequence|replacement transaction underpriced/i.test(String((e as Error)?.message ?? e));
 
 export async function execute(req: ExecuteRequest) {
   const { owner, calls, summary } = req ?? ({} as ExecuteRequest);
@@ -379,50 +373,43 @@ export async function execute(req: ExecuteRequest) {
   // both halves, against the owner's keys on chain, before the relayer spends anything
   await verifyMessageWithChain({ rest: REST, chainId: CHAIN_ID, signer: owner, data: text, signature: req.signature, requirePq: true });
 
-  // the price round and the window are shared: prepare them outside the relayer's queue
+  // the price round is shared: prepare it outside the relayer's queue
   if (what.kind !== "withdraw") await freshRound();
-  await ensureRelayerWindow(role);
   if (what.kind === "withdraw") await settleWithdrawals().catch(() => []);
 
   return serial(role, async () => {
     if ((await nonceOf(acc)) !== nonce) throw new Error("this message was already executed");
-    const w = createWalletClient({ account: privateKeyToAccount(rel.privateKey as unknown as Hex), chain: diana, transport: http(EVM_RPC, { retryCount: 3, retryDelay: 2000 }) });
     const pqSignature = ("0x" + Buffer.from(req.signature.pq!.signature, "base64").toString("hex")) as Hex;
     const args = [twinOf(owner), calls, summary, deadline, pqSignature] as const;
-    let gas: bigint;
+    // simulate first, from the relayer's EVM address: a refusal is named before anything is spent
+    let evmGas: bigint;
     try {
-      gas = await client.estimateContractGas({ address: FACTORY, abi: factoryAbi, functionName: "execute", args, account: w.account! } as any);
+      evmGas = await client.estimateContractGas({ address: FACTORY, abi: factoryAbi, functionName: "execute", args, account: rel.evm as Address } as any);
     } catch (e) {
       const reason = revertReason(e);
       throw new Error(reason ? `refused before sending: ${humane(reason)}` : String((e as Error)?.message ?? e).split("\n")[0]);
     }
-    // Another instance can take this relayer's sequence at the same moment: the send then fails
-    // ("nonce too low"), or the transaction is accepted and later dropped from the mempool, with
-    // no error at all (found by the battery). Either way it is sent again, as long as the account's
-    // nonce shows the message has not been executed.
-    let hash: Hex | undefined;
-    let receipt: Awaited<ReturnType<typeof client.waitForTransactionReceipt>> | undefined;
-    for (let attempt = 0; !receipt; attempt++) {
+    // Sent on the native lane: a MsgCrossVMCall the relayer hybrid-signs (secp256k1 + ML-DSA-87),
+    // so the transaction itself is post-quantum, and the user's ML-DSA-87 signature inside is
+    // checked again by the account (pqcVerify). An EVM transaction would carry ECDSA alone.
+    const data = encodeFunctionData({ abi: factoryAbi, functionName: "execute", args });
+    // a cross-VM call meters the EVM execution in native gas, at about 2.5x the EVM estimate
+    let gas = Math.max(1_200_000, Math.ceil(Number(evmGas) * 2.8) + 400_000);
+    let hash: string | undefined;
+    for (let attempt = 0; !hash; attempt++) {
       try {
-        hash = await w.writeContract({ address: FACTORY, abi: factoryAbi, functionName: "execute", args, account: w.account!, chain: diana, gas: (gas * 125n) / 100n } as any);
+        hash = await sendNative(role, [crossVm(rel.cosmos, FACTORY, data)], gas, `darwin execute ${acc.toLowerCase()} ${nonce}`);
       } catch (e) {
-        if (attempt < 4 && nonceRace(e)) {
-          await new Promise((r) => setTimeout(r, 1500 + Math.random() * 1500));
-          if ((await nonceOf(acc)) !== nonce) throw new Error("this message was already executed");
+        // a cut broadcast may still have landed: the account's nonce tells
+        if ((await nonceOf(acc)) !== nonce) throw new Error("this message was already executed");
+        // out of gas reverts the whole call, nonce included: send again with more
+        if (attempt < 2 && /out of gas/i.test(String((e as Error)?.message ?? e))) {
+          gas = Math.ceil(gas * 1.6);
           continue;
         }
         throw e;
       }
-      receipt = await client.waitForTransactionReceipt({ hash: hash!, timeout: 30_000 }).catch(() => undefined);
-      if (!receipt) {
-        const still = await client.getTransaction({ hash: hash! }).catch(() => null);
-        if (still) receipt = await client.waitForTransactionReceipt({ hash: hash!, timeout: 60_000 });
-        else if ((await nonceOf(acc)) !== nonce) throw new Error("this message was already executed");
-        else if (attempt >= 4) throw new Error(`transaction ${hash} was dropped, five times`);
-      }
     }
-    if (receipt.status !== "success") throw new Error(`reverted on chain in ${hash}`);
-    hash = receipt.transactionHash;
     let returned: string | undefined;
     if (what.kind === "withdraw") {
       const tag = `darwin withdraw ${hash}`;
@@ -436,6 +423,14 @@ export async function execute(req: ExecuteRequest) {
       }
       done.add(tag);
     }
-    return { txHash: hash!, account: acc, kind: what.kind, returned, gasUsed: String(receipt.gasUsed) };
+    return { txHash: hash, account: acc, kind: what.kind, returned, gasUsed: String(gas) };
   });
+}
+
+/** A cross-VM call in object form (MsgCrossVMCall is a type the signer's registry knows). */
+function crossVm(sender: string, target: Address, data: Hex) {
+  return {
+    typeUrl: "/qorechain.crossvm.v1.MsgCrossVMCall",
+    value: { sender, sourceVm: "cosmwasm", targetVm: "evm", targetContract: target, payload: hexToBytes(data), funds: [], async: false, asyncGasLimit: "0", asyncMaxFactor: "0" },
+  } as any;
 }

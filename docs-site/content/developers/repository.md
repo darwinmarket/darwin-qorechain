@@ -15,7 +15,7 @@ contracts/   Solidity 0.8.28, Foundry, OpenZeppelin
   account/              DarwinAccount, DarwinAccountFactory: users' accounts, ML-DSA-87 only
 ops/         TypeScript, QoreChain SDK, viem
   relayer.ts            the original relayer: signed intents through authz (shares bought before accounts)
-  deploy-accounts.ts    deploys the account factory; scopes the relayer's window to it
+  deploy-accounts.ts    deploys the account factory
   account-check.ts      the account path end to end on the testnet, through the app's API
   keeper.ts             local keeper; in production app/src/server does it on demand
   prices.ts             BTC/ETH spot median, QOR market price, QWAKK pool median
