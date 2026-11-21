@@ -50,6 +50,7 @@ fBTC, fETH and fUSD are the fest's test tokens for BTC, ETH and dollars. fQOR an
 | Every admin power (16 functions, including moving the reserve's funds) needs the admin's ML-DSA-87 signature | `PqcAdmin`: no function checks `msg.sender` for admin powers |
 | A basket's shares are always backed in kind, and redeeming in kind needs no price, no curator and no admin | `DarwinBasket.redeem` |
 | Your trade is the one you signed | Your Darwin account: `pqcVerify` over the exact calls, a single-use nonce, Darwin's contracts only; the router enforces your minimum |
+| Every transaction Darwin sends is hybrid-signed (secp256k1 + ML-DSA-87); an ECDSA-only one from Darwin's accounts is refused | The chain: `pqc_hybrid_verify` on every native transaction; none of Darwin's accounts holds an EVM window |
 | Keeping prices fresh, submitting QoreX users' signed trades, converting fUSD deposits and withdrawals | **Darwin's services.** Operator actions, bounded by the rules above. See [Risks](/risks) |
 
 ## What Darwin on QoreChain is not

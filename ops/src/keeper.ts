@@ -1,7 +1,7 @@
 /**
  * Darwin keeper: one loop that keeps the protocol alive on qorechain-diana.
  *
- *  - Window: keeps the relayer's EVM window open, SCOPED to Darwin's own contracts and tokens
+ *  - Signing: every call goes out as a hybrid-signed MsgCrossVMCall (evm.ts write): no EVM window
  *    (allowed_targets), so a leaked secp256k1 key of the keeper can touch nothing else.
  *  - Oracle: submits an ML-DSA-87 signed round every HEARTBEAT seconds, or sooner when a price
  *    moved more than DEVIATION_BPS.
@@ -13,14 +13,12 @@
  */
 import { readFileSync, writeFileSync } from "node:fs";
 import { formatEther, type Address } from "viem";
-import { fetchEvmWindow } from "@qorechain/sdk";
 import { evmAccount } from "./accounts.js";
 import { artifact, loadDeployments } from "./evm.js";
 import { publicClient, REST } from "./net.js";
 import { FEED, fetchPrices } from "./prices.js";
 import { submitRound } from "./oracle.js";
 import { rebalance } from "./rebalance.js";
-import { open } from "./window.js";
 import { lastSlot } from "./lib/schedule.js";
 import { evmTwin, nativeTrade, treasuryShares } from "./crossvm.js";
 import { bankBalance } from "./amm.js";
@@ -67,17 +65,6 @@ function targets(): string[] {
   ].map((a: string) => a.toLowerCase());
 }
 
-async function ensureWindow() {
-  const acc = await evmAccount("deployer");
-  const w = (await fetchEvmWindow({ rest: REST, address: acc.cosmos })) as any;
-  const blocks = Number(w?.remainingBlocks ?? w?.remaining_blocks ?? 0);
-  const txs = Number(w?.remainingTxs ?? w?.remaining_txs ?? 0);
-  const scoped = (w?.allowedTargets ?? w?.allowed_targets ?? []).length > 0;
-  if (w?.found && w?.live && blocks > 400 && txs > 30 && scoped) return;
-  log(`window: ${w?.found ? `${blocks} blocks, ${txs} txs, ${scoped ? "scoped" : "unscoped"}` : "none"}; opening a scoped one`);
-  await open("deployer", 17_280n, 1_000n, targets());
-  await new Promise((r) => setTimeout(r, 6000)); // the window opens in the next block
-}
 
 async function maybeRound() {
   const d = loadDeployments();
@@ -169,7 +156,7 @@ async function health() {
 log(`keeper up: heartbeat ${HEARTBEAT}s, deviation ${DEVIATION_BPS} bps, rebalance ${REBALANCE_SCHEDULE} at 12:00 UTC only (${SCHEDULED_DRIFT_BPS} bps)${DEMO ? `, demo trades every ${DEMO_EVERY}s` : ""}`);
 let ticks = 0;
 for (;;) {
-  for (const [name, fn] of [["window", ensureWindow], ["oracle", maybeRound], ["rebalance", maybeRebalance], ["demo", maybeDemo]] as const) {
+  for (const [name, fn] of [["oracle", maybeRound], ["rebalance", maybeRebalance], ["demo", maybeDemo]] as const) {
     try {
       await fn();
     } catch (e: any) {

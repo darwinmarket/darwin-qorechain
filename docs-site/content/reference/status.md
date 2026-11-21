@@ -1,6 +1,6 @@
 # Status
 
-What is live, what is not, and what is known to be imperfect. Accurate as of **20 November 2026**, on the QoreChain testnet.
+What is live, what is not, and what is known to be imperfect. Accurate as of **21 November 2026**, on the QoreChain testnet.
 
 ## Live
 
@@ -13,7 +13,9 @@ What is live, what is not, and what is known to be imperfect. Accurate as of **2
 | Pricing | ML-DSA-87 signed oracle rounds: BTC/ETH spot median, QOR market price, QWAKK pool median |
 | Rebalancing | Weekly, Mondays 12:00 UTC, curator-signed |
 | Fees | 0.30% on buys and sells, plus the reserve's 0.30% spread |
+| Darwin's own transactions | Every one hybrid-signed (secp256k1 + ML-DSA-87) and verified by the chain: rounds, rebalances, account executions, sent as `MsgCrossVMCall`. No Darwin account holds an EVM window |
 | Verification | In-browser re-verification of account trades and oracle rounds (`@qorechain/pqc`), and of hybrid transaction signatures (QoreSign) |
+| Tests (latest) | On-chain suite 28/28; signing audit 230/230 since 2026-11-21T09:12Z; account check 9/9 on production; Darwin account battery 168/168 operations, 0 failures |
 
 ## Not live
 

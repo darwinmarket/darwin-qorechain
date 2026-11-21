@@ -13,6 +13,9 @@ Darwin had its repository read cold, as a juror would, on 2026-11-20. What it fo
 | The reserve trades at the oracle price with a 0.30% spread, which arbitrage can farm around updates | accepted on testnet |
 | QoreX does not sign cross-VM calls | addressed by Darwin accounts: the user signs text, the account checks it on chain; trust bounds in [Risks](/risks#the-relayer) |
 | The QOR baskets were bounded by the real QOR and QWAKK on the testnet | addressed by fQOR and fQWAKK |
+| The keeper's rounds and rebalances were EVM transactions (ECDSA alone) through a scoped window; the explorer labelled them *not quantum-safe* (found 2026-11-21) | fixed and live: every Darwin transaction is a hybrid `MsgCrossVMCall`; every window closed, and the chain refuses an ECDSA-only transaction from Darwin's accounts |
+| Closing an EVM window always failed in `ops/src/window.ts` (an object passed where the SDK takes the address string: `invalid sender: decoding bech32 failed`) | fixed |
+| A contract creation or a call carrying QOR value cannot be a cross-VM call | accepted: such calls need an EVM window, opened with the ML-DSA-87 key at deployment only and closed afterwards; none since 2026-11-21 |
 
 ## Found by testing with a real wallet
 

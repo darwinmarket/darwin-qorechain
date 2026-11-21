@@ -11,15 +11,24 @@ On QoreChain an EVM transaction is admitted only while the sending account has a
 
 A stolen secp256k1 key alone cannot open a window: that needs the account's ML-DSA-87 signature. A window can be opened for at most **17,280 blocks**, about 7 hours at 1.43 s blocks.
 
-## How Darwin uses them
+## Darwin opens none
 
-- **The keeper's window is scoped** to Darwin's contracts and tokens (`allowed_targets`). A contract creation is refused in a scoped window, so deployments open an unscoped one, closed again by the keeper's scoped window.
-- **The value cap is real.** Each window caps the QOR it admits. Funding the reserve with wrapped QOR needed a window with a raised cap (`WINDOW_MAX_QOR` in `ops/src/window.ts`), replaced by the keeper's scoped window right after.
-- **Darwin's relayers need none either.** They submit users' signed messages to `DarwinAccountFactory` as hybrid-signed `MsgCrossVMCall`s on the native lane: no EVM window, and no ECDSA-only transaction. Only the deployer, which relays price rounds and rebalances, keeps a window, scoped to Darwin's contracts.
+Since 2026-11-21 none of Darwin's accounts (the deployer and the four relayers) holds an EVM window. Every transaction Darwin sends is a native `MsgCrossVMCall` hybrid-signed with secp256k1 + ML-DSA-87: the keeper's rounds and rebalances, and the relayers' account executions. So the chain refuses an ECDSA-only EVM transaction from Darwin's accounts:
+
+```
+account qor1yzq84n9uj6fmgzsh7tk88gr7dhrh60u95gpw8p has no open EVM authorisation window;
+open one with MsgOpenEVMWindow, signed on the Cosmos lane with the account's post-quantum key
+```
+
+A leaked secp256k1 key alone can therefore move nothing. The on-chain suite checks both facts (no window on any Darwin account, an ECDSA-only transaction refused), and `ops/src/pq-audit.ts` checks that every transaction of these accounts carries a verified hybrid signature.
+
+Two things still need an EVM transaction, because a cross-VM call cannot do them: creating a contract and a call carrying QOR value. Both are used at deployment only. A window is opened for them with the account's ML-DSA-87 key and closed afterwards (`npm run window -- open|close <role>`); none has been needed since the switch.
+
+Before 2026-11-21 the deployer kept a window scoped to Darwin's contracts and tokens (`allowed_targets`) to send rounds and rebalances. The explorer labelled those transactions *not quantum-safe*, because an EVM transaction is signed with ECDSA alone, even though each round's prices were ML-DSA-87 signed and checked by `pqcVerify`. The value cap was real too: funding the reserve with wrapped QOR needed a window with a raised cap (`WINDOW_MAX_QOR` in `ops/src/window.ts`).
 
 ## Users need none
 
-A QoreX user trades through a [Darwin account](/chain/accounts): the relayer sends the EVM transaction through its own window, and the account checks the user's ML-DSA-87 signature with `pqcVerify`. The user opens no window and grants nothing.
+A QoreX user trades through a [Darwin account](/chain/accounts): the relayer submits the user's signed message as a hybrid `MsgCrossVMCall`, and the account checks the user's ML-DSA-87 signature with `pqcVerify`. The user opens no window and grants nothing.
 
 ## Before Darwin accounts
 

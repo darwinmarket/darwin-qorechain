@@ -370,8 +370,9 @@ async function invariants(users: User[], relBefore: Record<string, { bank: bigin
     if (a.evm !== b.evm) failures.push(`${role} EVM fUSD changed: ${b.evm} -> ${a.evm} (a withdrawal left halfway?)`);
     if (a.bank !== b.bank) failures.push(`${role} bank fUSD changed: ${b.bank} -> ${a.bank} (a deposit not credited?)`);
     const w: any = await fetchEvmWindow({ rest: REST, address: rel.cosmos });
-    out.push(`${role} window: scoped to [${(w?.allowedTargets ?? []).join(", ")}], ${w?.remainingTxs} txs left`);
-    if (!(w?.allowedTargets ?? []).map((x: string) => x.toLowerCase()).every((x: string) => x === d.accountFactory.toLowerCase())) failures.push(`${role} window not scoped to the factory alone`);
+    // relayers send hybrid-signed MsgCrossVMCall: none holds an EVM window
+    out.push(`${role}: EVM window ${w?.live ? `OPEN (${w.remainingTxs} txs left)` : "none open"}`);
+    if (w?.live) failures.push(`${role} holds an open EVM window`);
   }
   for (const u of users) {
     const a = await info(u);

@@ -18,11 +18,15 @@ ops/         TypeScript, QoreChain SDK, viem
   deploy-accounts.ts    deploys the account factory
   account-check.ts      the account path end to end on the testnet, through the app's API
   keeper.ts             local keeper; in production app/src/server does it on demand
+  evm.ts                reads and writes; write() sends a hybrid MsgCrossVMCall
+  pq-audit.ts           every Darwin transaction since a date hybrid-verified
   prices.ts             BTC/ETH spot median, QOR market price, QWAKK pool median
   oracle.ts, rebalance.ts, window.ts, deploy.ts, redeploy-v2.ts, ...
 app/         Next.js: Darwin's mainnet front on QoreChain
-  src/lib/qore/         chain reads, QoreX, the account and relayer clients, in-browser verification
-  src/server/           keys, keeper on demand, accounts.ts (the account relayer), relayer.ts (original)
+  src/lib/qore/         chain reads, QoreX, the account and relayer clients, in-browser verification;
+                        nativeCalls.ts decodes native calls (calldata, memo), which leave no EVM logs
+  src/server/           keys, chain.ts (writeNative: hybrid MsgCrossVMCall), keeper.ts (rounds,
+                        rebalances on demand), accounts.ts (the account relayer), relayer.ts (original)
   src/app/api/          REST proxy, relayer proxy, trades summary, price history
 docs/        audit map, pricing, testing, CBOM, submission, E2E reports
 docs-site/   this documentation
@@ -33,7 +37,7 @@ deployments/diana.json  every address, role, seed and retired version
 
 | Kit | Used for |
 |---|---|
-| QoreChain SDK (`@qorechain/sdk`, `@qorechain/evm`) | key derivation, hybrid signing, PQC registration, EVM windows |
+| QoreChain SDK (`@qorechain/sdk`, `@qorechain/evm`) | key derivation, hybrid signing of every Darwin transaction (`MsgCrossVMCall`), PQC registration, EVM windows (deployment only) |
 | QoreSign (`@qorechain/qoresign`) | both halves of every signed message checked in the relayer; in-browser checks of committed transactions |
 | qorechain-pqc (`@qorechain/pqc`) | in-browser verification of account trades and oracle rounds |
 | QoreChain React (`@qorechain/react`) | the PQC key badge |
