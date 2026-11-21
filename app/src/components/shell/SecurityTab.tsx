@@ -71,7 +71,7 @@ export function SecurityTab() {
   const { data: win } = useQuery({
     queryKey: ["keeper-window"],
     queryFn: async () => (await (await fetch(`${REST}/qorechain/pqc/v1/evm_window/${KEEPER}`)).json()) as any,
-    refetchInterval: 20_000,
+    refetchInterval: 60_000,
   });
   const age = oracle ? Math.max(0, Math.floor(Date.now() / 1000) - oracle.lastTimestamp) : null;
   const label = (a: string) => {

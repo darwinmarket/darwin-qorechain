@@ -116,7 +116,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     queryKey: ["balances", account?.address],
     queryFn: () => readBalances(account!),
     enabled: Boolean(account),
-    refetchInterval: 12_000,
+    refetchInterval: 45_000, // a trade refreshes at once (refresh()); polling only catches outside changes
   });
   const refresh = useCallback(() => {
     void qc.invalidateQueries({ queryKey: ["balances"] });
