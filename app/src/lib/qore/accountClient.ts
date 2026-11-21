@@ -88,14 +88,16 @@ export async function depositFusd(owner: string, relayer: string, amount: bigint
     `Darwin: deposit ${(Number(amount) / 1e6).toFixed(2)} fUSD to your Darwin account`,
     300_000,
   );
-  // the claim is idempotent (one credit per transaction): ask again if the answer was lost
+  // the claim is idempotent (one credit per transaction): ask again if the answer was lost or the
+  // server could not read the chain at that moment; only a definite refusal is final
+  const FINAL = /no fUSD sent|failed on chain|bad account|bad tx hash/i;
   for (let attempt = 0; ; attempt++) {
     try {
       const r = await api("deposit", { owner, txHash: sent.txHash });
       return { txHash: sent.txHash, convert: r.txHash };
     } catch (e) {
-      if (!(e instanceof NoAnswer) || attempt >= 3) throw e;
-      await sleep(3000);
+      if (attempt >= 4 || FINAL.test(String((e as Error)?.message ?? e))) throw e;
+      await sleep(3000 + attempt * 2000);
     }
   }
 }

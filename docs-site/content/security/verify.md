@@ -7,7 +7,7 @@ You do not have to take the chain's word, or Darwin's. Each transaction page in 
 A trade made through a [Darwin account](/chain/accounts) shows **Signed by** with the owner's address and the summary the owner signed. The page then verifies the owner's ML-DSA-87 signature with `@qorechain/pqc`, in your browser:
 
 1. it decodes `factory.execute(owner, calls, summary, deadline, pqSignature)` from the calldata;
-2. it finds the account's nonce for this trade: from its `Executed` event for an older EVM-lane trade; for a native-lane execution, which leaves no EVM log, the one nonce below the account's current one for which the signature verifies (the relayer's memo `darwin execute <account> <nonce>` names it too);
+2. it finds the account's nonce for this trade: from its `Executed` event for an older EVM-lane trade; for a native-lane execution, which leaves no EVM log, the one nonce below the account's current one for which the signature verifies (the relayer's memo `darwin execute <account> <nonce> <calls hash, 12 hex>` names it too);
 3. it rebuilds the exact text, `qorechain-msg-v1|qorechain-diana|` + summary, account, nonce, deadline and the hash of the calls, as the account did on chain;
 4. it verifies the 4,627-byte signature against the owner's registered key;
 5. it checks that the same signature **fails** for nonce + 1.

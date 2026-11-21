@@ -39,12 +39,13 @@ No EVM window, no authz grant, no gas for the user's trades. The deposit `MsgSen
 - one to three calls, every target one of Darwin's contracts (router, baskets, fUSD);
 - the calls are a buy or sell paying the account itself, optionally after router approvals, or an fUSD withdrawal to the relayer; anything else is refused;
 - the deadline is in the future and at most 15 minutes ahead;
-- the account's nonce has not moved since signing (`already executed`);
+- the account's nonce has not moved since signing. If it has, either this very message already went through (a retry after a cut answer: the relayer answers with that transaction's hash and sends nothing), or another message took the nonce (a double click: "Your previous action was still being confirmed. Nothing was sent: try again.");
 - for a deposit: the transaction exists and succeeded, and sends fUSD from the user to the relayer; it is credited once (the relayer's memo is read back from the chain).
 
 ## What it sends
 
-- For a trade or a withdrawal: one call to the factory, which creates the account on its first action and calls it. It is a `MsgCrossVMCall` the relayer hybrid-signs (secp256k1 + ML-DSA-87), memo `darwin execute <account> <nonce>`; no relayer holds an EVM window. The relayer pays the gas. Before a trade it publishes a fresh oracle round if the last is more than 20 minutes old.
+- For a trade or a withdrawal: one call to the factory, which creates the account on its first action and calls it. It is a `MsgCrossVMCall` the relayer hybrid-signs (secp256k1 + ML-DSA-87), memo `darwin execute <account> <nonce> <calls hash, 12 hex>`; no relayer holds an EVM window. The relayer pays the gas. Before a trade it publishes a fresh oracle round if the last is more than 20 minutes old.
+- It never sends a message twice. The memo is unique to the message (the account, the nonce, and the first 12 hex digits of the calls' hash). Before any resend (after `account sequence mismatch`, or an error from a broadcast that may still have landed) the relayer looks for a committed, executed transaction carrying that memo among its latest 30, and returns it as the success. Before sending, it also checks the mempool: if another message for the same nonce is waiting there (two serverless instances, a double click), it waits for that block instead of sending a transaction that could only fail on chain. Tested by the battery: two messages signed for one nonce and sent at once, 4/4 times one executed and the other refused before sending, with no failed transaction on chain.
 - For a deposit: one native `MsgConvertCoin` (2M gas).
 - After a withdrawal: one native `MsgConvertERC20` (2M gas). `settleWithdrawals()` completes any withdrawal cut halfway, before the next withdrawal and in the daily cron.
 

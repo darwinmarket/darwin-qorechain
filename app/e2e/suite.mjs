@@ -8,7 +8,8 @@ import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { chromium } from "playwright";
-import { createPublicClient, http, parseAbi } from "viem";
+import { createPublicClient, encodeAbiParameters, encodeFunctionData, http, keccak256, maxUint256, parseAbi } from "viem";
+import { deriveCanonicalPqKey, deriveClassicalKey, signMessage } from "@qorechain/qoresign";
 import { createQorexMock } from "@qorechain/qorex-wallet-mock";
 
 const BASE = process.env.APP_URL ?? "http://localhost:3032";
@@ -55,8 +56,15 @@ async function check(name, fn) {
     results.push({ name, ok: true, detail, ms: Date.now() - t0 });
     console.log(`PASS  ${name}  ${detail}`);
   } catch (e) {
-    const detail = String(e?.message ?? e).split("\n")[0].slice(0, 220);
+    let detail = String(e?.message ?? e).split("\n")[0].slice(0, 220);
     const skip = e instanceof Skip;
+    if (!skip) {
+      // what the page showed: a screenshot, and any toast or error text on screen
+      const shot = `fail-${results.length + 1}.png`;
+      await page.screenshot({ path: `${SHOTS}${shot}` }).catch(() => {});
+      const said = await page.locator("[role=status], [role=alert], .toast").allInnerTexts().catch(() => []);
+      detail += ` [screen: e2e/shots/${shot}${said.length ? `; toasts: ${said.join(" / ").replace(/\s+/g, " ").slice(0, 200)}` : ""}]`;
+    }
     results.push({ name, ok: false, skip, detail, ms: Date.now() - t0 });
     console.log(`${skip ? "SKIP" : "FAIL"}  ${name}  ${detail}`);
   }
@@ -210,7 +218,12 @@ async function trade({ display, key, side, amount }) {
   assert(!(await cta.isDisabled()), "CTA enabled after the quote");
   const t0 = Date.now() - 5000;
   await cta.click({ timeout: 15000 });
-  await page.waitForSelector(`text=${side === "buy" ? "Bought" : "Sold"} ${NAME[key]}`, { timeout: 150000 });
+  // the outcome: done, or a failure toast (reported with its message, not waited out)
+  await page.waitForSelector(`text=/^(${side === "buy" ? "Bought" : "Sold"} ${NAME[key]}|Trade failed)/`, { timeout: 150000 });
+  if (await page.getByText("Trade failed").count()) {
+    const said = (await page.locator("text=Trade failed").first().locator("..").innerText().catch(() => "")).replace(/\s+/g, " ");
+    throw new Error(`the app said: ${said.slice(0, 220)}`);
+  }
   await page.screenshot({ path: `${SHOTS}${display}-${side}.png` });
   // the user signed one message (signArbitrary); the account checked it on chain and traded
   const signed = await page.evaluate(() => window.__qorexMock.requests.filter((r) => r.method.endsWith("signArbitrary") && r.outcome === "ok").length);
@@ -361,7 +374,8 @@ for (const [display, key, target] of [["BLUEdw", "BLUEDW", 1], ["BALdw", "BALDW"
 
 await check("the position shows on the trade card after a buy", async () => {
   await openBasket("BALdw");
-  await page.waitForSelector("text=/ BALdw$/", { timeout: 30000 });
+  // the position comes from EVM reads in the browser, after the page itself
+  await page.waitForSelector("text=/ BALdw$/", { timeout: 60000 });
   return await page.locator("text=/ BALdw$/").first().innerText();
 });
 
@@ -486,6 +500,52 @@ await check("disconnect from the account menu", async () => {
   connected = false;
   await page.getByRole("button", { name: "Connect wallet" }).first().waitFor({ timeout: 10000 });
   return "back to Connect wallet";
+});
+
+/**
+ * Leave the test wallet as it was: every position on its DarwinAccount sold for fUSD and the fUSD
+ * withdrawn to the wallet, each by one message signed like QoreX's signArbitrary (the wallet's own
+ * keys, from the mnemonic), so the suite can run again and again without topping it up.
+ */
+await check("exit: sell every position and withdraw the fUSD to the wallet (signed messages)", async () => {
+  if (!me) throw new Skip("not connected in this run");
+  const classicalKey = deriveClassicalKey({ mnemonic });
+  const pqKey = deriveCanonicalPqKey({ mnemonic, address: me.native });
+  const callsType = [{ type: "tuple[]", components: [{ name: "target", type: "address" }, { name: "data", type: "bytes" }] }];
+  const routerAbi = parseAbi(["function sell(address basket, uint256 shares, uint256 minUsdOut, address to) returns (uint256)", "function quoteSell(address basket, uint256 shares) view returns (uint256, uint256)"]);
+  const tokAbi = parseAbi(["function approve(address, uint256) returns (bool)", "function transfer(address, uint256) returns (bool)"]);
+  const execute = async (calls, summary) => {
+    const a = await acctInfo();
+    const deadline = BigInt(Math.floor(Date.now() / 1000) + 300);
+    const text = `${summary}\n\nDarwin account ${a.account.toLowerCase()}\nnonce ${a.nonce}\nvalid until ${deadline}\ncalls ${keccak256(encodeAbiParameters(callsType, [calls]))}`;
+    const signature = signMessage({ chainId: "qorechain-diana", signer: me.native, data: text, classicalKey, pqKey });
+    const r = await fetch(`${BASE}/api/relay/execute`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ owner: me.native, calls, summary, deadline: String(deadline), signature }) });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(`${summary}: ${j.error ?? r.status}`);
+    // the next message needs the next nonce: wait for it (load-balanced RPC)
+    await until(async () => BigInt((await acctInfo()).nonce), (n) => n > BigInt(a.nonce), "the account's nonce to move");
+    return j;
+  };
+  const out = [];
+  for (const [key, b] of Object.entries(D.baskets)) {
+    const a = await acctInfo();
+    const shares = BigInt(a.shares[key] ?? 0);
+    if (shares === 0n) continue;
+    const [q] = await evm.readContract({ address: D.router, abi: routerAbi, functionName: "quoteSell", args: [b.address, shares] });
+    const calls = [];
+    if (BigInt(a.allowance[key] ?? 0) < shares) calls.push({ target: b.address, data: encodeFunctionData({ abi: tokAbi, functionName: "approve", args: [D.router, maxUint256] }) });
+    calls.push({ target: D.router, data: encodeFunctionData({ abi: routerAbi, functionName: "sell", args: [b.address, shares, (q * 98n) / 100n, a.account] }) });
+    await execute(calls, `Darwin: Sell ${(Number(shares) / 1e18).toFixed(6)} ${key}`);
+    out.push(`${key} sold`);
+  }
+  const a = await acctInfo();
+  if (BigInt(a.fusd) > 0n) {
+    await execute([{ target: D.tokens.fUSD, data: encodeFunctionData({ abi: tokAbi, functionName: "transfer", args: [a.relayer.evm, BigInt(a.fusd)] }) }], `Darwin: Withdraw ${(Number(a.fusd) / 1e6).toFixed(2)} fUSD to QoreX`);
+    out.push(`${(Number(a.fusd) / 1e6).toFixed(2)} fUSD withdrawn`);
+  }
+  const bank = async () => BigInt((await (await fetch(`${REST}/cosmos/bank/v1beta1/balances/${me.native}`)).json()).balances.find((x) => x.denom === `erc20:${D.tokens.fUSD}`)?.amount ?? 0);
+  const after = await until(bank, (v) => v > 0n, "fUSD back in the wallet");
+  return `${out.join(", ") || "nothing to sell"}; the wallet holds ${(Number(after) / 1e6).toFixed(2)} fUSD`;
 });
 
 await check("no uncaught errors in the page", async () => {

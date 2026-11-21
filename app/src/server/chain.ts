@@ -17,10 +17,19 @@ export const CHAIN_ID = "qorechain-diana";
 export const D = deployments as any;
 export { client };
 
+/**
+ * A REST read. The public endpoint is rate-limited (429) and load-balanced (a 5xx now and then):
+ * those are tried again, up to three times; a 404 or a 400 is an answer and is returned at once.
+ */
 export const json = async (url: string) => {
-  const r = await fetch(url, { headers: { accept: "application/json", "user-agent": "darwin-qorechain" }, cache: "no-store" });
-  if (!r.ok) throw new Error(`${url.split("?")[0]}: ${r.status}`);
-  return r.json();
+  for (let attempt = 0; ; attempt++) {
+    const r = await fetch(url, { headers: { accept: "application/json", "user-agent": "darwin-qorechain" }, cache: "no-store" }).catch((e: unknown) => e as Error);
+    const transient = r instanceof Error || r.status === 429 || r.status >= 500;
+    if (!transient && !(r as Response).ok) throw new Error(`${url.split("?")[0]}: ${(r as Response).status}`);
+    if (!transient) return (r as Response).json();
+    if (attempt >= 3) throw new Error(`${url.split("?")[0]}: ${r instanceof Error ? r.message : r.status}`);
+    await new Promise((res) => setTimeout(res, 800 * 2 ** attempt));
+  }
 };
 
 async function sequence(address: string) {

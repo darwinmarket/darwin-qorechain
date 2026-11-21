@@ -93,7 +93,7 @@ cross-VM call can do neither); they are used at deployment only, and none happen
 switch (2026-11-21).
 
 Native calls leave no EVM logs, so each carries a memo: `darwin round <n>`, `darwin rebalance
-<basket> <nonce>`, `darwin execute <account> <nonce>`. The Security tab, the oracle history (the
+<basket> <nonce>`, `darwin execute <account> <nonce> <calls hash, 12 hex>`. The Security tab, the oracle history (the
 charts) and the transaction page decode the `submit` calldata from the committed transaction
 (`app/src/lib/qore/nativeCalls.ts`) and take the round number from the memo, never trusted alone:
 the browser re-verifies the reporter's signature for that number. Older EVM-lane rounds and trades
@@ -359,7 +359,7 @@ does the keeper's work on demand, so nothing runs while nobody trades:
 - **Relayer:** routes of the app (`/api/relay/*`), so it runs in the app's server on Vercel.
   `app/src/server/accounts.ts` checks both halves of a user's signed message with QoreSign, then
   submits it to `DarwinAccountFactory` as a `MsgCrossVMCall` it hybrid-signs (secp256k1 +
-  ML-DSA-87), with memo `darwin execute <account> <nonce>`, and pays the gas. The transaction
+  ML-DSA-87), with memo `darwin execute <account> <nonce> <calls hash, 12 hex>`, and pays the gas. The transaction
   itself is post-quantum and needs no EVM window. Deposits and withdrawals are credited once through the
   relayer's own on-chain memos (`darwin deposit <txhash>`, `darwin withdraw <evm hash>`), so they
   survive serverless restarts. `app/src/server/relayer.ts` keeps the original intent path for

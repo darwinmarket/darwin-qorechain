@@ -26,7 +26,7 @@ All registered with proof of possession; `PqcAuth` refuses a key without it, and
 | Sender | Transactions | Signed with |
 |---|---|---|
 | Keeper (deployer) | price rounds (memo `darwin round <n>`), rebalances (`darwin rebalance <basket> <nonce>`), admin calls | `MsgCrossVMCall`, secp256k1 + ML-DSA-87 |
-| Relayers | account executions (`darwin execute <account> <nonce>`), deposit and withdrawal conversions | `MsgCrossVMCall` or `MsgConvertCoin`/`MsgConvertERC20`, secp256k1 + ML-DSA-87 |
+| Relayers | account executions (`darwin execute <account> <nonce> <calls hash, 12 hex>`), deposit and withdrawal conversions | `MsgCrossVMCall` or `MsgConvertCoin`/`MsgConvertERC20`, secp256k1 + ML-DSA-87 |
 | Guardian (deployer) | a pause of new mints | hybrid, like every other deployer transaction |
 | Reporter, curator | none: they only sign messages | ML-DSA-87 |
 
