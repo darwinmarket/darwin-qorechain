@@ -1,15 +1,14 @@
 /**
  * Server-only chain access: REST and RPC upstreams, the deployments record, hybrid-signed native
- * transactions from a role account (secp256k1 + ML-DSA-87, as QoreX does), EVM writes from the
- * deployer, and ML-DSA-87 signatures by the reporter and curator.
+ * transactions from a role account (secp256k1 + ML-DSA-87, as QoreX does), contract calls on the
+ * native lane (writeNative), and ML-DSA-87 signatures by the reporter and curator.
  */
 import { StargateClient } from "@cosmjs/stargate";
 import type { EncodeObject } from "@cosmjs/proto-signing";
 import { EthNativeSigner, pqcSign, qorechainRegistry } from "@qorechain/sdk";
-import { createWalletClient, http, toHex, type Abi, type Address, type Hex } from "viem";
-import { privateKeyToAccount } from "viem/accounts";
+import { encodeFunctionData, hexToBytes, toHex, type Abi, type Address, type Hex } from "viem";
 import deployments from "@/config/deployments.json";
-import { client, diana, EVM_RPC } from "@/lib/qore/chain";
+import { client } from "@/lib/qore/chain";
 import { account, type Role } from "./keys";
 
 export const REST = process.env.QORE_REST_UPSTREAM ?? "https://api-testnet.qore.host";
@@ -77,12 +76,42 @@ async function sendNativeOnce(role: Role, messages: EncodeObject[], gas: number,
   }
 }
 
-/** An EVM transaction from the deployer (admitted by its scoped EVM window). */
-export async function writeEvm(address: Address, abi: Abi, functionName: string, args: unknown[]) {
-  const acc = await account("deployer");
-  const wallet = createWalletClient({ account: privateKeyToAccount(acc.privateKey as unknown as Hex), chain: diana, transport: http(EVM_RPC, { retryCount: 3, retryDelay: 2000 }) });
-  const hash = await wallet.writeContract({ address, abi, functionName, args, chain: diana, account: wallet.account! } as any);
-  return client.waitForTransactionReceipt({ hash });
+/** A cross-VM call in object form (MsgCrossVMCall is a type the signer's registry knows). */
+export function crossVmMsg(sender: string, target: Address, data: Hex): EncodeObject {
+  return {
+    typeUrl: "/qorechain.crossvm.v1.MsgCrossVMCall",
+    value: { sender, sourceVm: "cosmwasm", targetVm: "evm", targetContract: target, payload: hexToBytes(data), funds: [], async: false, asyncGasLimit: "0", asyncMaxFactor: "0" },
+  } as EncodeObject;
+}
+
+/**
+ * A contract call from a role, on the native lane: a MsgCrossVMCall hybrid-signed with the role's
+ * secp256k1 and ML-DSA-87 keys, so the transaction itself is post-quantum and needs no EVM window
+ * (an EVM transaction carries ECDSA alone; the QoreChain explorer labels it "not quantum-safe").
+ * Simulated first from the role's 0x address, so a refusal is named before anything is spent.
+ * A cross-VM call meters the EVM work at about 2.5x its EVM gas; out of gas is sent again with more.
+ * Native calls leave no EVM logs: `memo` names what the transaction did, for the readers.
+ */
+export async function writeNative(role: Role, address: Address, abi: Abi, functionName: string, args: unknown[], memo: string) {
+  const acc = await account(role);
+  const data = encodeFunctionData({ abi, functionName, args } as any);
+  const evmGas = await client.estimateContractGas({ address, abi, functionName, args, account: acc.evm as Address } as any);
+  let gas = Math.max(1_200_000, Math.ceil(Number(evmGas) * 2.8) + 400_000);
+  for (let attempt = 0; ; attempt++) {
+    try {
+      const transactionHash = await sendNative(role, [crossVmMsg(acc.cosmos, address, data)], gas, memo);
+      const t = await json(`${REST}/cosmos/tx/v1beta1/txs/${transactionHash}`).catch(() => null);
+      const executed = t?.tx_response?.events?.some((e: any) => e.type === "crossvm_response" && e.attributes.some((a: any) => a.key === "status" && a.value === "executed"));
+      if (t && !executed) throw new Error(`cross-VM call not executed in ${transactionHash}`);
+      return { transactionHash, gasUsed: Number(t?.tx_response?.gas_used ?? 0) };
+    } catch (e) {
+      if (attempt < 2 && /out of gas/i.test(String((e as Error)?.message ?? e))) {
+        gas = Math.ceil(gas * 1.6);
+        continue;
+      }
+      throw e;
+    }
+  }
 }
 
 /** ML-DSA-87 signature by a signing-only role (reporter, curator). */

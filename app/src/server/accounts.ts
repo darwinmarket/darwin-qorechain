@@ -35,7 +35,7 @@ import { erc20Abi } from "@/lib/qore/abis";
 import { ROUTER, TOKEN_INFO, TOKENS } from "@/lib/qore/chain";
 import { convertCoin, convertErc20 } from "@/lib/qore/proto";
 import { account, RELAYERS, type Role } from "./keys";
-import { CHAIN_ID, client, D, json, REST, sendNative } from "./chain";
+import { CHAIN_ID, client, crossVmMsg, D, json, REST, sendNative } from "./chain";
 import { freshRound } from "./keeper";
 
 const ADDR = /^qor1[02-9ac-hj-np-z]{38}$/;
@@ -398,7 +398,7 @@ export async function execute(req: ExecuteRequest) {
     let hash: string | undefined;
     for (let attempt = 0; !hash; attempt++) {
       try {
-        hash = await sendNative(role, [crossVm(rel.cosmos, FACTORY, data)], gas, `darwin execute ${acc.toLowerCase()} ${nonce}`);
+        hash = await sendNative(role, [crossVmMsg(rel.cosmos, FACTORY, data)], gas, `darwin execute ${acc.toLowerCase()} ${nonce}`);
       } catch (e) {
         // a cut broadcast may still have landed: the account's nonce tells
         if ((await nonceOf(acc)) !== nonce) throw new Error("this message was already executed");
@@ -427,10 +427,4 @@ export async function execute(req: ExecuteRequest) {
   });
 }
 
-/** A cross-VM call in object form (MsgCrossVMCall is a type the signer's registry knows). */
-function crossVm(sender: string, target: Address, data: Hex) {
-  return {
-    typeUrl: "/qorechain.crossvm.v1.MsgCrossVMCall",
-    value: { sender, sourceVm: "cosmwasm", targetVm: "evm", targetContract: target, payload: hexToBytes(data), funds: [], async: false, asyncGasLimit: "0", asyncMaxFactor: "0" },
-  } as any;
-}
+

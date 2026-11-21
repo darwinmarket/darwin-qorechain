@@ -68,7 +68,7 @@ function Action({ a }: { a: DarwinAction }) {
           Rebalance {a.basket}: {a.trades} trade(s)
         </div>
         <div style={{ ...sub, marginTop: 4 }}>
-          NAV {usd(a.navBefore)} → {usd(a.navAfter)}, signed by the curator with ML-DSA-87
+          {a.navBefore != null && a.navAfter != null ? `NAV ${usd(a.navBefore)} → ${usd(a.navAfter)}, ` : ""}signed by the curator with ML-DSA-87, checked on chain by pqcVerify
         </div>
       </>
     );

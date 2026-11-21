@@ -2,8 +2,8 @@
 
 /**
  * The fourth tab: what keeps Darwin safe after Q-Day, read live from QoreChain. The post-quantum
- * oracle (every round ML-DSA-87 signed), who can do what, the keeper's scoped EVM window, the
- * contracts. Drawn with the same rows and headings as Portfolio and Activity.
+ * oracle (every round ML-DSA-87 signed), who can do what, how every transaction is signed (hybrid,
+ * no EVM window), the contracts. Drawn with the same rows and headings as Portfolio and Activity.
  */
 import { useQuery } from "@tanstack/react-query";
 import type { CSSProperties, ReactNode } from "react";
@@ -58,9 +58,9 @@ const RULES: [string, string, string][] = [
   ["Oracle price round", "Reporter's ML-DSA-87 key", "pqcVerify (0x…0A01) against the key registered on chain (0x…0A02); next round only, newer timestamp, 15% circuit breaker"],
   ["Rebalance", "Curator's ML-DSA-87 key", "Signature over the exact trades, nonce and deadline; reverts if it costs more than 1% of NAV"],
   ["Every admin action", "Admin's ML-DSA-87 key", "Feeds, reporter, curator, reserve, spreads, withdrawals, unpausing: no function trusts msg.sender"],
-  ["Your buy and sell", "Your QoreX keys, hybrid", "secp256k1 + ML-DSA-87 on the native lane, carried to the EVM by MsgCrossVMCall"],
-  ["Keeper relaying", "Scoped EVM window", "allowed_targets = Darwin's contracts and tokens only"],
-  ["Pause new buys", "Guardian (classical key)", "The only classical power; selling always stays open"],
+  ["Your buy and sell", "Your QoreX keys, hybrid", "One message signed in QoreX (secp256k1 + ML-DSA-87); your Darwin account checks the ML-DSA-87 signature on chain (pqcVerify) before trading"],
+  ["Every Darwin transaction", "Hybrid secp256k1 + ML-DSA-87", "Rounds, rebalances and relayed trades go out as MsgCrossVMCall on the native lane, verified by the chain; no EVM window is open"],
+  ["Pause new buys", "Guardian, hybrid-signed", "The only power the contracts check by msg.sender; with no EVM window open, the chain admits it only in a hybrid secp256k1 + ML-DSA-87 transaction. Selling always stays open"],
 ];
 
 export function SecurityTab() {
@@ -70,7 +70,10 @@ export function SecurityTab() {
   const { data: gas } = useQuery({ queryKey: ["round-gas", latestTx], queryFn: () => roundGas(latestTx!), enabled: Boolean(latestTx) });
   const { data: win } = useQuery({
     queryKey: ["keeper-window"],
-    queryFn: async () => (await (await fetch(`${REST}/qorechain/pqc/v1/evm_window/${KEEPER}`)).json()) as any,
+    queryFn: async () => {
+      const j = (await (await fetch(`${REST}/qorechain/pqc/v1/evm_window/${KEEPER}`)).json()) as any;
+      return { ...j, live: Boolean(j?.found && j?.live) };
+    },
     refetchInterval: 60_000,
   });
   const age = oracle ? Math.max(0, Math.floor(Date.now() / 1000) - oracle.lastTimestamp) : null;
@@ -155,23 +158,27 @@ export function SecurityTab() {
         </div>
       </Section>
 
-      <Section
-        title="Keeper's EVM window"
-        aside={win?.found ? `${win.remaining_txs}/${win.max_txs} txs, ${win.remaining_blocks} blocks left` : "…"}
-      >
+      <Section title="How Darwin signs" aside={win == null ? "…" : win.live ? "an EVM window is open" : "no EVM window open"}>
         <div style={box}>
-          {(win?.allowed_targets ?? []).map((t: string, i: number) => (
-            <div key={t} style={row(i === 0)}>
-              <span style={{ fontWeight: 600 }}>{label(t)}</span>
-              <A href={addressUrl(t)}>
-                <span style={{ fontFamily: MONO, fontSize: 12, color: "var(--ink-3)" }}>{t}</span>
-              </A>
-            </div>
-          ))}
-          {!win?.found && <div style={{ ...row(true), ...sub }}>Reading the window…</div>}
+          <div style={row(true)}>
+            <span style={{ fontWeight: 600 }}>Keeper (rounds, rebalances)</span>
+            <span style={{ fontSize: 13, color: "var(--ink-2)" }}>MsgCrossVMCall, secp256k1 + ML-DSA-87</span>
+          </div>
+          <div style={row(false)}>
+            <span style={{ fontWeight: 600 }}>Relayers (your trades)</span>
+            <span style={{ fontSize: 13, color: "var(--ink-2)" }}>MsgCrossVMCall, secp256k1 + ML-DSA-87</span>
+          </div>
+          <div style={row(false)}>
+            <span style={{ fontWeight: 600 }}>Keeper&apos;s EVM window</span>
+            <span style={{ fontSize: 13, color: win?.live ? "var(--orange)" : "var(--green)", fontWeight: 600 }}>
+              {win == null ? "reading…" : win.live ? `open: ${win.remaining_txs} txs, ${win.remaining_blocks} blocks left` : "none"}
+            </span>
+          </div>
         </div>
         <p style={{ ...sub, marginTop: 10 }}>
-          Opening it took a hybrid ML-DSA-87 signature; a leaked secp256k1 key of the keeper can reach only these addresses.
+          Every transaction Darwin sends carries a hybrid signature the chain verifies (the QoreChain explorer shows each one
+          quantum-safe). With no EVM window open, the chain admits no ECDSA-only transaction from Darwin&apos;s accounts: a leaked
+          secp256k1 key alone cannot move anything.
         </p>
       </Section>
 

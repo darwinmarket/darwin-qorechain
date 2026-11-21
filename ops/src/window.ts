@@ -44,7 +44,7 @@ export async function open(role: Role, blocks = 17_280n, maxTxs = 1_000n, target
 
 export async function close(role: Role) {
   const acc = await evmAccount(role);
-  console.log(`${role}: closed ${await sendFromRole(role, [closeEvmWindowMsg({ sender: acc.cosmos } as any)], "hybrid")}`);
+  console.log(`${role}: closed ${await sendFromRole(role, [closeEvmWindowMsg(acc.cosmos)], "hybrid")}`);
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {

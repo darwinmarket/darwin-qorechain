@@ -2,17 +2,14 @@
  * Server-only keeper duties, run on demand instead of by an always-on process:
  *   - freshRound(): before a relayed trade, publish a signed price round if the last one is older
  *     than FRESH_SECONDS (the router refuses prices older than 30 minutes);
- *   - daily(): the daily cron's safety net: the deployer's scoped EVM window and a round;
+ *   - daily(): the daily cron's safety net: a round;
+ * Every transaction goes out on the native lane, hybrid-signed (writeNative): no EVM window.
  *   - weeklyRebalance(): Mondays 12:00 UTC, curator-signed rebalances of drifted baskets.
  * Nobody trading means no transactions: no cost. If none of this runs, selling and in-kind
  * redemption still work as soon as a round is published, and the app still displays.
  */
-import { openEvmWindowMsg } from "@qorechain/sdk";
-import { evmWindowCost } from "@qorechain/evm";
-import { fetchEvmWindow } from "@qorechain/qoresign/network";
 import { parseAbi, type Address, type Hex } from "viem";
-import { account } from "./keys";
-import { client, D, pqSign, REST, sendNative, writeEvm } from "./chain";
+import { client, D, pqSign, writeNative } from "./chain";
 import { FEED, fetchPrices, toWad } from "./prices";
 
 const FRESH_SECONDS = 20 * 60;
@@ -35,30 +32,6 @@ const reserveAbi = parseAbi([
   "function quoteExactIn(address trader, address tokenIn, address tokenOut, uint256 amountIn) view returns (uint256)",
 ]);
 
-// ---- the deployer's scoped EVM window -------------------------------------------------------------
-const targets = () =>
-  [D.oracle, D.reserve, D.router, ...Object.values(D.baskets).map((b: any) => b.address), ...Object.values(D.tokens)].map((a: any) =>
-    String(a).toLowerCase(),
-  );
-
-export async function ensureWindow(): Promise<string> {
-  const acc = await account("deployer");
-  const w: any = await fetchEvmWindow({ rest: REST, address: acc.cosmos });
-  const scoped = (w?.allowedTargets ?? []).length > 0;
-  if (w?.live && Number(w.remainingBlocks) > 2_000 && Number(w.remainingTxs) > 30 && scoped) return "window ok";
-  const maxTxs = 1_000n;
-  const msg = openEvmWindowMsg({
-    sender: acc.cosmos,
-    blocks: 17_280n, // the chain maximum: ~7 hours at the testnet's ~1.4 s blocks
-    maxTxs,
-    maxValue: evmWindowCost({ gas: 3_000_000n, maxFeePerGas: 250_000_000_000n }) * maxTxs,
-    allowedTargets: targets(),
-  } as any);
-  const tx = await sendNative("deployer", [msg as any], 500_000);
-  await new Promise((r) => setTimeout(r, 6000)); // the window opens in the next block
-  return `window ${tx}`;
-}
-
 // ---- oracle ------------------------------------------------------------------------------------
 export async function submitRound(): Promise<string> {
   const oracle = D.oracle as Address;
@@ -77,7 +50,8 @@ export async function submitRound(): Promise<string> {
   const ts = block.timestamp > earliest ? block.timestamp : earliest;
   const msg = (await client.readContract({ address: oracle, abi: oracleAbi, functionName: "roundMessage", args: [round + 1n, ts, ids, prices] })) as Hex;
   const sig = await pqSign("reporter", msg);
-  const r = await writeEvm(oracle, oracleAbi as any, "submit", [ts, ids, prices, sig]);
+  // the memo names the round: a native call leaves no RoundSubmitted log for readers to find
+  const r = await writeNative("deployer", oracle, oracleAbi as any, "submit", [ts, ids, prices, sig], `darwin round ${round + 1n}`);
   return `round ${round + 1n} (${r.transactionHash})`;
 }
 
@@ -86,7 +60,6 @@ export async function freshRound(): Promise<string> {
   const last = (await client.readContract({ address: D.oracle, abi: oracleAbi, functionName: "lastTimestamp" })) as bigint;
   const age = Math.floor(Date.now() / 1000) - Number(last);
   if (age < FRESH_SECONDS) return `round fresh (${age}s)`;
-  await ensureWindow();
   const ageNow = async () =>
     Math.floor(Date.now() / 1000) - Number((await client.readContract({ address: D.oracle, abi: oracleAbi, functionName: "lastTimestamp" })) as bigint);
   for (let attempt = 0; attempt < 2; attempt++) {
@@ -108,9 +81,7 @@ export async function freshRound(): Promise<string> {
 const STALE_LIMIT = 30 * 60;
 
 export async function daily(): Promise<string[]> {
-  const out = [await ensureWindow()];
-  out.push(await submitRound().catch((e) => `round skipped: ${String(e?.message ?? e).slice(0, 120)}`));
-  return out;
+  return [await submitRound().catch((e) => `round skipped: ${String(e?.message ?? e).slice(0, 120)}`)];
 }
 
 // ---- weekly rebalance (curator-signed) -----------------------------------------------------------
@@ -138,8 +109,6 @@ function planMoves(values: readonly bigint[], targets: readonly number[]) {
 }
 
 export async function weeklyRebalance(minDriftBps = 100): Promise<string[]> {
-  // a window lasts ~7 hours at 1.4 s blocks: renew it before relaying rebalances
-  await ensureWindow();
   await freshRound();
   const out: string[] = [];
   for (const [key, b] of Object.entries(D.baskets) as [string, any][]) {
@@ -162,7 +131,7 @@ export async function weeklyRebalance(minDriftBps = 100): Promise<string[]> {
     const nonce = await client.readContract({ address: basket, abi: basketAbi, functionName: "curatorNonce" });
     const deadline = BigInt(Math.floor(Date.now() / 1000) + 600);
     const msg = (await client.readContract({ address: basket, abi: basketAbi, functionName: "rebalanceMessage", args: [trades, nonce, deadline] })) as Hex;
-    const r = await writeEvm(basket, basketAbi as any, "rebalance", [trades, deadline, await pqSign("curator", msg)]);
+    const r = await writeNative("deployer", basket, basketAbi as any, "rebalance", [trades, deadline, await pqSign("curator", msg)], `darwin rebalance ${key} ${nonce}`);
     out.push(`${key}: drift ${drift} bps, rebalanced with ${trades.length} trade(s) (${r.transactionHash})`);
   }
   return out;

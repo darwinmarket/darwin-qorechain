@@ -41,6 +41,27 @@ export function roundMessage(round: bigint, timestamp: bigint, ids: readonly num
   return encodePacked(["string", "uint256", "address", "bytes32"], ["DarwinOracle:round:v1", 9800n, ORACLE, inner]);
 }
 
+/** Verify a round's ML-DSA-87 signature from its calldata and round number (either lane). */
+export async function verifyRoundCall(data: Hex, round: bigint): Promise<BrowserCheck> {
+  const call = decodeFunctionData({ abi: oracleAbi, data });
+  if (call.functionName !== "submit") return { kind: "none" };
+  const [timestamp, ids, prices, sig] = call.args;
+  const reporter = addressFromBytes(hexToBytes(D.roles.reporter as Hex)).bech32;
+  const key = await fetchPqKeyStatus({ rest: rest(), address: reporter });
+  if (!key.publicKey) throw new Error(`${reporter} has no ML-DSA-87 key on chain`);
+  const signature = hexToBytes(sig);
+  return {
+    kind: "round",
+    round,
+    verified: mldsa87.verify(key.publicKey, hexToBytes(roundMessage(round, timestamp, ids, prices)), signature),
+    tamperedRejected: !mldsa87.verify(key.publicKey, hexToBytes(roundMessage(round + 1n, timestamp, ids, prices)), signature),
+    reporter,
+    keyBytes: key.publicKey.length,
+    sigBytes: signature.length,
+    proven: Boolean(key.possessionProven),
+  };
+}
+
 /** Verify an oracle round's ML-DSA-87 signature from its EVM transaction. */
 export async function verifyRound(evmHash: Hex): Promise<BrowserCheck> {
   const [tx, receipt] = await Promise.all([client.getTransaction({ hash: evmHash }), client.getTransactionReceipt({ hash: evmHash })]);
@@ -126,7 +147,9 @@ export async function verifyNative(cosmosHash: string): Promise<BrowserCheck> {
 }
 
 export function useBrowserCheck(
-  tx: { cosmosHash: string; evmHash?: string; hybridVerified: boolean; actions: { kind: string }[]; viaAccount?: { account: string; nonce?: number; data: Hex } } | undefined,
+  tx:
+    | { cosmosHash: string; evmHash?: string; hybridVerified: boolean; actions: { kind: string }[]; viaAccount?: { account: string; nonce?: number; data: Hex }; roundCall?: { data: Hex; round: number } }
+    | undefined,
 ) {
   return useQuery({
     queryKey: ["browser-check", tx?.cosmosHash],
@@ -136,6 +159,7 @@ export function useBrowserCheck(
     queryFn: async (): Promise<BrowserCheck> => {
       if (!tx) return { kind: "none" };
       if (tx.viaAccount) return verifyAccount(tx.viaAccount.data, tx.viaAccount.account, tx.viaAccount.nonce);
+      if (tx.roundCall) return verifyRoundCall(tx.roundCall.data, BigInt(tx.roundCall.round));
       if (tx.hybridVerified) return verifyNative(tx.cosmosHash);
       if (tx.evmHash && tx.actions.some((a) => a.kind === "round")) return verifyRound(tx.evmHash as Hex);
       return { kind: "none" };
