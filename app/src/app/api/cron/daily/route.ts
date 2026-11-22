@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { daily } from "@/server/keeper";
 import { settleDeposits, settleWithdrawals } from "@/server/accounts";
 
-/** Daily safety net (Vercel cron): the deployer's scoped EVM window and one signed price round. */
+/** Daily safety net (Vercel cron): one signed price round, relayer gas top-ups, unsettled deposits and withdrawals. */
 export const runtime = "nodejs";
 export const maxDuration = 300;
 

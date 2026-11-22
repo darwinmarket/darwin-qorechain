@@ -9,7 +9,8 @@
  * redemption still work as soon as a round is published, and the app still displays.
  */
 import { parseAbi, type Address, type Hex } from "viem";
-import { client, D, pqSign, writeNative } from "./chain";
+import { client, D, json, pqSign, REST, sendNative, writeNative } from "./chain";
+import { account, RELAYERS } from "./keys";
 import { FEED, fetchPrices, toWad } from "./prices";
 
 const FRESH_SECONDS = 20 * 60;
@@ -81,7 +82,40 @@ export async function freshRound(): Promise<string> {
 const STALE_LIMIT = 30 * 60;
 
 export async function daily(): Promise<string[]> {
-  return [await submitRound().catch((e) => `round skipped: ${String(e?.message ?? e).slice(0, 120)}`)];
+  return [
+    await submitRound().catch((e) => `round skipped: ${String(e?.message ?? e).slice(0, 120)}`),
+    await topUpRelayers().catch((e) => `relayer top-up failed: ${String(e?.message ?? e).slice(0, 120)}`),
+  ];
+}
+
+// ---- relayer gas ---------------------------------------------------------------------------------
+// Each relayed trade costs its relayer about 0.26 QOR, and a user always lands on the same relayer:
+// one dry relayer fails every trade of its users. The deployer refills any relayer below FLOOR.
+const FLOOR = 25_000_000n; // uqor
+const TARGET = 80_000_000n;
+const uqor = async (address: string) =>
+  BigInt(((await json(`${REST}/cosmos/bank/v1beta1/balances/${address}/by_denom?denom=uqor`)) as any).balance?.amount ?? "0");
+
+export async function topUpRelayers(): Promise<string> {
+  const dep = await account("deployer");
+  const low = async () => {
+    const out: { cosmos: string; have: bigint }[] = [];
+    for (const r of RELAYERS) {
+      const a = await account(r);
+      const have = await uqor(a.cosmos);
+      if (have < FLOOR) out.push({ cosmos: a.cosmos, have });
+    }
+    return out;
+  };
+  const need = await low();
+  if (!need.length) return "relayers funded";
+  const msgs = need.map((n) => ({
+    typeUrl: "/cosmos.bank.v1beta1.MsgSend",
+    value: { fromAddress: dep.cosmos, toAddress: n.cosmos, amount: [{ denom: "uqor", amount: String(TARGET - n.have) }] },
+  }));
+  // a retry after a sequence clash must not send twice: if every relayer is above the floor, it landed
+  const hash = await sendNative("deployer", msgs as any, 400_000 + 200_000 * msgs.length, "darwin relayer top-up", async () => ((await low()).length ? null : "landed"));
+  return `relayers topped up: ${need.map((n) => `${n.cosmos.slice(0, 10)}… ${Number(n.have) / 1e6} -> ${Number(TARGET) / 1e6} QOR`).join(", ")} (${hash})`;
 }
 
 // ---- weekly rebalance (curator-signed) -----------------------------------------------------------
