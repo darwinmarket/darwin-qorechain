@@ -7,7 +7,7 @@
  */
 import { useEffect, useState } from "react";
 import { BASKETS, basketSymbolFromLocation, syncBasketUrl } from "@/lib/baskets";
-import { QOREX_INSTALL_URL } from "@/lib/qore/qorex";
+import { QOREX_INSTALL_URL } from "@/lib/qore/links";
 import { useWallet } from "@/lib/qore/wallet";
 import { DarwinHome } from "../darwin/DarwinHome";
 import { HeroActions, darwinContainer } from "../darwin/shell";
@@ -17,10 +17,14 @@ import { AppNavbar, NAV_ACTION_WIDTH, SigningInPill } from "./AppNavbar";
 import AnimatedButton from "./AnimatedButton";
 import { BasketScreen } from "./BasketScreen";
 import { PreConnectCard } from "./PreConnectCard";
-import { ActivityTab, TradeHistory } from "./QoreActivity";
-import { QorePortfolio } from "./QorePortfolio";
-import { QoreTradePanel } from "./QoreTradePanel";
-import { SecurityTab } from "./SecurityTab";
+import { TradeHistory } from "./QoreActivity";
+import dynamic from "next/dynamic";
+
+// Loaded when opened: they bring the QoreChain SDK and its WASM, which the home page does not need.
+const ActivityTab = dynamic(() => import("./QoreActivity").then((m) => m.ActivityTab), { ssr: false });
+const QorePortfolio = dynamic(() => import("./QorePortfolio").then((m) => m.QorePortfolio), { ssr: false });
+const QoreTradePanel = dynamic(() => import("./QoreTradePanel").then((m) => m.QoreTradePanel), { ssr: false });
+const SecurityTab = dynamic(() => import("./SecurityTab").then((m) => m.SecurityTab), { ssr: false });
 import { useToast } from "./Toast";
 import { usePanelScroll } from "./usePanelScroll";
 
