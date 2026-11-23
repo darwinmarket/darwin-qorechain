@@ -26,7 +26,7 @@ declare global {
   }
 }
 
-export const QOREX_INSTALL_URL = "https://docs.qorechain.io/qorex/browser-extension";
+export { QOREX_INSTALL_URL } from "./links";
 
 export function qorex(): NativeProvider | null {
   if (typeof window === "undefined") return null;

@@ -5,8 +5,14 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { Address } from "viem";
 import { erc20Abi } from "./abis";
 import { client, D, REST, TOKEN_INFO, TOKENS } from "./chain";
-import { connectQorex, qorex, waitForQorex, type Account } from "./qorex";
-import { readAccount, type AccountInfo } from "./accountClient";
+import type { Account } from "./qorex";
+import type { AccountInfo } from "./accountClient";
+
+// The wallet adapter and the account client bring the QoreChain SDK (and its WASM): load them only
+// when a wallet is involved, never for a visitor who just reads the page.
+const qorexLib = () => import("./qorex");
+import { qorexInjected, waitForQorexInjected } from "./detect";
+const readAccount = async (address: string) => (await import("./accountClient")).readAccount(address);
 
 export type Balances = {
   qor: bigint; // bank uqor
@@ -72,13 +78,13 @@ export function WalletProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     let alive = true;
-    void waitForQorex(2000).then(async (n) => {
+    void waitForQorexInjected(2000).then(async (n) => {
       if (!alive) return;
       setInstalled(Boolean(n));
       // Reconnect silently if this site was connected before.
       if (n && localStorage.getItem(STORAGE)) {
         try {
-          setAccount(await connectQorex());
+          setAccount(await (await qorexLib()).connectQorex());
         } catch {
           localStorage.removeItem(STORAGE);
         }
@@ -93,11 +99,11 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     setError(null);
     setConnecting(true);
     try {
-      if (!qorex()) {
+      if (!qorexInjected()) {
         setInstalled(false);
         throw new Error("Install the QoreX wallet to trade: it signs every Darwin trade with ML-DSA-87.");
       }
-      const acc = await connectQorex();
+      const acc = await (await qorexLib()).connectQorex();
       localStorage.setItem(STORAGE, "1");
       setAccount(acc);
     } catch (e) {
