@@ -18,10 +18,7 @@ export function HomeFallback() {
   useEffect(() => {
     // Starts the price request a beat before the query mounts; the query adopts this promise.
     void warmPrices();
-    // And pull the shader's chunk once the browser is idle -- it is big, and the app's own
-    // chunk should not have to share bandwidth with it.
-    const idle = window.requestIdleCallback?.(() => void import("./HeroShaderCanvas"), { timeout: 4000 });
-    return () => { if (idle !== undefined) window.cancelIdleCallback?.(idle); };
+    // The shader's chunk (1.4 MB) is pulled by HeroShader itself, after the page and its prices.
   }, []);
 
   return (
