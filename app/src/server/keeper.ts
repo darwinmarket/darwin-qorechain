@@ -21,6 +21,8 @@ const oracleAbi = parseAbi([
   "function MIN_ROUND_INTERVAL() view returns (uint32)",
   "function roundMessage(uint64 round_, uint64 timestamp, uint16[] ids, uint128[] prices) view returns (bytes)",
   "function submit(uint64 timestamp, uint16[] ids, uint128[] prices, bytes signature)",
+  "function maxDeviationBps() view returns (uint16)",
+  "function latest(uint16 feedId) view returns (uint256 price, uint64 updatedAt, uint64 round_)",
 ]);
 const basketAbi = parseAbi([
   "function composition() view returns (address[] tokens, uint16[] targets, uint256[] balances, uint256[] values, uint16[] weights)",
@@ -40,20 +42,48 @@ export async function submitRound(): Promise<string> {
   const byId = Object.fromEntries(Object.entries(FEED).map(([n, id]) => [id, n])) as Record<number, keyof typeof FEED>;
   const known = (await client.readContract({ address: oracle, abi: oracleAbi, functionName: "feedIds" })) as readonly number[];
   const ids = known.filter((id) => byId[id] && Number.isFinite(p[byId[id]])).sort((a, b) => a - b);
-  const prices = ids.map((id) => toWad(p[byId[id]]));
-  const [round, last, gap, block] = await Promise.all([
+  const [round, last, gap, block, maxDev, stored] = await Promise.all([
     client.readContract({ address: oracle, abi: oracleAbi, functionName: "round" }),
     client.readContract({ address: oracle, abi: oracleAbi, functionName: "lastTimestamp" }),
     client.readContract({ address: oracle, abi: oracleAbi, functionName: "MIN_ROUND_INTERVAL" }),
     client.getBlock(),
+    client.readContract({ address: oracle, abi: oracleAbi, functionName: "maxDeviationBps" }),
+    Promise.all(ids.map((id) => client.readContract({ address: oracle, abi: oracleAbi, functionName: "latest", args: [id] }))),
   ]);
+  // The oracle refuses a round where a feed moves more than maxDeviationBps from its stored price.
+  // A market that moved further (QOR fell 29% in four quiet days) would freeze every round, and with
+  // it every trade: step toward the market by 1% less than the breaker, one round at a time.
+  const step = BigInt(Math.max(1, Number(maxDev) - 100));
+  let clamped = 0;
+  const prices = ids.map((id, i) => {
+    const want = toWad(p[byId[id]]);
+    const prev = stored[i][0];
+    if (prev === 0n) return want;
+    const lo = (prev * (10_000n - step)) / 10_000n;
+    const hi = (prev * (10_000n + step)) / 10_000n;
+    if (want >= lo && want <= hi) return want;
+    clamped++;
+    return want < lo ? lo : hi;
+  });
   const earliest = last + BigInt(gap);
   const ts = block.timestamp > earliest ? block.timestamp : earliest;
   const msg = (await client.readContract({ address: oracle, abi: oracleAbi, functionName: "roundMessage", args: [round + 1n, ts, ids, prices] })) as Hex;
   const sig = await pqSign("reporter", msg);
   // the memo names the round: a native call leaves no RoundSubmitted log for readers to find
   const r = await writeNative("deployer", oracle, oracleAbi as any, "submit", [ts, ids, prices, sig], `darwin round ${round + 1n}`);
-  return `round ${round + 1n} (${r.transactionHash})`;
+  return `round ${round + 1n}${clamped ? ` (${clamped} feed(s) stepped toward the market)` : ""} (${r.transactionHash})`;
+}
+
+/** Rounds until no feed is held back by the breaker (at most `max`, MIN_ROUND_INTERVAL apart). */
+export async function catchUpRounds(max = 3): Promise<string> {
+  const out: string[] = [];
+  for (let i = 0; i < max; i++) {
+    if (i) await new Promise((r) => setTimeout(r, 62_000));
+    const s = await submitRound();
+    out.push(s);
+    if (!s.includes("stepped toward")) break;
+  }
+  return out.join("; ");
 }
 
 /** Publish a round if the last one is older than FRESH_SECONDS. Safe to call concurrently. */
@@ -83,7 +113,7 @@ const STALE_LIMIT = 30 * 60;
 
 export async function daily(): Promise<string[]> {
   return [
-    await submitRound().catch((e) => `round skipped: ${String(e?.message ?? e).slice(0, 120)}`),
+    await catchUpRounds().catch((e) => `round skipped: ${String(e?.message ?? e).slice(0, 120)}`),
     await topUpRelayers().catch((e) => `relayer top-up failed: ${String(e?.message ?? e).slice(0, 120)}`),
   ];
 }
