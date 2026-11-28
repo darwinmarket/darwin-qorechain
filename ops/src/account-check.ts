@@ -99,7 +99,9 @@ await check("deposit: one MsgSend of fUSD lands on the account as ERC-20", async
   return `+${usd} fUSD (send ${r.transactionHash.slice(0, 10)}…, convert ${String(dep.txHash).slice(0, 10)}…), credited once`;
 });
 
-// 2. buy
+// 2. buy. Like the app on a quiet day: prices older than 30 minutes are refused (PriceStale), so ask
+// the server for a round first, as the page does when a visitor finds them stale.
+await fetch(`${APP}/api/relay/refresh`, { method: "POST" }).catch(() => null);
 const spend = amount / 2n;
 let bought = 0n;
 await check(`buy ${key} by one signed message (no window, no grant)`, async () => {
